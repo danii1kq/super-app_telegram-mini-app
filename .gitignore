@@ -5,11 +5,17 @@
 Thumbs.db
 .DS_Store
 
-# Local secrets and backups
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Go
+backend/bin/
+*.exe
+
+# Local secrets and environment
 .env
-.env.*
-!.env.example
-*.key
-*.pem
-/secrets/
-/backups/
+.env.local
+*.local.md
+deploy/SSH.local.md
