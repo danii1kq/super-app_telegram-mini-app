@@ -25,16 +25,18 @@ import { formatDayMonth } from '@/shared/i18n/date';
 
 /** One expense group: balances, expenses and the add form. */
 export function SplitGroupPage() {
-  const { id = '' } = useParams();
+  const { groupId = '' } = useParams();
   const t = useT();
   const { lang } = useI18n();
   const navigate = useNavigate();
   const feedback = useFeedback();
   const { me } = useSession();
-  const expenses = useSplitExpenses(id);
-  const balances = useSplitBalances(id);
-  const addExpense = useAddExpense(id);
-  const people = usePeople(Boolean(id));
+  const { status } = useSession();
+  const ready = status === 'ready';
+  const expenses = useSplitExpenses(groupId, ready);
+  const balances = useSplitBalances(groupId, ready);
+  const addExpense = useAddExpense(groupId);
+  const people = usePeople(Boolean(groupId) && ready);
 
   const [composing, setComposing] = useState(false);
   const [description, setDescription] = useState('');
@@ -86,11 +88,11 @@ export function SplitGroupPage() {
   return (
     <Screen header={<AppHeader title={t('splitGroup')} onBack={() => navigate('/apps/split')} />}>
       <div className="flex gap-2 pt-2">
-        <SecondaryButton onClick={() => navigate(`/apps/split/${id}/receipt`)} full>
+        <SecondaryButton onClick={() => navigate(`/apps/split/${groupId}/receipt`)} full>
           <Icon name="photo_camera" size={18} />
           {t('receiptAdd')}
         </SecondaryButton>
-        <SecondaryButton onClick={() => navigate(`/apps/split/${id}/debts`)} full>
+        <SecondaryButton onClick={() => navigate(`/apps/split/${groupId}/debts`)} full>
           <Icon name="handshake" size={18} />
           {t('debts')}
         </SecondaryButton>

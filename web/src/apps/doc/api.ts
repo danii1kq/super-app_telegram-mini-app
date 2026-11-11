@@ -16,11 +16,12 @@ export const docKeys = {
   order: (number: string) => ['doc', 'order', number] as const,
 };
 
-export function useDocStatus() {
+export function useDocStatus(enabled = true) {
   return useQuery({
     queryKey: docKeys.status,
     queryFn: () => api<{ linked: boolean }>('/apps/doc/status'),
     select: (data) => data.linked,
+    enabled,
   });
 }
 

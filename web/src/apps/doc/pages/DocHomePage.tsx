@@ -12,6 +12,7 @@ import {
   Skeleton,
 } from '@/shared/ui';
 import { useT, type DictKey } from '@/shared/i18n';
+import { useSession } from '@/app/session';
 
 const STATUS_KEY: Record<string, DictKey> = {
   draft: 'statusDraft',
@@ -40,7 +41,8 @@ function statusLabel(t: (key: DictKey) => string, status: string): string {
 export function DocHomePage() {
   const t = useT();
   const navigate = useNavigate();
-  const status = useDocStatus();
+  const { status: session } = useSession();
+  const status = useDocStatus(session === 'ready');
   const orders = useDocOrders(status.data === true);
 
   return (

@@ -33,29 +33,30 @@ export const splitKeys = {
   balances: (groupId: string) => ['split', 'balances', groupId] as const,
 };
 
-export function useSplitGroups() {
+export function useSplitGroups(enabled = true) {
   return useQuery({
     queryKey: splitKeys.groups,
     queryFn: () => api<{ groups: SplitGroup[] }>('/split/groups'),
     select: (data) => data.groups,
+    enabled,
   });
 }
 
-export function useSplitExpenses(groupId: string) {
+export function useSplitExpenses(groupId: string, enabled = true) {
   return useQuery({
     queryKey: splitKeys.expenses(groupId),
     queryFn: () => api<{ expenses: SplitExpense[] }>(`/split/groups/${groupId}/expenses`),
     select: (data) => data.expenses,
-    enabled: Boolean(groupId),
+    enabled: Boolean(groupId) && enabled,
   });
 }
 
-export function useSplitBalances(groupId: string) {
+export function useSplitBalances(groupId: string, enabled = true) {
   return useQuery({
     queryKey: splitKeys.balances(groupId),
     queryFn: () => api<{ balances: SplitBalance[] }>(`/split/groups/${groupId}/balances`),
     select: (data) => data.balances,
-    enabled: Boolean(groupId),
+    enabled: Boolean(groupId) && enabled,
   });
 }
 

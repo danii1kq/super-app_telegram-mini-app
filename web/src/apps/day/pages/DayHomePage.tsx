@@ -17,6 +17,7 @@ import {
 } from '@/shared/ui';
 import { useT, useI18n } from '@/shared/i18n';
 import { formatMonthDay, formatTime, formatWeekday, formatAgenda } from '@/shared/i18n/date';
+import { useSession } from '@/app/session';
 
 function startOfWeek(date: Date): Date {
   const copy = new Date(date);
@@ -35,7 +36,8 @@ export function DayHomePage() {
   const t = useT();
   const { lang } = useI18n();
   const navigate = useNavigate();
-  const status = useDayStatus();
+  const { status: session } = useSession();
+  const status = useDayStatus(session === 'ready');
   const [view, setView] = useState<'week' | 'agenda'>('week');
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
 

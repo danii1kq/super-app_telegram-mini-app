@@ -15,11 +15,12 @@ export const notesKeys = {
   one: (id: string) => ['notes', 'one', id] as const,
 };
 
-export function useNotes() {
+export function useNotes(enabled = true) {
   return useQuery({
     queryKey: notesKeys.list,
     queryFn: () => api<{ notes: Note[] }>('/notes'),
     select: (data) => data.notes,
+    enabled,
   });
 }
 

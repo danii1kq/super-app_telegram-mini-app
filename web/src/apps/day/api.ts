@@ -16,11 +16,12 @@ export const dayKeys = {
   events: (from: string) => ['day', 'events', from] as const,
 };
 
-export function useDayStatus() {
+export function useDayStatus(enabled = true) {
   return useQuery({
     queryKey: dayKeys.status,
     queryFn: () => api<{ linked: boolean }>('/apps/day/status'),
     select: (data) => data.linked,
+    enabled,
   });
 }
 

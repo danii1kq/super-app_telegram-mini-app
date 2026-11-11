@@ -18,6 +18,7 @@ import {
 import { useFeedback } from '@/shared/ui/toast';
 import { useT, useI18n } from '@/shared/i18n';
 import { formatDayMonth } from '@/shared/i18n/date';
+import { useSession } from '@/app/session';
 
 /** SruNotes: own notes and notes shared with the viewer. */
 export function NotesHomePage() {
@@ -25,7 +26,8 @@ export function NotesHomePage() {
   const { lang } = useI18n();
   const navigate = useNavigate();
   const feedback = useFeedback();
-  const notes = useNotes();
+  const { status } = useSession();
+  const notes = useNotes(status === 'ready');
   const createNote = useCreateNote();
   const [composing, setComposing] = useState(false);
   const [title, setTitle] = useState('');

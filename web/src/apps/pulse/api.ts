@@ -18,13 +18,14 @@ export const pulseKeys = {
   feed: ['pulse', 'feed'] as const,
 };
 
-export function usePulseFeed() {
+export function usePulseFeed(enabled = true) {
   return useQuery({
     queryKey: pulseKeys.feed,
     queryFn: () => api<{ statuses: PulseStatus[] }>('/pulse'),
     select: (data) => data.statuses,
     // Statuses expire on their own: refresh while the screen is open.
     refetchInterval: 30_000,
+    enabled,
   });
 }
 

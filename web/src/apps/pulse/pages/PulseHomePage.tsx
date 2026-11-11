@@ -31,7 +31,7 @@ export function PulseHomePage() {
   const navigate = useNavigate();
   const feedback = useFeedback();
   const { me } = useSession();
-  const feed = usePulseFeed();
+  const feed = usePulseFeed(Boolean(me));
   const createStatus = useCreateStatus();
   const respond = useRespond();
   const closeStatus = useCloseStatus();
