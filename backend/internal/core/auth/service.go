@@ -99,14 +99,56 @@ func (s *Service) Login(ctx context.Context, data InitData) (User, string, error
 	if err != nil {
 		return User{}, "", err
 	}
+
+	// The verified payload is kept with the session (sealed) so the trusted hop
+	// to SruDoc and SruDay can present it while the session is alive.
+	sealed, err := s.content.SealString(data.Raw, sessionAAD(user.ID))
+	if err != nil {
+		return User{}, "", err
+	}
+
 	_, err = s.pool.Exec(ctx,
-		`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)`,
-		secure.TokenHash(token), user.ID, time.Now().Add(s.ttl),
+		`INSERT INTO sessions (token_hash, user_id, expires_at, init_data_sealed, init_data_key_id)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		secure.TokenHash(token), user.ID, time.Now().Add(s.ttl), sealed.Ciphertext, sealed.KeyID,
 	)
 	if err != nil {
 		return User{}, "", err
 	}
 	return user, token, nil
+}
+
+// InitDataFor returns the verified Telegram payload stored with the session.
+func (s *Service) InitDataFor(ctx context.Context, userID int64, token string) (string, error) {
+	var sealed []byte
+	var keyID string
+	err := s.pool.QueryRow(ctx,
+		`SELECT init_data_sealed, init_data_key_id FROM sessions
+		  WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > now()`,
+		secure.TokenHash(token), userID,
+	).Scan(&sealed, &keyID)
+	if err != nil {
+		return "", nil
+	}
+	return s.content.OpenString(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, sessionAAD(userID))
+}
+
+func sessionAAD(userID int64) string {
+	return "session_init_data:user:" + itoa(userID)
+}
+
+func itoa(value int64) string {
+	if value == 0 {
+		return "0"
+	}
+	var buffer [20]byte
+	position := len(buffer)
+	for value > 0 {
+		position--
+		buffer[position] = byte('0' + value%10)
+		value /= 10
+	}
+	return string(buffer[position:])
 }
 
 // Authenticate resolves a bearer token to its user. Every request goes through

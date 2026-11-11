@@ -35,6 +35,9 @@ type InitData struct {
 	PhotoURL   string
 	Language   string
 	AuthDate   time.Time
+	// Raw is the original payload, kept only to present it on the trusted hop
+	// to the existing services.
+	Raw string
 }
 
 // Verifier checks initData against the bot token.
@@ -126,6 +129,7 @@ func (v *Verifier) Verify(raw string) (InitData, error) {
 		PhotoURL:   user.PhotoURL,
 		Language:   user.LanguageCode,
 		AuthDate:   authDate,
+		Raw:        raw,
 	}, nil
 }
 
