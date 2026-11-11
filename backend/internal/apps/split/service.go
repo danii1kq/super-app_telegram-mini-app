@@ -507,6 +507,33 @@ func (s *Service) sharesOf(ctx context.Context, expenseID int64) (map[int64]int6
 	return out, rows.Err()
 }
 
+// Members returns the active members of a group, for pickers.
+//
+// A receipt or an expense may only involve people of this group, so the UI must
+// offer exactly these and never the whole app directory.
+func (s *Service) Members(ctx context.Context, viewerID, groupID int64) ([]int64, error) {
+	if err := s.requireMember(ctx, viewerID, groupID); err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT user_id FROM split_members WHERE group_id = $1 AND state = 'active' ORDER BY user_id`,
+		groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]int64, 0, 8)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 func (s *Service) requireMember(ctx context.Context, viewerID, groupID int64) error {
 	var member bool
 	err := s.pool.QueryRow(ctx,

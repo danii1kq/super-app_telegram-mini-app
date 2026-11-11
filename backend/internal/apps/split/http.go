@@ -23,6 +23,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/split/groups/{id}/expenses", h.auth.Middleware(http.HandlerFunc(h.listExpenses)))
 	mux.Handle("POST /api/v1/split/groups/{id}/expenses", h.auth.Middleware(http.HandlerFunc(h.addExpense)))
 	mux.Handle("GET /api/v1/split/groups/{id}/balances", h.auth.Middleware(http.HandlerFunc(h.balances)))
+	mux.Handle("GET /api/v1/split/groups/{id}/members", h.auth.Middleware(http.HandlerFunc(h.members)))
 	h.RegisterReceipts(mux)
 }
 
@@ -218,4 +219,28 @@ func parseIDs(raw []string) ([]int64, error) {
 		out = append(out, id)
 	}
 	return out, nil
+}
+
+// members lists the group's active members for the pickers.
+func (h *Handler) members(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFrom(r.Context())
+	if !ok {
+		httpapi.WriteError(w, httpapi.Unauthorized("????????? ????"))
+		return
+	}
+	groupID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "???????????? ID"))
+		return
+	}
+	ids, err := h.service.Members(r.Context(), user.ID, groupID)
+	if err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, strconv.FormatInt(id, 10))
+	}
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"members": out})
 }

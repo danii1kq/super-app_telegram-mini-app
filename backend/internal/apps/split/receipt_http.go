@@ -12,6 +12,7 @@ import (
 // RegisterReceipts mounts the receipt and debt routes.
 func (h *Handler) RegisterReceipts(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/split/groups/{id}/receipts", h.auth.Middleware(http.HandlerFunc(h.createReceipt)))
+	mux.Handle("POST /api/v1/split/groups/{id}/receipts/manual", h.auth.Middleware(http.HandlerFunc(h.createManualReceipt)))
 	mux.Handle("GET /api/v1/split/receipts/{id}", h.auth.Middleware(http.HandlerFunc(h.getReceipt)))
 	mux.Handle("PATCH /api/v1/split/receipts/{id}", h.auth.Middleware(http.HandlerFunc(h.updateReceipt)))
 	mux.Handle("GET /api/v1/split/receipts/{id}/image", h.auth.Middleware(http.HandlerFunc(h.receiptImage)))
@@ -488,4 +489,24 @@ func debtJSON(debt Debt) map[string]any {
 		out["source_expense_id"] = strconv.FormatInt(*debt.SourceExpenseID, 10)
 	}
 	return out
+}
+
+// createManualReceipt starts an empty draft for a receipt typed by hand.
+func (h *Handler) createManualReceipt(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFrom(r.Context())
+	if !ok {
+		httpapi.WriteError(w, httpapi.Unauthorized("????????? ????"))
+		return
+	}
+	groupID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "???????????? ID"))
+		return
+	}
+	receipt, err := h.service.CreateManualReceipt(r.Context(), user.ID, groupID)
+	if err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	httpapi.WriteJSON(w, http.StatusCreated, receiptJSON(receipt))
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { formatMinor, parseMinor } from '../api';
 import { newRequestId } from '../mutations';
-import { useAddPayment, useCreateDebt, useDebts } from '../receipts';
+import { useAddPayment, useCreateDebt, useDebts, useGroupMembers } from '../receipts';
 import {
   AppHeader,
   Banner,
@@ -33,6 +33,7 @@ export function SplitDebtsPage() {
   const { me } = useSession();
   const debts = useDebts(groupId);
   const people = usePeople(Boolean(groupId));
+  const groupMembers = useGroupMembers(groupId);
   const createDebt = useCreateDebt(groupId);
   const addPayment = useAddPayment(groupId);
 
@@ -46,7 +47,16 @@ export function SplitDebtsPage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentKey, setPaymentKey] = useState(newRequestId);
 
-  const members = people.data ?? [];
+  // Only the group's own members can be a side of a debt here, and the viewer
+  // is one of them: the directory leaves the viewer out.
+  const members = (() => {
+    const ids = new Set(groupMembers.data ?? []);
+    const fromDirectory = (people.data ?? []).filter((person) => ids.has(person.id));
+    if (me && ids.has(me.id) && !fromDirectory.some((person) => person.id === me.id)) {
+      return [{ id: me.id, public_name: me.public_name, username: me.username, following: false, is_me: true }, ...fromDirectory];
+    }
+    return fromDirectory;
+  })();
   const nameOf = (userId: string): string => {
     if (userId === me?.id) return t('you');
     return members.find((person) => person.id === userId)?.public_name ?? `${t('member')} ${userId}`;

@@ -7,7 +7,8 @@ import {
 } from '../api';
 import { newRequestId } from '../mutations';
 import {
-  useAllocation,
+  useGroupMembers,
+  useManualReceipt,
   useSaveReceipt,
   useUpdateReceipt,
   useUploadReceipt,
@@ -23,7 +24,7 @@ import {
   Screen,
   SecondaryButton,
   SectionLabel,
-  Skeleton,
+
 } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
@@ -59,8 +60,10 @@ export function SplitReceiptPage() {
   const feedback = useFeedback();
   const { me } = useSession();
   const groups = useSplitGroups();
+  const groupMembers = useGroupMembers(groupId);
   const people = usePeople(Boolean(groupId));
   const upload = useUploadReceipt(groupId);
+  const manualReceipt = useManualReceipt(groupId);
 
   const [receiptId, setReceiptId] = useState('');
   const [items, setItems] = useState<DraftItem[]>([]);
@@ -75,10 +78,20 @@ export function SplitReceiptPage() {
 
   const updateReceipt = useUpdateReceipt(receiptId);
   const saveReceipt = useSaveReceipt(receiptId, groupId);
-  const allocation = useAllocation(receiptId, payerId);
+
 
   const group = groups.data?.find((candidate) => candidate.id === groupId);
-  const members = useMemo(() => people.data ?? [], [people.data]);
+  // Only the group's own members: a stranger must never appear in a picker.
+  // The viewer is added from the session, because the people directory leaves
+  // the viewer out on purpose and the payer is often the viewer.
+  const members = useMemo(() => {
+    const ids = new Set(groupMembers.data ?? []);
+    const fromDirectory = (people.data ?? []).filter((person) => ids.has(person.id));
+    if (me && ids.has(me.id) && !fromDirectory.some((person) => person.id === me.id)) {
+      return [{ id: me.id, public_name: me.public_name, username: me.username, following: false, is_me: true }, ...fromDirectory];
+    }
+    return fromDirectory;
+  }, [people.data, groupMembers.data, me]);
 
   const nameOf = (userId: string): string => {
     if (userId === me?.id) return t('you');
@@ -126,9 +139,17 @@ export function SplitReceiptPage() {
   };
 
   const startManual = () => {
-    setManual(true);
-    setItems([{ key: nextKey(), name: '', quantity: 1, amount: '', unclear: false, units: {} }]);
-    if (me) setPayerId(me.id);
+    // A hand-typed receipt is a real draft on the server, so it saves the same
+    // way a recognized one does.
+    manualReceipt.mutate(undefined, {
+      onSuccess: (receipt) => {
+        setManual(true);
+        setReceiptId(receipt.id);
+        setItems([{ key: nextKey(), name: '', quantity: 1, amount: '', unclear: false, units: {} }]);
+        if (me) setPayerId(me.id);
+      },
+      onError: () => feedback(t('receiptSaveFailed'), 'error'),
+    });
   };
 
   const patchItem = (key: string, patch: Partial<DraftItem>) => {
@@ -178,6 +199,82 @@ export function SplitReceiptPage() {
 
   const itemsTotal = items.reduce((sum, item) => sum + (parseMinor(item.amount) ?? 0), 0);
   const totalMinor = parseMinor(total) ?? itemsTotal;
+
+  /**
+   * Local preview of the split.
+   *
+   * The server is the source of truth for a saved receipt, but a hand-typed
+   * draft has no receipt row yet, so the same arithmetic runs here to show the
+   * total, the shares and the difference before anything is saved. Integer minor
+   * units only, and the remainder goes to the largest shares first.
+   */
+  const preview = useMemo(() => {
+    const perPerson: Record<string, number> = {};
+    const unallocated: string[] = [];
+
+    for (const item of items) {
+      const amount = parseMinor(item.amount) ?? 0;
+      const entries = Object.entries(item.units).filter(([, count]) => count > 0);
+      if (entries.length === 0) {
+        unallocated.push(item.key);
+        continue;
+      }
+      const weightTotal = entries.reduce((sum, [, count]) => sum + count, 0);
+      let assigned = 0;
+      const ordered = [...entries].sort((a, b) => (b[1] !== a[1] ? b[1] - a[1] : a[0].localeCompare(b[0])));
+      for (const [userId, count] of ordered) {
+        const share = Math.floor((amount * count) / weightTotal);
+        perPerson[userId] = (perPerson[userId] ?? 0) + share;
+        assigned += share;
+      }
+      let remainder = amount - assigned;
+      let index = 0;
+      while (remainder !== 0 && ordered.length > 0) {
+        const entry = ordered[index % ordered.length];
+        if (!entry) break;
+        perPerson[entry[0]] = (perPerson[entry[0]] ?? 0) + (remainder > 0 ? 1 : -1);
+        remainder += remainder > 0 ? -1 : 1;
+        index += 1;
+      }
+    }
+
+    const discountMinor = parseMinor(discount) ?? 0;
+    const serviceMinor = parseMinor(service) ?? 0;
+    const adjustment = serviceMinor - discountMinor;
+    const participants = Object.entries(perPerson).filter(([, share]) => share > 0);
+    if (adjustment !== 0 && participants.length > 0) {
+      const weightTotal = participants.reduce((sum, [, share]) => sum + share, 0);
+      let assigned = 0;
+      const ordered = [...participants].sort((a, b) => (b[1] !== a[1] ? b[1] - a[1] : a[0].localeCompare(b[0])));
+      for (const [userId, share] of ordered) {
+        const delta = Math.floor((adjustment * share) / weightTotal);
+        perPerson[userId] = (perPerson[userId] ?? 0) + delta;
+        assigned += delta;
+      }
+      let remainder = adjustment - assigned;
+      let index = 0;
+      while (remainder !== 0 && ordered.length > 0) {
+        const entry = ordered[index % ordered.length];
+        if (!entry) break;
+        perPerson[entry[0]] = (perPerson[entry[0]] ?? 0) + (remainder > 0 ? 1 : -1);
+        remainder += remainder > 0 ? -1 : 1;
+        index += 1;
+      }
+    }
+
+    const sum = Object.values(perPerson).reduce((acc, share) => acc + share, 0);
+    const owes: Record<string, number> = {};
+    for (const [userId, share] of Object.entries(perPerson)) {
+      if (userId !== payerId && share > 0) owes[userId] = share;
+    }
+    return {
+      perPerson,
+      owes,
+      sum,
+      difference: totalMinor - sum,
+      unallocated,
+    };
+  }, [items, discount, service, totalMinor, payerId]);
 
   const persist = (): boolean => {
     if (!receiptId) return true;
@@ -243,7 +340,7 @@ export function SplitReceiptPage() {
     );
   };
 
-  const difference = allocation.data ? Number(allocation.data.difference) : 0;
+  const difference = preview.difference;
 
   return (
     <Screen
@@ -467,66 +564,64 @@ export function SplitReceiptPage() {
             ))}
           </Card>
 
-          {allocation.isLoading ? <Skeleton className="mt-3 h-24 w-full" /> : null}
+          <SectionLabel>{t('receiptResult')}</SectionLabel>
+          <Card className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-body-secondary text-ink-2">{t('receiptTotal')}</span>
+              <span className="text-body-strong text-ink">{formatMinor(String(totalMinor))} ₸</span>
+            </div>
+            {(parseMinor(discount) ?? 0) > 0 ? (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-body-secondary text-ink-2">{t('receiptDiscount')}</span>
+                <span className="text-body-secondary text-success">
+                  -{formatMinor(String(parseMinor(discount) ?? 0))} ₸
+                </span>
+              </div>
+            ) : null}
+            {(parseMinor(service) ?? 0) > 0 ? (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-body-secondary text-ink-2">{t('receiptService')}</span>
+                <span className="text-body-secondary text-warning">
+                  +{formatMinor(String(parseMinor(service) ?? 0))} ₸
+                </span>
+              </div>
+            ) : null}
 
-          {allocation.data ? (
-            <>
-              <SectionLabel>{t('receiptResult')}</SectionLabel>
-              <Card className="p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-body-secondary text-ink-2">{t('receiptTotal')}</span>
-                  <span className="text-body-strong text-ink">
-                    {formatMinor(allocation.data.total_minor)} ₸
-                  </span>
-                </div>
-                {Number(allocation.data.discount_minor) > 0 ? (
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-body-secondary text-ink-2">{t('receiptDiscount')}</span>
-                    <span className="text-body-secondary text-success">
-                      -{formatMinor(allocation.data.discount_minor)} ₸
-                    </span>
-                  </div>
-                ) : null}
-                {Number(allocation.data.service_minor) > 0 ? (
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-body-secondary text-ink-2">{t('receiptService')}</span>
-                    <span className="text-body-secondary text-warning">
-                      +{formatMinor(allocation.data.service_minor)} ₸
-                    </span>
-                  </div>
-                ) : null}
+            <div className="pt-3 text-caption text-ink-2">{t('receiptShares')}</div>
+            {Object.entries(preview.perPerson).map(([userId, share]) => (
+              <div key={userId} className="flex items-center justify-between pt-1">
+                <span className="text-body-secondary text-ink">{nameOf(userId)}</span>
+                <span className="text-body-secondary text-ink">{formatMinor(String(share))} ₸</span>
+              </div>
+            ))}
 
-                <div className="pt-3 text-caption text-ink-2">{t('receiptShares')}</div>
-                {Object.entries(allocation.data.per_person).map(([userId, share]) => (
-                  <div key={userId} className="flex items-center justify-between pt-1">
-                    <span className="text-body-secondary text-ink">{nameOf(userId)}</span>
-                    <span className="text-body-secondary text-ink">{formatMinor(share)} ₸</span>
-                  </div>
-                ))}
+            <div className="pt-3 text-caption text-ink-2">{t('receiptOwes')}</div>
+            {Object.entries(preview.owes).length === 0 ? (
+              <div className="pt-1 text-caption text-ink-2">{t('receiptNobodyOwes')}</div>
+            ) : null}
+            {Object.entries(preview.owes).map(([userId, share]) => (
+              <div key={userId} className="flex items-center justify-between pt-1">
+                <span className="text-body-secondary text-ink">
+                  {nameOf(userId)} → {nameOf(payerId)}
+                </span>
+                <Chip tone="warning">{formatMinor(String(share))} ₸</Chip>
+              </div>
+            ))}
 
-                <div className="pt-3 text-caption text-ink-2">{t('receiptOwes')}</div>
-                {Object.entries(allocation.data.owes_to_payer).length === 0 ? (
-                  <div className="pt-1 text-caption text-ink-2">{t('receiptNobodyOwes')}</div>
-                ) : null}
-                {Object.entries(allocation.data.owes_to_payer).map(([userId, share]) => (
-                  <div key={userId} className="flex items-center justify-between pt-1">
-                    <span className="text-body-secondary text-ink">
-                      {nameOf(userId)} → {nameOf(payerId)}
-                    </span>
-                    <Chip tone="warning">{formatMinor(share)} ₸</Chip>
-                  </div>
-                ))}
+            {preview.unallocated.length > 0 ? (
+              <div className="pt-3">
+                <Banner tone="warning" icon="info" title={t('receiptUnassigned')} />
+              </div>
+            ) : null}
 
-                {difference !== 0 ? (
-                  <div className="pt-3">
-                    <Banner tone="danger" icon="error" title={t('receiptMismatch')}>
-                      {t('receiptDifference')}: {formatMinor(String(difference))} ₸
-                    </Banner>
-                  </div>
-                ) : null}
-              </Card>
-            </>
-          ) : null}
+            {difference !== 0 ? (
+              <div className="pt-3">
+                <Banner tone="danger" icon="error" title={t('receiptMismatch')}>
+                  {t('receiptDifference')}: {formatMinor(String(difference))} ₸
+                </Banner>
+              </div>
+            ) : null}
+          </Card>
 
           <div className="pt-3">
             <PrimaryButton

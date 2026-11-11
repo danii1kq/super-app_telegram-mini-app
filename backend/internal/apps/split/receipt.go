@@ -78,6 +78,38 @@ var allowedImageMime = map[string]string{
 	"image/webp": ".webp",
 }
 
+// CreateManualReceipt starts an empty draft without a photo.
+//
+// A receipt typed by hand is a first-class case: recognition may be unavailable
+// or the paper may be lost. The row keeps the same shape, with no image.
+func (s *Service) CreateManualReceipt(ctx context.Context, authorID, groupID int64) (Receipt, error) {
+	if err := s.requireMember(ctx, authorID, groupID); err != nil {
+		return Receipt{}, err
+	}
+
+	var receipt Receipt
+	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx,
+			`INSERT INTO split_receipts (group_id, author_id, image_sealed, image_key_id, image_mime, image_bytes)
+			 VALUES ($1, $2, ''::bytea, 'none', 'image/png', 0)
+			 RETURNING id, created_at`,
+			groupID, authorID,
+		).Scan(&receipt.ID, &receipt.CreatedAt); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return Receipt{}, err
+	}
+
+	receipt.GroupID = groupID
+	receipt.AuthorID = authorID
+	receipt.Status = "draft"
+	receipt.Items = []ReceiptItem{}
+	return receipt, nil
+}
+
 // CreateReceipt stores the photo, asks the recognizer for a draft and returns it.
 //
 // Recognition failure is not a request failure: the draft is stored with a

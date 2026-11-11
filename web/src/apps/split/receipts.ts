@@ -69,7 +69,23 @@ export const receiptKeys = {
 
 export const debtKeys = {
   list: (groupId: string) => ['split', 'debts', groupId] as const,
+  members: (groupId: string) => ['split', 'members', groupId] as const,
 };
+
+/**
+ * The group's own members.
+ *
+ * A receipt or an expense may only involve people of this group, so pickers use
+ * this list and never the app-wide directory.
+ */
+export function useGroupMembers(groupId: string) {
+  return useQuery({
+    queryKey: debtKeys.members(groupId),
+    queryFn: () => api<{ members: string[] }>(`/split/groups/${groupId}/members`),
+    select: (data) => data.members,
+    enabled: Boolean(groupId),
+  });
+}
 
 export function useReceipt(id: string) {
   return useQuery({
@@ -106,6 +122,17 @@ export function useUploadReceipt(groupId: string) {
         file,
         file.type || 'application/octet-stream',
       ),
+    onSuccess: (receipt) => {
+      queryClient.setQueryData(receiptKeys.one(receipt.id), receipt);
+    },
+  });
+}
+
+/** Starts an empty draft for a receipt typed by hand. */
+export function useManualReceipt(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<Receipt>(`/split/groups/${groupId}/receipts/manual`, { method: 'POST' }),
     onSuccess: (receipt) => {
       queryClient.setQueryData(receiptKeys.one(receipt.id), receipt);
     },

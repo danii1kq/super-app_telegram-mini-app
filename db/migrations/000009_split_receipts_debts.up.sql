@@ -13,7 +13,9 @@ CREATE TABLE split_receipts (
     image_sealed   bytea       NOT NULL,
     image_key_id   text        NOT NULL,
     image_mime     text        NOT NULL CHECK (image_mime IN ('image/jpeg', 'image/png', 'image/webp')),
-    image_bytes    integer     NOT NULL CHECK (image_bytes > 0 AND image_bytes <= 5242880),
+    -- Zero means a receipt typed by hand: recognition may be unavailable, and a
+    -- paper receipt may simply be lost.
+    image_bytes    integer     NOT NULL CHECK (image_bytes >= 0 AND image_bytes <= 5242880),
     -- draft: recognized, editable, not yet an expense. saved: committed.
     status         text        NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'saved')),
     -- Why recognition failed, as a stable code the UI translates. Never the
