@@ -398,6 +398,14 @@ func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, 
 		if item.AmountMinor < 0 {
 			return Receipt{}, httpapi.Validation(map[string]string{"items": "Сумма не может быть отрицательной"}, "Проверьте поля")
 		}
+		// A line is shared by people, not by units: one pizza split between two
+		// people has quantity 1 and two participants. Quantity bounds the units
+		// only when the line really has several units to hand out, so the cap is
+		// the larger of the two.
+		maxUnits := item.Quantity
+		if len(item.Units) > maxUnits {
+			maxUnits = len(item.Units)
+		}
 		units := 0
 		for userID, count := range item.Units {
 			if count <= 0 {
@@ -408,7 +416,7 @@ func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, 
 				return Receipt{}, httpapi.Validation(map[string]string{"items": "Позиция назначена не участнику группы"}, "Проверьте поля")
 			}
 		}
-		if units > item.Quantity {
+		if units > maxUnits {
 			return Receipt{}, httpapi.Validation(
 				map[string]string{"items": "Единиц больше, чем в позиции: одна единица учтена дважды"},
 				"Проверьте поля",

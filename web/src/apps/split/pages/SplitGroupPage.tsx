@@ -14,6 +14,7 @@ import {
   PrimaryButton,
   Row,
   Screen,
+  SecondaryButton,
   SectionLabel,
   Skeleton,
 } from '@/shared/ui';
@@ -84,6 +85,17 @@ export function SplitGroupPage() {
 
   return (
     <Screen header={<AppHeader title={t('splitGroup')} onBack={() => navigate('/apps/split')} />}>
+      <div className="flex gap-2 pt-2">
+        <SecondaryButton onClick={() => navigate(`/apps/split/${id}/receipt`)} full>
+          <Icon name="photo_camera" size={18} />
+          {t('receiptAdd')}
+        </SecondaryButton>
+        <SecondaryButton onClick={() => navigate(`/apps/split/${id}/debts`)} full>
+          <Icon name="handshake" size={18} />
+          {t('debts')}
+        </SecondaryButton>
+      </div>
+
       <SectionLabel>{t('balances')}</SectionLabel>
       <Card>
         {balances.isLoading ? (

@@ -53,6 +53,24 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     signal: options.signal,
   });
 
+  return readResponse<T>(response);
+}
+
+/**
+ * Uploads a binary body with the session token.
+ *
+ * The token is module-private, so a file upload goes through here instead of
+ * reaching for it from a component.
+ */
+export async function apiUpload<T>(path: string, file: Blob, mime: string): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json', 'Content-Type': mime };
+  if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
+
+  const response = await fetch(`/api/v1${path}`, { method: 'POST', headers, body: file });
+  return readResponse<T>(response);
+}
+
+async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     clearSessionToken();
     onUnauthorized?.();
