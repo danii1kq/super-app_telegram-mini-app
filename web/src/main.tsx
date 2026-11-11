@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './app/App';
+import { SessionProvider } from './app/session';
 import { I18nProvider } from './shared/i18n';
 import { ToastProvider } from './shared/ui/toast';
 import { bootstrapTelegram, tg } from './shared/telegram/sdk';
@@ -29,7 +30,9 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
         <ToastProvider>
-          <App />
+          <SessionProvider>
+            <App />
+          </SessionProvider>
         </ToastProvider>
       </I18nProvider>
     </QueryClientProvider>

@@ -1,6 +1,6 @@
 // Package app wires the services together and builds the HTTP handler.
 //
-// It is the only place that knows every module; the modules never import each
+// It is the only place that knows every module; modules never import each
 // other directly.
 package app
 
@@ -8,19 +8,40 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/danii1kq/srunal/internal/core/auth"
+	"github.com/danii1kq/srunal/internal/core/chat"
+	"github.com/danii1kq/srunal/internal/core/social"
+	"github.com/danii1kq/srunal/internal/core/user"
 	"github.com/danii1kq/srunal/internal/platform/config"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
+	"github.com/danii1kq/srunal/internal/platform/secure"
 )
 
 // Deps carries what every module needs.
 type Deps struct {
-	Config config.Config
-	Pool   *postgres.Pool
+	Config  config.Config
+	Pool    *postgres.Pool
+	Content *secure.Cipher
+	Index   *secure.LookupIndex
 }
 
 // NewAPI builds the root handler.
 func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.Handler, error) {
+	content, err := secure.NewCipher(cfg.ContentKey)
+	if err != nil {
+		return nil, err
+	}
+	index, err := secure.NewLookupIndex(cfg.HMACIndexKey)
+	if err != nil {
+		return nil, err
+	}
+
+	deps := Deps{Config: cfg, Pool: pool, Content: content, Index: index}
+
+	verifier := auth.NewVerifier(cfg.BotToken, cfg.AllowedBotID, cfg.InitDataMaxAge)
+	authService := auth.NewService(pool, index, content, cfg.SessionTTL)
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -31,11 +52,17 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	auth.NewHandler(verifier, authService).Register(mux)
+	user.NewHandler(user.NewService(pool), authService).Register(mux)
+	social.NewHandler(social.NewService(pool, content), authService).Register(mux)
+	chat.NewHandler(chat.NewService(pool, content), authService, chat.NewHub()).Register(mux)
+
 	// Unknown API routes answer JSON, never the SPA shell.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, httpapi.NotFound("Маршрут не найден"))
 	})
 
 	_ = ctx
+	_ = deps
 	return mux, nil
 }
