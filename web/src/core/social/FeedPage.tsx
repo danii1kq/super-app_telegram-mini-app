@@ -26,9 +26,9 @@ export function FeedPage() {
         onSuccess: () => {
           setDraft('');
           setComposerOpen(false);
-          feedback('Опубликовано');
+          feedback(t('published'));
         },
-        onError: () => feedback('Не удалось опубликовать', 'error'),
+        onError: () => feedback(t('publishFailed'), 'error'),
       },
     );
   };
@@ -37,8 +37,8 @@ export function FeedPage() {
     <Screen header={<AppHeader title="SruNal" leadingIcon="dynamic_feed" />}>
       {status === 'outside' ? (
         <div className="pt-2">
-          <Banner tone="warning" icon="info" title="Откройте через Telegram">
-            Лента работает внутри Telegram Mini App: вход подтверждается подписью Telegram.
+          <Banner tone="warning" icon="info" title={t('openInTelegram')}>
+            {t('feedOutside')}
           </Banner>
         </div>
       ) : null}
@@ -49,7 +49,7 @@ export function FeedPage() {
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Что нового?"
+              placeholder={t('postPlaceholder')}
               rows={3}
               maxLength={4000}
               className="w-full resize-none rounded-xl bg-neutral-soft/60 p-3 text-body-lg text-ink outline-none placeholder:text-hint"
@@ -74,7 +74,7 @@ export function FeedPage() {
             className="flex w-full items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-left text-body-lg text-hint"
           >
             <Icon name="edit" size={20} className="text-accent" />
-            Написать пост
+            {t('writePost')}
           </button>
         )}
       </div>
@@ -89,16 +89,12 @@ export function FeedPage() {
 
         {feed.isError ? (
           <Banner tone="danger" icon="error" title={t('error')}>
-            Проверьте соединение и повторите.
+            {t('retryConnection')}
           </Banner>
         ) : null}
 
         {feed.data && feed.data.length === 0 ? (
-          <EmptyState
-            icon="dynamic_feed"
-            title={t('empty')}
-            text="Подпишитесь на авторов или вступите в сообщество, чтобы увидеть публикации."
-          />
+          <EmptyState icon="dynamic_feed" title={t('empty')} text={t('feedEmpty')} />
         ) : null}
 
         {feed.data?.map((post) => (

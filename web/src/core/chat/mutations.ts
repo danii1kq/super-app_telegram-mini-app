@@ -34,3 +34,13 @@ export function useMarkRead(conversationId: string) {
 export function newClientMessageId(): string {
   return crypto.randomUUID();
 }
+
+/** Opens (or reuses) the one-to-one dialog with another account. */
+export function useOpenDirect() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api<{ id: string }>('/conversations', { method: 'POST', body: { user_id: userId } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: chatKeys.list }),
+  });
+}

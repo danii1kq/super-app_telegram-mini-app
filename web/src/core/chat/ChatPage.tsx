@@ -5,10 +5,12 @@ import { newClientMessageId, useMarkRead, useSendMessage } from './mutations';
 import { AppHeader, Banner, Icon, Screen, Skeleton } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
+import { useT } from '@/shared/i18n';
 
 /** Single conversation with a sticky composer. */
 export function ChatPage() {
   const { id = '' } = useParams();
+  const t = useT();
   const navigate = useNavigate();
   const feedback = useFeedback();
   const { me } = useSession();
@@ -38,16 +40,13 @@ export function ChatPage() {
       { clientMessageId: newClientMessageId(), text },
       {
         onSuccess: () => setDraft(''),
-        onError: () => feedback('Сообщение не отправлено', 'error'),
+        onError: () => feedback(t('messageFailed'), 'error'),
       },
     );
   };
 
   return (
-    <Screen
-      header={<AppHeader title="Чат" onBack={() => navigate('/chats')} />}
-      bottomSpace
-    >
+    <Screen header={<AppHeader title={t('chat')} onBack={() => navigate('/chats')} />} bottomSpace>
       {messages.isLoading ? (
         <div className="flex flex-col gap-2 pt-2">
           <Skeleton className="h-10 w-2/3" />
@@ -57,8 +56,8 @@ export function ChatPage() {
 
       {messages.isError ? (
         <div className="pt-2">
-          <Banner tone="danger" icon="error" title="Не удалось загрузить историю">
-            Проверьте соединение и повторите.
+          <Banner tone="danger" icon="error" title={t('historyError')}>
+            {t('retryConnection')}
           </Banner>
         </div>
       ) : null}
@@ -98,14 +97,14 @@ export function ChatPage() {
               }
             }}
             rows={1}
-            placeholder="Сообщение"
+            placeholder={t('messagePlaceholder')}
             className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl bg-neutral-soft/70 px-3 py-2.5 text-body-lg text-ink outline-none placeholder:text-hint"
           />
           <button
             type="button"
             onClick={submit}
             disabled={!draft.trim() || sendMessage.isPending}
-            aria-label="Отправить"
+            aria-label={t('send')}
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent text-btn-text transition active:scale-95 disabled:opacity-50"
           >
             <Icon name="send" size={20} filled />

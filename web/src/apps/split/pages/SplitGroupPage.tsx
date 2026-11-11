@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { formatMinor, parseMinor, useSplitBalances, useSplitExpenses } from '../api';
 import { newRequestId, useAddExpense } from '../mutations';
+import { usePeople } from '@/core/social/api';
 import {
   AppHeader,
   Banner,
@@ -30,40 +31,58 @@ export function SplitGroupPage() {
   const expenses = useSplitExpenses(id);
   const balances = useSplitBalances(id);
   const addExpense = useAddExpense(id);
+  const people = usePeople(Boolean(id));
 
   const [composing, setComposing] = useState(false);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [participants, setParticipants] = useState<string[]>([]);
+
+  const nameOf = (userId: string): string => {
+    if (userId === me?.id) return t('you');
+    const person = people.data?.find((candidate) => candidate.id === userId);
+    return person?.public_name ?? `${t('member')} ${userId}`;
+  };
+
+  const toggleParticipant = (userId: string) => {
+    setParticipants((current) =>
+      current.includes(userId) ? current.filter((value) => value !== userId) : [...current, userId],
+    );
+  };
 
   const submit = () => {
     const minor = parseMinor(amount);
     if (!description.trim() || minor === null || !me) {
-      feedback('Проверьте сумму и описание', 'error');
+      feedback(t('checkAmount'), 'error');
       return;
     }
+    // The payer takes part by default: a share nobody carries would break the
+    // zero-sum invariant the server checks.
+    const chosen = participants.length > 0 ? participants : [me.id];
     addExpense.mutate(
       {
         clientRequestId: newRequestId(),
         description: description.trim(),
         amountMinor: minor,
         payerId: me.id,
-        participants: [me.id],
+        participants: chosen.includes(me.id) ? chosen : [me.id, ...chosen],
       },
       {
         onSuccess: () => {
           setDescription('');
           setAmount('');
+          setParticipants([]);
           setComposing(false);
-          feedback('Расход добавлен');
+          feedback(t('expenseAdded'));
         },
-        onError: () => feedback('Не удалось добавить расход', 'error'),
+        onError: () => feedback(t('expenseFailed'), 'error'),
       },
     );
   };
 
   return (
-    <Screen header={<AppHeader title="Группа расходов" onBack={() => navigate('/apps/split')} />}>
-      <SectionLabel>Балансы</SectionLabel>
+    <Screen header={<AppHeader title={t('splitGroup')} onBack={() => navigate('/apps/split')} />}>
+      <SectionLabel>{t('balances')}</SectionLabel>
       <Card>
         {balances.isLoading ? (
           <div className="p-4">
@@ -72,7 +91,7 @@ export function SplitGroupPage() {
         ) : null}
 
         {balances.data && balances.data.length === 0 ? (
-          <div className="px-4 py-3 text-caption text-ink-2">Пока никого нет в группе</div>
+          <div className="px-4 py-3 text-caption text-ink-2">{t('noMembers')}</div>
         ) : null}
 
         {balances.data?.map((balance, index) => {
@@ -84,8 +103,8 @@ export function SplitGroupPage() {
               <Row
                 icon="person"
                 iconTone={mine ? 'accent' : 'ink-2'}
-                title={mine ? 'Вы' : `Участник ${balance.user_id}`}
-                subtitle={`Оплачено ${formatMinor(balance.paid_minor)} ₸ · доля ${formatMinor(balance.share_minor)} ₸`}
+                title={nameOf(balance.user_id)}
+                subtitle={`${t('paid')} ${formatMinor(balance.paid_minor)} ₸ · ${t('share2')} ${formatMinor(balance.share_minor)} ₸`}
                 trailing={
                   <Chip tone={value > 0 ? 'success' : value < 0 ? 'danger' : 'neutral'}>
                     {value > 0 ? '+' : ''}
@@ -98,24 +117,46 @@ export function SplitGroupPage() {
         })}
       </Card>
 
-      <SectionLabel>Расходы</SectionLabel>
+      <SectionLabel>{t('expenses')}</SectionLabel>
       {composing ? (
         <Card className="p-3">
           <input
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="На что потратили"
+            placeholder={t('expenseWhat')}
             maxLength={200}
             className="w-full rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-lg text-ink outline-none placeholder:text-hint"
           />
           <input
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
-            placeholder="Сумма, ₸"
+            placeholder={t('expenseAmount')}
             inputMode="decimal"
             className="mt-2 w-full rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-lg text-ink outline-none placeholder:text-hint"
           />
-          <div className="flex items-center justify-between pt-2">
+
+          <div className="pt-3 text-caption text-ink-2">{t('addMembers')}</div>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {people.data?.map((person) => {
+              const picked = participants.includes(person.id);
+              return (
+                <button
+                  key={person.id}
+                  type="button"
+                  onClick={() => toggleParticipant(person.id)}
+                  className={
+                    picked
+                      ? 'h-8 rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent'
+                      : 'h-8 rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
+                  }
+                >
+                  {person.public_name}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between pt-3">
             <button type="button" onClick={() => setComposing(false)} className="text-body-secondary text-ink-2">
               {t('cancel')}
             </button>
@@ -131,7 +172,7 @@ export function SplitGroupPage() {
           className="flex w-full items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-left text-body-lg text-hint"
         >
           <Icon name="add_circle" size={20} className="text-accent" />
-          Добавить расход
+          {t('addExpense')}
         </button>
       )}
 
@@ -140,12 +181,12 @@ export function SplitGroupPage() {
 
         {expenses.isError ? (
           <Banner tone="danger" icon="error" title={t('error')}>
-            Проверьте соединение и повторите.
+            {t('retryConnection')}
           </Banner>
         ) : null}
 
         {expenses.data && expenses.data.length === 0 ? (
-          <EmptyState icon="receipt_long" title="Расходов пока нет" text="Добавьте первый расход группы." />
+          <EmptyState icon="receipt_long" title={t('expenseEmpty')} text={t('expenseEmptyText')} />
         ) : null}
 
         {expenses.data && expenses.data.length > 0 ? (
@@ -155,7 +196,7 @@ export function SplitGroupPage() {
                 {index > 0 ? <Hairline /> : null}
                 <Row
                   icon="payments"
-                  title={expense.description || 'Расход'}
+                  title={expense.description || t('expenses')}
                   subtitle={new Date(expense.spent_at).toLocaleDateString('ru-RU', {
                     day: 'numeric',
                     month: 'short',
@@ -168,10 +209,7 @@ export function SplitGroupPage() {
         ) : null}
       </div>
 
-      <div className="px-1 pt-4 text-caption text-ink-2">
-        Сумма делится поровну, остаток округления достаётся первым участникам по порядку. Сумма
-        балансов группы всегда равна нулю.
-      </div>
+      <div className="px-1 pt-4 text-caption text-ink-2">{t('splitNote')}</div>
     </Screen>
   );
 }

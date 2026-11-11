@@ -16,12 +16,13 @@ import {
 } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
+import { usePeople } from '@/core/social/api';
 import { useT } from '@/shared/i18n';
 
 const DURATIONS = [
-  { value: 30, label: '30 мин' },
-  { value: 60, label: '1 час' },
-  { value: 120, label: '2 часа' },
+  { value: 30, label: '30' },
+  { value: 60, label: '60' },
+  { value: 120, label: '120' },
 ] as const;
 
 /** SruPulse: who is free right now. */
@@ -34,24 +35,35 @@ export function PulseHomePage() {
   const createStatus = useCreateStatus();
   const respond = useRespond();
   const closeStatus = useCloseStatus();
+  const people = usePeople(Boolean(me));
 
   const [composing, setComposing] = useState(false);
   const [text, setText] = useState('');
   const [minutes, setMinutes] = useState<number>(60);
+  const [audience, setAudience] = useState<string[]>([]);
+
+  const toggleAudience = (id: string) => {
+    setAudience((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  };
 
   const submit = () => {
     const value = text.trim();
     if (!value || !me) return;
+    // The author always sees their own status; the audience adds the rest.
+    const recipients = audience.includes(me.id) ? audience : [me.id, ...audience];
     const expiresAt = new Date(Date.now() + minutes * 60_000).toISOString();
     createStatus.mutate(
-      { text: value, expiresAt, audience: [me.id] },
+      { text: value, expiresAt, audience: recipients },
       {
         onSuccess: () => {
           setText('');
+          setAudience([]);
           setComposing(false);
-          feedback('Статус опубликован');
+          feedback(t('pulsePublished'));
         },
-        onError: () => feedback('Не удалось опубликовать статус', 'error'),
+        onError: () => feedback(t('pulseFailed'), 'error'),
       },
     );
   };
@@ -63,7 +75,7 @@ export function PulseHomePage() {
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="Свободен до 16:20, хочу кофе"
+            placeholder={t('pulsePlaceholder')}
             rows={2}
             maxLength={280}
             className="w-full resize-none rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-lg text-ink outline-none placeholder:text-hint"
@@ -80,11 +92,33 @@ export function PulseHomePage() {
                     : 'h-8 rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
                 }
               >
-                {duration.label}
+                {duration.label} {t('minutesShort')}
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-2">
+
+          <div className="pt-3 text-caption text-ink-2">{t('audience')}</div>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {people.data?.map((person) => {
+              const picked = audience.includes(person.id);
+              return (
+                <button
+                  key={person.id}
+                  type="button"
+                  onClick={() => toggleAudience(person.id)}
+                  className={
+                    picked
+                      ? 'h-8 rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent'
+                      : 'h-8 rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
+                  }
+                >
+                  {person.public_name}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between pt-3">
             <button type="button" onClick={() => setComposing(false)} className="text-body-secondary text-ink-2">
               {t('cancel')}
             </button>
@@ -100,7 +134,7 @@ export function PulseHomePage() {
           className="mt-2 flex w-full items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-left text-body-lg text-hint"
         >
           <Icon name="bolt" size={20} className="text-accent" />
-          Я свободен сейчас
+          {t('pulseFree')}
         </button>
       )}
 
@@ -109,16 +143,12 @@ export function PulseHomePage() {
 
         {feed.isError ? (
           <Banner tone="danger" icon="error" title={t('error')}>
-            Проверьте соединение и повторите.
+            {t('retryConnection')}
           </Banner>
         ) : null}
 
         {feed.data && feed.data.length === 0 ? (
-          <EmptyState
-            icon="bolt"
-            title={t('empty')}
-            text="Статусы видны выбранной аудитории и истекают сами."
-          />
+          <EmptyState icon="bolt" title={t('empty')} text={t('pulseEmpty')} />
         ) : null}
 
         {feed.data?.map((status) => {
@@ -130,11 +160,11 @@ export function PulseHomePage() {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-body-strong text-ink">{status.author_name}</span>
                   <span className="text-caption text-ink-2">
-                    ещё {left} мин
+                    {t('left')} {left} {t('minutesShort')}
                   </span>
                 </div>
                 <Chip tone={left > 15 ? 'success' : 'warning'} icon="schedule">
-                  {left > 0 ? 'свободен' : 'истёк'}
+                  {left > 0 ? t('pulseFree15') : t('pulseExpired')}
                 </Chip>
               </div>
 
@@ -152,7 +182,7 @@ export function PulseHomePage() {
                     onClick={() => closeStatus.mutate(status.id)}
                     className="text-body-secondary text-danger"
                   >
-                    Завершить
+                    {t('pulseFinish')}
                   </button>
                 ) : (
                   <button
@@ -160,8 +190,8 @@ export function PulseHomePage() {
                     disabled={status.responded || left === 0}
                     onClick={() =>
                       respond.mutate(status.id, {
-                        onSuccess: () => feedback('Отклик отправлен'),
-                        onError: () => feedback('Статус уже завершён', 'error'),
+                        onSuccess: () => feedback(t('pulseRespondDone')),
+                        onError: () => feedback(t('pulseClosed'), 'error'),
                       })
                     }
                     className={`h-9 rounded-xl px-4 text-body-secondary-strong ${
@@ -170,7 +200,7 @@ export function PulseHomePage() {
                         : 'bg-accent-soft text-accent'
                     }`}
                   >
-                    {status.responded ? 'Вы откликнулись' : 'Откликнуться'}
+                    {status.responded ? t('pulseResponded') : t('pulseRespond')}
                   </button>
                 )}
               </div>
@@ -179,10 +209,7 @@ export function PulseHomePage() {
         })}
       </div>
 
-      <div className="px-1 pt-4 text-caption text-ink-2">
-        Статус виден только выбранной аудитории и перестаёт принимать отклики после окончания времени.
-        Календарь SruDay не раскрывает названия событий.
-      </div>
+      <div className="px-1 pt-4 text-caption text-ink-2">{t('pulseNote')}</div>
     </Screen>
   );
 }

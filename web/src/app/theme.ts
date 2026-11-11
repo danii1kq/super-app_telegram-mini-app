@@ -8,7 +8,8 @@ import { deviceStorage, tg, versionAtLeast } from '@/shared/telegram/sdk';
  * "dark"  - fixed dark palette.
  *
  * The choice is stored on the device and applied through data-scheme on <html>;
- * the CSS resolves the semantic tokens per scheme.
+ * the CSS resolves the semantic tokens per scheme. applyThemeMode is called both
+ * at start and on every change, so the switch takes effect immediately.
  */
 
 export type ThemeMode = 'auto' | 'light' | 'dark';
@@ -32,14 +33,85 @@ export function resolveScheme(mode: ThemeMode = loadThemeMode()): 'light' | 'dar
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+/** Telegram's own dark palette, used when Telegram is not driving the theme. */
+const TG_DARK = {
+  bg: '#17212b',
+  surface: '#17212b',
+  surface2: '#0e1621',
+  ink: '#ffffff',
+  ink2: '#708499',
+  hint: '#708499',
+  link: '#6ab3f3',
+  button: '#5288c1',
+  line: '#101921',
+};
+
+const TG_LIGHT = {
+  bg: '#efeff4',
+  surface: '#ffffff',
+  surface2: '#ffffff',
+  ink: '#000000',
+  ink2: '#8e8e93',
+  hint: '#8e8e93',
+  link: '#2481cc',
+  button: '#2481cc',
+  line: 'rgba(60, 60, 67, 0.2)',
+};
+
+/**
+ * Writes the palette onto <html> as inline custom properties.
+ *
+ * Inside Telegram with "auto" the --tg-theme-* variables already carry the
+ * client palette and the CSS falls back to them, so nothing is written. A forced
+ * light/dark choice has to override them, which is what this does.
+ */
+function applyPalette(mode: ThemeMode, scheme: 'light' | 'dark'): void {
+  const root = document.documentElement;
+  const followTelegram = mode === 'auto' && Boolean(tg?.themeParams);
+
+  if (followTelegram) {
+    for (const name of Object.keys(OVERRIDES)) root.style.removeProperty(name);
+    return;
+  }
+
+  const palette = scheme === 'dark' ? TG_DARK : TG_LIGHT;
+  root.style.setProperty('--app-bg', palette.bg);
+  root.style.setProperty('--app-surface', palette.surface);
+  root.style.setProperty('--app-surface-2', palette.surface2);
+  root.style.setProperty('--app-ink', palette.ink);
+  root.style.setProperty('--app-ink-2', palette.ink2);
+  root.style.setProperty('--app-hint', palette.hint);
+  root.style.setProperty('--app-link', palette.link);
+  root.style.setProperty('--app-btn', palette.button);
+  root.style.setProperty('--app-line', palette.line);
+}
+
+const OVERRIDES: Record<string, string> = {
+  '--app-bg': '',
+  '--app-surface': '',
+  '--app-surface-2': '',
+  '--app-ink': '',
+  '--app-ink-2': '',
+  '--app-hint': '',
+  '--app-link': '',
+  '--app-btn': '',
+  '--app-line': '',
+};
+
 export function applyThemeMode(mode: ThemeMode = loadThemeMode()): void {
   const scheme = resolveScheme(mode);
   document.documentElement.dataset.scheme = scheme;
   document.documentElement.dataset.themeMode = mode;
+  applyPalette(mode, scheme);
+
+  // The browser chrome follows the scheme even outside Telegram.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', scheme === 'dark' ? '#17212b' : '#efeff4');
+
   if (!tg) return;
 
   const followTelegram = mode === 'auto' && versionAtLeast('7.0');
-  const bar = followTelegram ? 'secondary_bg_color' : scheme === 'dark' ? '#0E1621' : '#EFEFF4';
+  const bar = followTelegram ? 'secondary_bg_color' : scheme === 'dark' ? '#17212b' : '#efeff4';
   try {
     if (versionAtLeast('6.1')) {
       tg.setHeaderColor(bar);
@@ -53,12 +125,23 @@ export function applyThemeMode(mode: ThemeMode = loadThemeMode()): void {
   }
 }
 
-/** Applies the stored theme and keeps "auto" in sync with Telegram. */
+/** Applies the stored theme and keeps "auto" in sync with Telegram and the OS. */
 export function initTheme(): () => void {
   applyThemeMode();
+
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  const onSystemChange = () => {
+    if (loadThemeMode() === 'auto') applyThemeMode();
+  };
+  media.addEventListener('change', onSystemChange);
+
   const client = tg;
-  if (!client) return () => {};
+  if (!client) return () => media.removeEventListener('change', onSystemChange);
+
   const onThemeChanged = () => applyThemeMode();
   client.onEvent('themeChanged', onThemeChanged);
-  return () => client.offEvent('themeChanged', onThemeChanged);
+  return () => {
+    media.removeEventListener('change', onSystemChange);
+    client.offEvent('themeChanged', onThemeChanged);
+  };
 }

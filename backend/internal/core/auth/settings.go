@@ -23,7 +23,7 @@ func (s *Service) Settings(ctx context.Context, userID int64) (Settings, error) 
 		`SELECT lang, theme, timezone, pinned_apps FROM user_settings WHERE user_id = $1`, userID,
 	).Scan(&out.Lang, &out.Theme, &out.Timezone, &out.Pinned)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Settings{Lang: "ru", Theme: "auto", Timezone: "Asia/Qyzylorda"}, nil
+		return Settings{Lang: "ru", Theme: "auto", Timezone: "Asia/Almaty"}, nil
 	}
 	if err != nil {
 		return Settings{}, err

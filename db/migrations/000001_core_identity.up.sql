@@ -18,7 +18,7 @@ CREATE TABLE user_settings (
     user_id         bigint PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     lang            text        NOT NULL DEFAULT 'ru' CHECK (lang IN ('ru', 'kk', 'en')),
     theme           text        NOT NULL DEFAULT 'auto' CHECK (theme IN ('auto', 'light', 'dark')),
-    timezone        text        NOT NULL DEFAULT 'Asia/Qyzylorda',
+    timezone        text        NOT NULL DEFAULT 'Asia/Almaty',
     pinned_apps     text[]      NOT NULL DEFAULT '{}',
     updated_at      timestamptz NOT NULL DEFAULT now()
 );

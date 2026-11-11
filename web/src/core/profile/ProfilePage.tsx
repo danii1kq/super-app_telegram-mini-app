@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useSession } from '@/app/session';
 import { api } from '@/shared/api/client';
-import { AppHeader, Banner, Card, Hairline, Row, Screen, Segmented, SectionLabel, Switch } from '@/shared/ui';
+import { AppHeader, Card, Hairline, Row, Screen, Segmented, SectionLabel, Switch } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useI18n, type Lang } from '@/shared/i18n';
-import { saveThemeMode, type ThemeMode } from '@/app/theme';
+import { saveThemeMode, applyThemeMode, type ThemeMode } from '@/app/theme';
+
+/** The build the user is running. Shown in the profile, not hidden in a menu. */
+export const APP_VERSION = 'v1.0.0';
 
 /** Profile and shell settings. */
 export function ProfilePage() {
-  const { me, status } = useSession();
+  const { me } = useSession();
   const { lang, setLang, t } = useI18n();
   const feedback = useFeedback();
   const [theme, setTheme] = useState<ThemeMode>(me?.theme ?? 'auto');
@@ -16,15 +19,16 @@ export function ProfilePage() {
   const patch = async (body: Record<string, unknown>) => {
     try {
       await api('/me/settings', { method: 'PATCH', body });
-      feedback('Сохранено');
+      feedback(t('saved'));
     } catch {
-      feedback('Не удалось сохранить', 'error');
+      feedback(t('saveFailed'), 'error');
     }
   };
 
   const changeTheme = (next: ThemeMode) => {
     setTheme(next);
     saveThemeMode(next);
+    applyThemeMode(next);
     void patch({ theme: next });
   };
 
@@ -35,37 +39,29 @@ export function ProfilePage() {
 
   return (
     <Screen header={<AppHeader title={t('profile')} leadingIcon="person" />}>
-      {status === 'outside' ? (
-        <div className="pt-2">
-          <Banner tone="warning" icon="info" title="Откройте через Telegram">
-            Профиль привязан к аккаунту Telegram и работает внутри Mini App.
-          </Banner>
-        </div>
-      ) : null}
-
-      <SectionLabel>Аккаунт</SectionLabel>
+      <SectionLabel>{t('account')}</SectionLabel>
       <Card>
         <Row
           icon="person"
-          title={me?.public_name ?? 'Гость'}
-          subtitle={me?.username ? `@${me.username}` : 'Telegram не подключён'}
+          title={me?.public_name ?? t('guest')}
+          subtitle={me?.username ? `@${me.username}` : t('telegramNotLinked')}
         />
       </Card>
 
-      <SectionLabel>Оформление</SectionLabel>
+      <SectionLabel>{t('appearance')}</SectionLabel>
       <Card className="p-3">
         <Segmented
           options={[
-            { value: 'auto', label: 'Как в Telegram' },
-            { value: 'light', label: 'Светлая' },
-            { value: 'dark', label: 'Тёмная' },
+            { value: 'auto', label: t('themeAuto') },
+            { value: 'light', label: t('themeLight') },
+            { value: 'dark', label: t('themeDark') },
           ]}
           value={theme}
           onChange={changeTheme}
         />
       </Card>
 
-      <SectionLabel>Язык</SectionLabel>
+      <SectionLabel>{t('language')}</SectionLabel>
       <Card className="p-3">
         <Segmented
           options={[
@@ -78,27 +74,34 @@ export function ProfilePage() {
         />
       </Card>
 
-      <SectionLabel>Уведомления</SectionLabel>
+      <SectionLabel>{t('notifications')}</SectionLabel>
       <Card>
         <Row
           icon="notifications"
-          title="Сообщения в чате бота"
-          subtitle="Доставка не зависит от открытого приложения"
-          trailing={<Switch checked label="Уведомления" onChange={() => feedback('Настройка появится позже')} />}
+          title={t('notificationsTitle')}
+          subtitle={t('notificationsSubtitle')}
+          trailing={<Switch checked label={t('notifications')} onChange={() => feedback(t('soon'))} />}
         />
         <Hairline />
         <Row
           icon="volume_off"
-          title="Заглушить диалог"
-          subtitle="Настраивается в самом диалоге"
+          title={t('muteDialog')}
+          subtitle={t('muteDialogSubtitle')}
           iconTone="ink-2"
         />
       </Card>
 
-      <div className="px-1 pt-4 text-caption text-ink-2">
-        Часовой пояс: {me?.timezone ?? 'Asia/Qyzylorda'}. Приложения остаются отдельными: их данные
-        открываются только по выбранным вами разрешениям.
-      </div>
+      <SectionLabel>{t('timezone')}</SectionLabel>
+      <Card>
+        <Row icon="schedule" title={me?.timezone ?? 'Asia/Almaty'} subtitle="GMT+5" />
+      </Card>
+
+      <SectionLabel>{t('version')}</SectionLabel>
+      <Card>
+        <Row icon="info" title={APP_VERSION} subtitle="SruNal" iconTone="ink-2" />
+      </Card>
+
+      <div className="px-1 pt-4 text-caption text-ink-2">{t('profileNote')}</div>
     </Screen>
   );
 }

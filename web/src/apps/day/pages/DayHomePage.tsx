@@ -64,9 +64,8 @@ export function DayHomePage() {
     <Screen header={<AppHeader title="SruDay" onBack={() => navigate('/apps')} leadingIcon="calendar_month" />}>
       {status.data === false ? (
         <div className="pt-2">
-          <Banner tone="info" icon="link" title="Аккаунт SruDay не привязан">
-            Календарь, друзья и группы остаются в SruDay. Привязка откроет расписание здесь и позволит
-            создавать дедлайны из SruDoc.
+          <Banner tone="info" icon="link" title={t('dayNotLinked')}>
+            {t('dayNotLinkedText')}
           </Banner>
         </div>
       ) : null}
@@ -77,7 +76,7 @@ export function DayHomePage() {
             <button
               type="button"
               onClick={() => shift(-1)}
-              aria-label="Предыдущая неделя"
+              aria-label={t('prevWeek')}
               className="flex size-10 items-center justify-center rounded-xl bg-neutral-soft text-ink"
             >
               <Icon name="chevron_left" size={22} />
@@ -88,7 +87,7 @@ export function DayHomePage() {
             <button
               type="button"
               onClick={() => shift(1)}
-              aria-label="Следующая неделя"
+              aria-label={t('nextWeek')}
               className="flex size-10 items-center justify-center rounded-xl bg-neutral-soft text-ink"
             >
               <Icon name="chevron_right" size={22} />
@@ -98,8 +97,8 @@ export function DayHomePage() {
           <div className="pt-2">
             <Segmented
               options={[
-                { value: 'week', label: 'Неделя' },
-                { value: 'agenda', label: 'Список' },
+                { value: 'week', label: t('dayWeek') },
+                { value: 'agenda', label: t('dayAgenda') },
               ]}
               value={view}
               onChange={setView}
@@ -111,13 +110,13 @@ export function DayHomePage() {
           {events.isError ? (
             <div className="pt-3">
               <Banner tone="danger" icon="error" title={t('error')}>
-                SruDay сейчас недоступен. Остальные разделы SruNal работают.
+                {t('dayUnavailable')}
               </Banner>
             </div>
           ) : null}
 
           {events.data && events.data.length === 0 ? (
-            <EmptyState icon="event_available" title="Событий нет" text="На этой неделе календарь свободен." />
+            <EmptyState icon="event_available" title={t('dayNoEvents')} text={t('dayNoEventsText')} />
           ) : null}
 
           {view === 'week'
@@ -134,7 +133,7 @@ export function DayHomePage() {
                             title={event.title}
                             subtitle={
                               event.all_day
-                                ? 'Весь день'
+                                ? t('dayAllDay')
                                 : `${new Date(event.starts_at).toLocaleTimeString('ru-RU', {
                                     hour: '2-digit',
                                     minute: '2-digit',
@@ -143,14 +142,12 @@ export function DayHomePage() {
                                     minute: '2-digit',
                                   })}`
                             }
-                            trailing={
-                              event.source_ref ? <Chip tone="accent">SruDoc</Chip> : undefined
-                            }
+                            trailing={event.source_ref ? <Chip tone="accent">SruDoc</Chip> : undefined}
                           />
                         </div>
                       ))
                     ) : (
-                      <div className="px-4 py-3 text-caption text-ink-2">Свободно</div>
+                      <div className="px-4 py-3 text-caption text-ink-2">{t('dayFree')}</div>
                     )}
                   </Card>
                 </div>

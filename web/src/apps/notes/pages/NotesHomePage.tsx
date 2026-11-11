@@ -38,9 +38,9 @@ export function NotesHomePage() {
           setTitle('');
           setBody('');
           setComposing(false);
-          feedback('Заметка сохранена');
+          feedback(t('saved'));
         },
-        onError: () => feedback('Не удалось сохранить', 'error'),
+        onError: () => feedback(t('saveFailed'), 'error'),
       },
     );
   };
@@ -52,14 +52,14 @@ export function NotesHomePage() {
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Заголовок"
+            placeholder={t('noteTitle')}
             maxLength={200}
             className="w-full rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-strong text-ink outline-none placeholder:text-hint"
           />
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="Текст заметки"
+            placeholder={t('noteBody')}
             rows={6}
             maxLength={20000}
             className="mt-2 w-full resize-none rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-lg text-ink outline-none placeholder:text-hint"
@@ -80,7 +80,7 @@ export function NotesHomePage() {
           className="mt-2 flex w-full items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-left text-body-lg text-hint"
         >
           <Icon name="note_add" size={20} className="text-accent" />
-          Новая заметка
+          {t('noteNew')}
         </button>
       )}
 
@@ -89,16 +89,12 @@ export function NotesHomePage() {
 
         {notes.isError ? (
           <Banner tone="danger" icon="error" title={t('error')}>
-            Проверьте соединение и повторите.
+            {t('retryConnection')}
           </Banner>
         ) : null}
 
         {notes.data && notes.data.length === 0 ? (
-          <EmptyState
-            icon="sticky_note_2"
-            title={t('empty')}
-            text="Заметки видны только вам, пока вы сами не поделитесь ими."
-          />
+          <EmptyState icon="sticky_note_2" title={t('empty')} text={t('noteEmpty')} />
         ) : null}
 
         {notes.data && notes.data.length > 0 ? (
@@ -108,13 +104,13 @@ export function NotesHomePage() {
                 {index > 0 ? <Hairline /> : null}
                 <Row
                   icon="sticky_note_2"
-                  title={note.title || 'Без заголовка'}
+                  title={note.title || t('noteUntitled')}
                   subtitle={new Date(note.updated_at).toLocaleDateString('ru-RU', {
                     day: 'numeric',
                     month: 'short',
                   })}
                   onClick={() => navigate(`/apps/notes/${note.id}`)}
-                  trailing={note.mine ? undefined : <Chip tone="accent">Поделились</Chip>}
+                  trailing={note.mine ? undefined : <Chip tone="accent">{t('noteShared')}</Chip>}
                 />
               </div>
             ))}
