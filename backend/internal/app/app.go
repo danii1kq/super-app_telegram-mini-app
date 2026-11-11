@@ -11,6 +11,7 @@ import (
 	"github.com/danii1kq/srunal/internal/apps/day"
 	"github.com/danii1kq/srunal/internal/apps/doc"
 	"github.com/danii1kq/srunal/internal/apps/notes"
+	"github.com/danii1kq/srunal/internal/apps/pulse"
 	"github.com/danii1kq/srunal/internal/apps/split"
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/core/chat"
@@ -70,6 +71,8 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	notes.NewHandler(notes.NewService(pool, content), authService).Register(mux)
 
 	split.NewHandler(split.NewService(pool, content), authService).Register(mux)
+
+	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 
 	// Unknown API routes answer JSON, never the SPA shell.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
