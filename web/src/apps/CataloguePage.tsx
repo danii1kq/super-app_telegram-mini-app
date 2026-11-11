@@ -27,7 +27,7 @@ export function CataloguePage() {
               <Icon name={app.icon} size={26} />
             </span>
             <span className="text-body-strong text-ink">{app.title}</span>
-            <span className="text-caption text-ink-2">{app.tagline}</span>
+            <span className="text-caption text-ink-2">{t(app.tagline)}</span>
           </button>
         ))}
       </div>

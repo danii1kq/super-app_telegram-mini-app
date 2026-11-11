@@ -259,8 +259,8 @@ export function Segmented<T extends string>({
             onClick={() => onChange(option.value)}
             className={
               active
-                ? 'flex h-9 items-center justify-center rounded-[10px] bg-surface text-body-secondary-strong text-ink shadow-[0_1px_4px_rgba(0,0,0,0.08)]'
-                : 'flex h-9 items-center justify-center rounded-[10px] text-body-secondary text-ink-2'
+                ? 'flex h-9 min-w-0 items-center justify-center truncate rounded-[10px] bg-surface px-2 text-body-secondary-strong text-ink shadow-[0_1px_4px_rgba(0,0,0,0.08)]'
+                : 'flex h-9 min-w-0 items-center justify-center truncate rounded-[10px] px-2 text-body-secondary text-ink-2'
             }
           >
             {option.label}
