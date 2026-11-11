@@ -52,7 +52,7 @@ export function DocOrderPage() {
       {
         idempotencyKey,
         orderNumber: number,
-        title: order.data?.title ? `Дедлайн: ${order.data.title}` : '',
+        title: order.data?.title ? `${t('deadlinePrefix')}: ${order.data.title}` : '',
         dueDate: new Date(`${dueDate}T09:00:00`).toISOString(),
       },
       {

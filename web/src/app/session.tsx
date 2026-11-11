@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiError, clearSessionToken, setSessionToken, setUnauthorizedHandler } from '@/shared/api/client';
 import { initData, isMiniApp, telegramUser } from '@/shared/telegram/sdk';
+import { useT } from '@/shared/i18n';
 
 /**
  * Session: one Telegram-verified login per Mini App launch. The token lives in
@@ -37,6 +38,7 @@ export function useSession(): SessionValue {
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const t = useT();
   const [me, setMe] = useState<Me | null>(null);
   const [status, setStatus] = useState<SessionValue['status']>('loading');
   const [error, setError] = useState<string | undefined>(undefined);
@@ -76,10 +78,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setMe(response.me);
       setStatus('ready');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось войти');
+      setError(err instanceof ApiError ? err.message : t('loginFailed'));
       setStatus('error');
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void login();
@@ -89,10 +91,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUnauthorizedHandler(() => {
       setMe(null);
       setStatus('error');
-      setError('Сессия истекла, откройте приложение заново');
+      setError(t('sessionExpired'));
     });
     return () => setUnauthorizedHandler(undefined);
-  }, []);
+  }, [t]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 

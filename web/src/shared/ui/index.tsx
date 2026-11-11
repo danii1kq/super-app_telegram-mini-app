@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { hasNativeButtons } from '@/shared/telegram/sdk';
+import { useT } from '@/shared/i18n';
 
 /** Telegram avatar with a graceful fallback to initials. */
 export function Avatar({
@@ -74,6 +75,7 @@ export function AppHeader({
 }) {
   // Inside Telegram the native BackButton owns "back"; the in-content arrow is
   // the browser affordance.
+  const t = useT();
   const showInlineBack = Boolean(onBack) && !hasNativeButtons();
   const showLeadingIcon = Boolean(leadingIcon) && !showInlineBack;
   return (
@@ -86,7 +88,7 @@ export function AppHeader({
           {showInlineBack ? (
             <button
               type="button"
-              aria-label="Назад"
+              aria-label={t('back')}
               onClick={onBack}
               className="-ml-1 flex size-11 shrink-0 items-center justify-center text-accent transition-opacity active:opacity-60"
             >
