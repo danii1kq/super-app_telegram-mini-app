@@ -19,3 +19,7 @@ backend/bin/
 .env.local
 *.local.md
 deploy/SSH.local.md
+
+# Local dev server output
+web/dev.log
+backend/bin/
