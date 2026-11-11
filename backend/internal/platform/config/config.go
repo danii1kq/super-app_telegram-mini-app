@@ -27,6 +27,12 @@ type Config struct {
 	SessionTTL        time.Duration
 	MiniAppShortName  string
 
+	// Existing services SruNal adapts to.
+	DocAPIURL   string
+	DocAPIToken string
+	DayAPIURL   string
+	DayAPIToken string
+
 	// Cryptography: base64-encoded 32-byte keys. Empty in development means
 	// the process refuses to start unless DevInsecureKeys is set.
 	ContentKey     string
@@ -46,6 +52,10 @@ func Load() (Config, error) {
 		InitDataMaxAge:   envDuration("SRUNAL_INITDATA_MAX_AGE", 24*time.Hour),
 		SessionTTL:       envDuration("SRUNAL_SESSION_TTL", 30*24*time.Hour),
 		MiniAppShortName: env("SRUNAL_MINIAPP_NAME", ""),
+		DocAPIURL:        env("SRUNAL_DOC_API_URL", ""),
+		DocAPIToken:      env("SRUNAL_DOC_API_TOKEN", ""),
+		DayAPIURL:        env("SRUNAL_DAY_API_URL", ""),
+		DayAPIToken:      env("SRUNAL_DAY_API_TOKEN", ""),
 		ContentKey:       env("SRUNAL_CONTENT_KEY", ""),
 		IdentityKey:      env("SRUNAL_IDENTITY_KEY", ""),
 		DeliveryKey:      env("SRUNAL_DELIVERY_KEY", ""),

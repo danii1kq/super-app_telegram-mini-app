@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/danii1kq/srunal/internal/apps/doc"
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/core/chat"
 	"github.com/danii1kq/srunal/internal/core/social"
@@ -56,6 +57,9 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	user.NewHandler(user.NewService(pool), authService).Register(mux)
 	social.NewHandler(social.NewService(pool, content), authService).Register(mux)
 	chat.NewHandler(chat.NewService(pool, content), authService, chat.NewHub()).Register(mux)
+
+	docClient := doc.NewClient(cfg.DocAPIURL, cfg.DocAPIToken)
+	doc.NewHandler(doc.NewService(pool, docClient), authService).Register(mux)
 
 	// Unknown API routes answer JSON, never the SPA shell.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
