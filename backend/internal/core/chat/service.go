@@ -56,8 +56,11 @@ type Payload struct {
 
 // List returns the viewer's conversations with unread counts.
 func (s *Service) List(ctx context.Context, viewerID int64) ([]Conversation, error) {
+	// title_sealed is bytea: coalesce with '' would make the driver hand back a
+	// bytea value for a string destination, so the column is read as nullable
+	// and the title is opened only when it exists.
 	rows, err := s.pool.Query(ctx,
-		`SELECT c.id, c.kind, coalesce(c.title_sealed, ''), c.key_id,
+		`SELECT c.id, c.kind, c.title_sealed, c.key_id,
 		        c.last_message_seq, m.last_read_seq, c.created_at
 		   FROM chat_conversations c
 		   JOIN chat_members m ON m.conversation_id = c.id
@@ -73,16 +76,17 @@ func (s *Service) List(ctx context.Context, viewerID int64) ([]Conversation, err
 		var conversation Conversation
 		var sealed []byte
 		var keyID *string
-		if err := rows.Scan(&conversation.ID, &conversation.Kind, &conversation.Title,
+		if err := rows.Scan(&conversation.ID, &conversation.Kind, &sealed,
 			&keyID, &conversation.LastSeq, &conversation.LastRead, &conversation.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
-		_ = sealed
-		if keyID != nil && conversation.Title != "" {
-			// Title is stored sealed for groups; the placeholder above keeps the
-			// scan simple until the title column is read separately.
-			conversation.Title = ""
+		if len(sealed) > 0 && keyID != nil {
+			title, err := s.content.OpenString(secure.Sealed{KeyID: *keyID, Ciphertext: sealed}, titleAAD(conversation.ID))
+			if err != nil {
+				return nil, err
+			}
+			conversation.Title = title
 		}
 		if conversation.LastSeq > conversation.LastRead {
 			conversation.Unread = int(conversation.LastSeq - conversation.LastRead)
@@ -273,6 +277,10 @@ func (s *Service) openPayload(sealed []byte, keyID string, conversationID, seq i
 
 func messageAAD(conversationID, seq int64) string {
 	return "chat_message:" + itoa(conversationID) + ":" + itoa(seq)
+}
+
+func titleAAD(conversationID int64) string {
+	return "chat_title:" + itoa(conversationID)
 }
 
 func itoa(value int64) string {

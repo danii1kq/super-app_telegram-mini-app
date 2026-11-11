@@ -46,42 +46,30 @@ func (s *Service) Login(ctx context.Context, data InitData) (User, string, error
 	var user User
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
 		var id int64
-		err := tx.QueryRow(ctx,
-			`SELECT id, public_name, coalesce(username, ''), status
-			   FROM users WHERE telegram_id_lookup = $1`, lookup,
-		).Scan(&id, &user.PublicName, &user.Username, &user.Status)
-
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			sealed, err := s.content.SealString(fmt.Sprintf("%d", data.TelegramID), "user:telegram_id")
-			if err != nil {
-				return err
-			}
-			err = tx.QueryRow(ctx,
-				`INSERT INTO users (telegram_id_lookup, telegram_id_sealed, key_id, public_name, username)
-				 VALUES ($1, $2, $3, $4, nullif($5, ''))
-				 RETURNING id, public_name, coalesce(username, ''), status`,
-				lookup, sealed.Ciphertext, sealed.KeyID, publicName, data.Username,
-			).Scan(&id, &user.PublicName, &user.Username, &user.Status)
-			if err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `INSERT INTO user_settings (user_id) VALUES ($1)`, id); err != nil {
-				return err
-			}
-		case err != nil:
+		// Upsert, not select-then-insert: React StrictMode fires the login twice
+		// in development, and two concurrent inserts of the same account raced
+		// into a unique violation. ON CONFLICT makes the second one an update.
+		sealed, err := s.content.SealString(fmt.Sprintf("%d", data.TelegramID), "user:telegram_id")
+		if err != nil {
 			return err
-		default:
-			// Keep the display name and username fresh: both are mutable in
-			// Telegram and neither is an identity.
-			if _, err := tx.Exec(ctx,
-				`UPDATE users SET public_name = $2, username = nullif($3, ''), updated_at = now()
-				  WHERE id = $1`, id, publicName, data.Username,
-			); err != nil {
-				return err
-			}
-			user.PublicName = publicName
-			user.Username = data.Username
+		}
+		err = tx.QueryRow(ctx,
+			`INSERT INTO users (telegram_id_lookup, telegram_id_sealed, key_id, public_name, username)
+			 VALUES ($1, $2, $3, $4, nullif($5, ''))
+			 ON CONFLICT (telegram_id_lookup) DO UPDATE
+			    SET public_name = excluded.public_name,
+			        username = excluded.username,
+			        updated_at = now()
+			 RETURNING id, public_name, coalesce(username, ''), status`,
+			lookup, sealed.Ciphertext, sealed.KeyID, publicName, data.Username,
+		).Scan(&id, &user.PublicName, &user.Username, &user.Status)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, id,
+		); err != nil {
+			return err
 		}
 
 		user.ID = id

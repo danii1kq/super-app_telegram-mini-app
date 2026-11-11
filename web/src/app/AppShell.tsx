@@ -10,18 +10,21 @@ const TABS: readonly { to: string; label: DictKey; icon: string }[] = [
 ];
 
 /**
- * Shell around every section. The tab bar is hidden inside an app space so the
- * app owns the screen and the way back is the catalogue.
+ * Shell around every section. The tab bar is hidden inside an app space and in
+ * a single conversation: both own the screen, and the tab bar would cover the
+ * message composer.
  */
 export function AppShell() {
   const t = useT();
   const location = useLocation();
   const insideApp = location.pathname.startsWith('/apps/');
+  const insideChat = /^\/chats\/[^/]+/.test(location.pathname);
+  const hideTabs = insideApp || insideChat;
 
   return (
     <div className="flex min-h-screen flex-col bg-page">
       <Outlet />
-      {insideApp ? null : (
+      {hideTabs ? null : (
         <nav
           className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur-xl"
           style={{ paddingBottom: 'var(--safe-bottom)' }}
