@@ -23,6 +23,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/split/groups/{id}/expenses", h.auth.Middleware(http.HandlerFunc(h.listExpenses)))
 	mux.Handle("POST /api/v1/split/groups/{id}/expenses", h.auth.Middleware(http.HandlerFunc(h.addExpense)))
 	mux.Handle("GET /api/v1/split/groups/{id}/balances", h.auth.Middleware(http.HandlerFunc(h.balances)))
+	h.RegisterReceipts(mux)
 }
 
 func (h *Handler) listGroups(w http.ResponseWriter, r *http.Request) {

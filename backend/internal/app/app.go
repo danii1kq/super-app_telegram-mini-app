@@ -19,6 +19,7 @@ import (
 	"github.com/danii1kq/srunal/internal/core/user"
 	"github.com/danii1kq/srunal/internal/integration"
 	"github.com/danii1kq/srunal/internal/platform/config"
+	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
@@ -78,7 +79,7 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	notesService := notes.NewService(pool, content)
 	notes.NewHandler(notesService, authService).Register(mux)
 
-	split.NewHandler(split.NewService(pool, content), authService).Register(mux)
+	split.NewHandler(split.NewService(pool, content, receiptReader(cfg)), authService).Register(mux)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 
@@ -95,4 +96,16 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	_ = ctx
 	_ = deps
 	return mux, nil
+}
+
+// receiptReader picks the recognizer for this process.
+//
+// No key means the Disabled reader: the API answers "unavailable" and the UI
+// offers manual entry. There is deliberately no mock that returns invented
+// lines, because a fake receipt would look like a successful reading.
+func receiptReader(cfg config.Config) ocr.Reader {
+	if cfg.OCRAPIKey == "" {
+		return ocr.Disabled{}
+	}
+	return ocr.NewOpenAI(cfg.OCRBaseURL, cfg.OCRAPIKey, cfg.OCRModel)
 }
