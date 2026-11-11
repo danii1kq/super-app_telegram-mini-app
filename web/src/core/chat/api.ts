@@ -26,11 +26,12 @@ export const chatKeys = {
   history: (conversationId: string) => ['chat', 'history', conversationId] as const,
 };
 
-export function useConversations() {
+export function useConversations(enabled = true) {
   return useQuery({
     queryKey: chatKeys.list,
     queryFn: () => api<{ conversations: Conversation[] }>('/conversations'),
     select: (data) => data.conversations,
+    enabled,
   });
 }
 

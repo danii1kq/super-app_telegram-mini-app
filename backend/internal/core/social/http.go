@@ -24,6 +24,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/posts/{id}/reactions", h.auth.Middleware(http.HandlerFunc(h.react)))
 	mux.Handle("POST /api/v1/authors/{id}/follow", h.auth.Middleware(http.HandlerFunc(h.follow)))
 	mux.Handle("DELETE /api/v1/authors/{id}/follow", h.auth.Middleware(http.HandlerFunc(h.unfollow)))
+	mux.Handle("GET /api/v1/people", h.auth.Middleware(http.HandlerFunc(h.people)))
+	mux.Handle("GET /api/v1/people/{id}", h.auth.Middleware(http.HandlerFunc(h.person)))
 }
 
 type postDTO struct {

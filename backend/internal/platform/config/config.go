@@ -6,6 +6,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strconv"
@@ -66,10 +68,45 @@ func Load() (Config, error) {
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("SRUNAL_DATABASE_URL is required")
 	}
-	if cfg.ContentKey == "" && !cfg.DevInsecureKeys {
+
+	if cfg.DevInsecureKeys {
+		// Local development without a secret store: generate ephemeral keys so the
+		// process starts. They are lost on restart, which is the point: nothing
+		// encrypted in a dev database survives a restart, and no key ever lands
+		// in the repository.
+		for name, target := range map[string]*string{
+			"SRUNAL_CONTENT_KEY":    &cfg.ContentKey,
+			"SRUNAL_IDENTITY_KEY":   &cfg.IdentityKey,
+			"SRUNAL_DELIVERY_KEY":   &cfg.DeliveryKey,
+			"SRUNAL_HMAC_INDEX_KEY": &cfg.HMACIndexKey,
+		} {
+			if *target == "" {
+				key, err := devKey()
+				if err != nil {
+					return Config{}, fmt.Errorf("generate %s: %w", name, err)
+				}
+				*target = key
+			}
+		}
+	}
+
+	if cfg.ContentKey == "" {
 		return Config{}, fmt.Errorf("SRUNAL_CONTENT_KEY is required (or set SRUNAL_DEV_INSECURE_KEYS=1 for local development)")
 	}
+	if cfg.HMACIndexKey == "" {
+		return Config{}, fmt.Errorf("SRUNAL_HMAC_INDEX_KEY is required (or set SRUNAL_DEV_INSECURE_KEYS=1 for local development)")
+	}
 	return cfg, nil
+}
+
+// devKey returns a base64-encoded 32-byte key for local development only.
+//
+// Deterministic on purpose: a random key per process would make everything
+// encrypted in the dev database unreadable after a restart. This value is public
+// and must never be used outside SRUNAL_DEV_INSECURE_KEYS=1.
+func devKey() (string, error) {
+	sum := sha256.Sum256([]byte("srunal-dev-insecure-key"))
+	return base64.StdEncoding.EncodeToString(sum[:]), nil
 }
 
 func env(key, fallback string) string {

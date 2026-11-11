@@ -11,7 +11,7 @@ export function FeedPage() {
   const t = useT();
   const feedback = useFeedback();
   const { status } = useSession();
-  const feed = useFeed();
+  const feed = useFeed(status === 'ready');
   const createPost = useCreatePost();
   const toggleReaction = useToggleReaction();
   const [draft, setDraft] = useState('');

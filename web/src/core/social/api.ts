@@ -19,10 +19,11 @@ export const feedKeys = {
   all: ['social', 'feed'] as const,
 };
 
-export function useFeed() {
+export function useFeed(enabled = true) {
   return useQuery({
     queryKey: feedKeys.all,
     queryFn: () => api<{ posts: Post[] }>('/feed'),
     select: (data) => data.posts,
+    enabled,
   });
 }

@@ -82,24 +82,24 @@ export function AppHeader({
         className="mx-auto flex h-14 w-full max-w-[480px] items-center justify-between px-4"
         style={{ paddingTop: 'var(--safe-top)', height: 'calc(3.5rem + var(--safe-top))' }}
       >
-        <div className="flex min-w-0 items-center gap-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           {showInlineBack ? (
             <button
               type="button"
               aria-label="Назад"
               onClick={onBack}
-              className="-ml-1 flex size-11 items-center justify-center text-accent transition-opacity active:opacity-60"
+              className="-ml-1 flex size-11 shrink-0 items-center justify-center text-accent transition-opacity active:opacity-60"
             >
               <Icon name="arrow_back_ios_new" size={22} />
             </button>
           ) : showLeadingIcon ? (
-            <span className="flex size-11 items-center justify-center text-accent">
+            <span className="flex size-9 shrink-0 items-center justify-center text-accent">
               <Icon name={leadingIcon ?? 'apps'} size={22} />
             </span>
           ) : null}
-          <h1 className="truncate text-headline-md text-ink">{title}</h1>
+          <h1 className="min-w-0 truncate text-headline-md text-ink">{title}</h1>
         </div>
-        <div className="flex items-center gap-2">{trailing}</div>
+        <div className="flex shrink-0 items-center gap-2">{trailing}</div>
       </div>
     </header>
   );

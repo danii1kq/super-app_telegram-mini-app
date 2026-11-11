@@ -2,12 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useConversations } from './api';
 import { AppHeader, Avatar, Banner, Card, EmptyState, Hairline, Row, Screen, Skeleton } from '@/shared/ui';
 import { useT } from '@/shared/i18n';
+import { useSession } from '@/app/session';
 
 /** Conversation list with unread counts. */
 export function ChatsPage() {
   const t = useT();
   const navigate = useNavigate();
-  const conversations = useConversations();
+  const { status } = useSession();
+  const conversations = useConversations(status === 'ready');
 
   return (
     <Screen header={<AppHeader title={t('chats')} leadingIcon="chat_bubble" />}>

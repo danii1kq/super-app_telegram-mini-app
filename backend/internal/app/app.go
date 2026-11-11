@@ -59,6 +59,10 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	})
 
 	auth.NewHandler(verifier, authService).Register(mux)
+	if cfg.DevInsecureKeys {
+		// Local development only: lets the Mini App be opened in a browser.
+		auth.NewDevHandler(authService).Register(mux)
+	}
 	user.NewHandler(user.NewService(pool), authService).Register(mux)
 	social.NewHandler(social.NewService(pool, content), authService).Register(mux)
 	chat.NewHandler(chat.NewService(pool, content), authService, chat.NewHub()).Register(mux)

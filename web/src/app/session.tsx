@@ -45,6 +45,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async () => {
     const signed = initData();
     if (!signed) {
+      // Outside Telegram (browser preview) the dev login keeps the app usable.
+      // The server mounts it only with SRUNAL_DEV_INSECURE_KEYS=1.
+      if (import.meta.env.DEV) {
+        try {
+          const response = await api<{ token: string; me: Me }>('/auth/dev', {
+            method: 'POST',
+            body: { name: 'Разработчик' },
+          });
+          setSessionToken(response.token);
+          setMe(response.me);
+          setStatus('ready');
+          return;
+        } catch {
+          setStatus('outside');
+          return;
+        }
+      }
       setStatus('outside');
       return;
     }
