@@ -17,6 +17,7 @@ import (
 	"github.com/danii1kq/srunal/internal/core/chat"
 	"github.com/danii1kq/srunal/internal/core/social"
 	"github.com/danii1kq/srunal/internal/core/user"
+	"github.com/danii1kq/srunal/internal/integration"
 	"github.com/danii1kq/srunal/internal/platform/config"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
@@ -63,16 +64,24 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	chat.NewHandler(chat.NewService(pool, content), authService, chat.NewHub()).Register(mux)
 
 	docClient := doc.NewClient(cfg.DocAPIURL, cfg.DocAPIToken)
-	doc.NewHandler(doc.NewService(pool, docClient), authService).Register(mux)
+	docService := doc.NewService(pool, docClient)
+	doc.NewHandler(docService, authService).Register(mux)
 
 	dayClient := day.NewClient(cfg.DayAPIURL, cfg.DayAPIToken)
-	day.NewHandler(day.NewService(pool, dayClient), authService).Register(mux)
+	dayService := day.NewService(pool, dayClient)
+	day.NewHandler(dayService, authService).Register(mux)
 
-	notes.NewHandler(notes.NewService(pool, content), authService).Register(mux)
+	notesService := notes.NewService(pool, content)
+	notes.NewHandler(notesService, authService).Register(mux)
 
 	split.NewHandler(split.NewService(pool, content), authService).Register(mux)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
+
+	integration.NewHandler(
+		integration.NewService(pool, docService, dayService, notesService, authService),
+		authService,
+	).Register(mux)
 
 	// Unknown API routes answer JSON, never the SPA shell.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
