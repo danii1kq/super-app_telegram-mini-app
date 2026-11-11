@@ -16,11 +16,13 @@ import {
   Skeleton,
 } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
-import { useT } from '@/shared/i18n';
+import { useT, useI18n } from '@/shared/i18n';
+import { formatDayMonth } from '@/shared/i18n/date';
 
 /** SruNotes: own notes and notes shared with the viewer. */
 export function NotesHomePage() {
   const t = useT();
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const feedback = useFeedback();
   const notes = useNotes();
@@ -105,10 +107,7 @@ export function NotesHomePage() {
                 <Row
                   icon="sticky_note_2"
                   title={note.title || t('noteUntitled')}
-                  subtitle={new Date(note.updated_at).toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
+                  subtitle={formatDayMonth(note.updated_at, lang)}
                   onClick={() => navigate(`/apps/notes/${note.id}`)}
                   trailing={note.mine ? undefined : <Chip tone="accent">{t('noteShared')}</Chip>}
                 />

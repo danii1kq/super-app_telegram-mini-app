@@ -3,12 +3,14 @@ import { useFeed } from './api';
 import { useCreatePost, useToggleReaction } from './mutations';
 import { AppHeader, Avatar, Banner, Card, EmptyState, Icon, PrimaryButton, Screen, Skeleton } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
-import { useT } from '@/shared/i18n';
+import { useT, useI18n } from '@/shared/i18n';
+import { formatDateTime } from '@/shared/i18n/date';
 import { useSession } from '@/app/session';
 
 /** SruNal feed: the start screen of the shell. */
 export function FeedPage() {
   const t = useT();
+  const { lang } = useI18n();
   const feedback = useFeedback();
   const { status } = useSession();
   const feed = useFeed(status === 'ready');
@@ -103,14 +105,7 @@ export function FeedPage() {
               <Avatar name={post.author_name} size={36} />
               <div className="flex min-w-0 flex-col">
                 <span className="truncate text-body-strong text-ink">{post.author_name}</span>
-                <span className="text-caption text-ink-2">
-                  {new Date(post.created_at).toLocaleString('ru-RU', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
+                <span className="text-caption text-ink-2">{formatDateTime(post.created_at, lang)}</span>
               </div>
             </div>
             <p className="whitespace-pre-wrap pt-2 text-body-lg text-ink">{post.body}</p>

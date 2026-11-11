@@ -16,11 +16,13 @@ import {
   Skeleton,
 } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
-import { useT } from '@/shared/i18n';
+import { useT, useI18n } from '@/shared/i18n';
+import { formatDayMonth } from '@/shared/i18n/date';
 
 /** SruSplit: expense groups. */
 export function SplitHomePage() {
   const t = useT();
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const feedback = useFeedback();
   const groups = useSplitGroups();
@@ -131,10 +133,7 @@ export function SplitHomePage() {
                 <Row
                   icon="receipt_long"
                   title={group.title}
-                  subtitle={new Date(group.created_at).toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
+                  subtitle={formatDayMonth(group.created_at, lang)}
                   onClick={() => navigate(`/apps/split/${group.id}`)}
                 />
               </div>

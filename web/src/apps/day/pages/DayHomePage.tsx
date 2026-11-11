@@ -15,7 +15,8 @@ import {
   Segmented,
   Skeleton,
 } from '@/shared/ui';
-import { useT } from '@/shared/i18n';
+import { useT, useI18n } from '@/shared/i18n';
+import { formatMonthDay, formatTime, formatWeekday, formatAgenda } from '@/shared/i18n/date';
 
 function startOfWeek(date: Date): Date {
   const copy = new Date(date);
@@ -25,13 +26,14 @@ function startOfWeek(date: Date): Date {
   return copy;
 }
 
-function formatDay(date: Date): string {
-  return date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' });
+function formatDay(date: Date, lang: 'ru' | 'kk' | 'en'): string {
+  return formatWeekday(date, lang);
 }
 
 /** SruDay space: the caller's calendar week from the existing SruDay service. */
 export function DayHomePage() {
   const t = useT();
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const status = useDayStatus();
   const [view, setView] = useState<'week' | 'agenda'>('week');
@@ -81,9 +83,7 @@ export function DayHomePage() {
             >
               <Icon name="chevron_left" size={22} />
             </button>
-            <span className="text-body-strong text-ink">
-              {anchor.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-            </span>
+            <span className="text-body-strong text-ink">{formatMonthDay(anchor, lang)}</span>
             <button
               type="button"
               onClick={() => shift(1)}
@@ -122,7 +122,7 @@ export function DayHomePage() {
           {view === 'week'
             ? days.map((day) => (
                 <div key={day.date.toISOString()}>
-                  <SectionLabel>{formatDay(day.date)}</SectionLabel>
+                  <SectionLabel>{formatDay(day.date, lang)}</SectionLabel>
                   <Card>
                     {day.events && day.events.length > 0 ? (
                       day.events.map((event, index) => (
@@ -134,13 +134,7 @@ export function DayHomePage() {
                             subtitle={
                               event.all_day
                                 ? t('dayAllDay')
-                                : `${new Date(event.starts_at).toLocaleTimeString('ru-RU', {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })} - ${new Date(event.ends_at).toLocaleTimeString('ru-RU', {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}`
+                                : `${formatTime(event.starts_at, lang)} - ${formatTime(event.ends_at, lang)}`
                             }
                             trailing={event.source_ref ? <Chip tone="accent">SruDoc</Chip> : undefined}
                           />
@@ -158,13 +152,7 @@ export function DayHomePage() {
                     <Row
                       icon="event"
                       title={event.title}
-                      subtitle={new Date(event.starts_at).toLocaleString('ru-RU', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      subtitle={formatAgenda(event.starts_at, lang)}
                       trailing={event.source_ref ? <Chip tone="accent">SruDoc</Chip> : undefined}
                     />
                   </Card>

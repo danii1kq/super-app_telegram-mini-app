@@ -19,12 +19,14 @@ import {
 } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
-import { useT } from '@/shared/i18n';
+import { useT, useI18n } from '@/shared/i18n';
+import { formatDayMonth } from '@/shared/i18n/date';
 
 /** One expense group: balances, expenses and the add form. */
 export function SplitGroupPage() {
   const { id = '' } = useParams();
   const t = useT();
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const feedback = useFeedback();
   const { me } = useSession();
@@ -197,10 +199,7 @@ export function SplitGroupPage() {
                 <Row
                   icon="payments"
                   title={expense.description || t('expenses')}
-                  subtitle={new Date(expense.spent_at).toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
+                  subtitle={formatDayMonth(expense.spent_at, lang)}
                   value={`${formatMinor(expense.amount_minor)} ₸`}
                 />
               </div>
