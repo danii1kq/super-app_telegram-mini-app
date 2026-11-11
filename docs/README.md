@@ -21,6 +21,7 @@
 | [09-ui-foundation.md](09-ui-foundation.md) | Переиспользование UI/UX и компонентов существующего DocGen |
 | [10-security.md](10-security.md) | Хэши, шифрование, права доступа, защита ключей и проверки безопасности |
 | [11-project-layout.md](11-project-layout.md) | Папки и файлы каждого приложения, общий код, зависимости и подключение модулей |
+| [12-srusplit-receipts-and-debts.md](12-srusplit-receipts-and-debts.md) | Чеки, распределение позиций, долги и возвраты в SruSplit: что сделано и что осталось |
 
 ## Основа концепции
 
