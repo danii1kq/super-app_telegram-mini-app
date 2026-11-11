@@ -1,0 +1,6 @@
+# Perch workspace state
+.perch/
+
+# OS junk
+Thumbs.db
+.DS_Store
