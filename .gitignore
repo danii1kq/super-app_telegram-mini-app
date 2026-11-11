@@ -4,3 +4,12 @@
 # OS junk
 Thumbs.db
 .DS_Store
+
+# Local secrets and backups
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+/secrets/
+/backups/
