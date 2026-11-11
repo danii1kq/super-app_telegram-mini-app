@@ -35,15 +35,15 @@ export function resolveScheme(mode: ThemeMode = loadThemeMode()): 'light' | 'dar
 
 /** Telegram's own dark palette, used when Telegram is not driving the theme. */
 const TG_DARK = {
-  bg: '#17212b',
+  bg: '#0e1621',
   surface: '#17212b',
-  surface2: '#0e1621',
+  surface2: '#17212b',
   ink: '#ffffff',
-  ink2: '#708499',
-  hint: '#708499',
+  ink2: '#8a9bb0',
+  hint: '#8a9bb0',
   link: '#6ab3f3',
   button: '#5288c1',
-  line: '#101921',
+  line: '#2a3743',
 };
 
 const TG_LIGHT = {

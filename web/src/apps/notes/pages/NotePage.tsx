@@ -76,7 +76,7 @@ export function NotePage() {
   };
 
   return (
-    <Screen header={<AppHeader title={t('noteTitle')} onBack={() => navigate('/apps/notes')} />}>
+    <Screen header={<AppHeader title={t('noteScreen')} onBack={() => navigate('/apps/notes')} />}>
       {note.isLoading ? <Skeleton className="mt-2 h-32 w-full" /> : null}
 
       {note.isError ? (

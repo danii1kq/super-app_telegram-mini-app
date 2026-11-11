@@ -40,7 +40,25 @@
   --safe-bottom: 16px;
 }
 
+/**
+ * Dark scheme.
+ *
+ * The page is darker than the cards: a single flat colour makes every surface
+ * merge into one block. Inside Telegram the client variables win, outside them
+ * the Telegram dark palette is the fallback.
+ */
 :root[data-scheme='dark'] {
+  --app-bg: var(--tg-theme-secondary-bg-color, #0e1621);
+  --app-surface: var(--tg-theme-section-bg-color, #17212b);
+  --app-surface-2: var(--tg-theme-bg-color, #17212b);
+  --app-ink: var(--tg-theme-text-color, #ffffff);
+  --app-ink-2: var(--tg-theme-subtitle-text-color, #8a9bb0);
+  --app-hint: var(--tg-theme-hint-color, #8a9bb0);
+  --app-link: var(--tg-theme-link-color, #6ab3f3);
+  --app-btn: var(--tg-theme-button-color, #5288c1);
+  --app-btn-text: var(--tg-theme-button-text-color, #ffffff);
+  --app-line: var(--tg-theme-section-separator-color, #2a3743);
+
   --app-accent: #6ab3f3;
   --app-accent-soft: #1c2e40;
   --app-outline: #8c939c;
@@ -73,8 +91,8 @@
   --app-surface: #17212b;
   --app-surface-2: #17212b;
   --app-ink: #ffffff;
-  --app-ink-2: #708499;
-  --app-hint: #708499;
+  --app-ink-2: #8a9bb0;
+  --app-hint: #8a9bb0;
   --app-link: #6ab3f3;
   --app-btn: #5288c1;
   --app-btn-text: #ffffff;
