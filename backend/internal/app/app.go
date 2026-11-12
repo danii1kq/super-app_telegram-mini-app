@@ -10,6 +10,7 @@ import (
 
 	"github.com/danii1kq/srunal/internal/apps/day"
 	"github.com/danii1kq/srunal/internal/apps/doc"
+	"github.com/danii1kq/srunal/internal/apps/farm"
 	"github.com/danii1kq/srunal/internal/apps/notes"
 	"github.com/danii1kq/srunal/internal/apps/pulse"
 	"github.com/danii1kq/srunal/internal/apps/split"
@@ -19,8 +20,8 @@ import (
 	"github.com/danii1kq/srunal/internal/core/user"
 	"github.com/danii1kq/srunal/internal/integration"
 	"github.com/danii1kq/srunal/internal/platform/config"
-	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
 )
@@ -88,6 +89,7 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	split.NewHandler(split.NewService(pool, content, receiptReader(cfg), delivery), authService, pool).Register(mux)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
+	farm.NewHandler(pool, authService).Register(mux)
 
 	integration.NewHandler(
 		integration.NewService(pool, docService, dayService, notesService, authService),
