@@ -20,6 +20,8 @@ func NewHandler(service *Service, authService *auth.Service) *Handler {
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/feed", h.auth.Middleware(http.HandlerFunc(h.feed)))
 	mux.Handle("POST /api/v1/posts", h.auth.Middleware(http.HandlerFunc(h.createPost)))
+	mux.Handle("GET /api/v1/posts/{id}/comments", h.auth.Middleware(http.HandlerFunc(h.comments)))
+	mux.Handle("POST /api/v1/posts/{id}/comments", h.auth.Middleware(http.HandlerFunc(h.createComment)))
 	mux.Handle("DELETE /api/v1/posts/{id}", h.auth.Middleware(http.HandlerFunc(h.deletePost)))
 	mux.Handle("POST /api/v1/posts/{id}/reactions", h.auth.Middleware(http.HandlerFunc(h.react)))
 	mux.Handle("POST /api/v1/authors/{id}/follow", h.auth.Middleware(http.HandlerFunc(h.follow)))
@@ -66,20 +68,33 @@ func (h *Handler) feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	before, _ := strconv.ParseInt(r.URL.Query().Get("before"), 10, 64)
+	before, err := cursorID(r.URL.Query().Get("before"))
+	if err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
 
-	posts, err := h.service.Feed(r.Context(), user.ID, before, limit)
+	posts, err := h.service.Feed(r.Context(), user.ID, before, limit+1)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return
 	}
 
+	var next *string
+	if len(posts) > limit {
+		posts = posts[:limit]
+		value := itoa(posts[limit-1].ID)
+		next = &value
+	}
 	out := make([]postDTO, 0, len(posts))
 	for _, post := range posts {
 		out = append(out, toDTO(post))
 	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"posts": out})
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"posts": out, "next_before": next})
 }
 
 type createPostRequest struct {

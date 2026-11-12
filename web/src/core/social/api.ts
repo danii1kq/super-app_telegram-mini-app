@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '@/shared/api/client';
 
 export interface Post {
@@ -17,14 +17,37 @@ export interface Post {
 /** Query keys start with the app id so a feed refresh never resets other apps. */
 export const feedKeys = {
   all: ['social', 'feed'] as const,
+  comments: (postId: string) => ['social', 'comments', postId] as const,
   people: (query: string) => ['social', 'people', query] as const,
 };
 
 export function useFeed(enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: feedKeys.all,
-    queryFn: () => api<{ posts: Post[] }>('/feed'),
-    select: (data) => data.posts,
+    initialPageParam: '',
+    queryFn: ({ pageParam, signal }) => api<{ posts: Post[]; next_before: string | null }>(`/feed?before=${pageParam}`, { signal }),
+    getNextPageParam: (last) => last.next_before ?? undefined,
+    select: (data) => data.pages.flatMap((page) => page.posts),
+    enabled,
+  });
+}
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  author_id: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
+export function useComments(postId: string, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: feedKeys.comments(postId),
+    initialPageParam: '',
+    queryFn: ({ pageParam, signal }) => api<{ comments: Comment[]; next_before: string | null }>(`/posts/${postId}/comments?before=${pageParam}`, { signal }),
+    getNextPageParam: (last) => last.next_before ?? undefined,
+    select: (data) => data.pages.flatMap((page) => page.comments),
     enabled,
   });
 }

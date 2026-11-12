@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/shared/api/client';
-import { feedKeys, type Post } from './api';
+import { feedKeys, type Comment, type Post } from './api';
 
 export function useCreatePost() {
   const queryClient = useQueryClient();
@@ -19,7 +19,18 @@ export function useToggleReaction() {
         method: 'POST',
         body: { kind: 'like' },
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedKeys.all }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: feedKeys.all }),
+  });
+}
+
+export function useCreateComment(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => api<Comment>(`/posts/${postId}/comments`, { method: 'POST', body: { body } }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: feedKeys.comments(postId) }),
+      queryClient.invalidateQueries({ queryKey: feedKeys.all }),
+    ]),
   });
 }
 

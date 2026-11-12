@@ -13,6 +13,20 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  commentsTitle: 'Комментарии',
+  commentPlaceholder: 'Написать комментарий',
+  commentEmpty: 'Комментариев пока нет',
+  commentFailed: 'Не удалось отправить комментарий',
+  commentLoadFailed: 'Не удалось загрузить комментарии',
+  commentSent: 'Комментарий добавлен',
+  loadMore: 'Показать ещё',
+  refresh: 'Обновить',
+  like: 'Нравится',
+  unlike: 'Убрать отметку',
+  publicPostHint: 'Публикацию увидят все пользователи SruNal',
+  confirmDeletePost: 'Удалить публикацию?',
+  postDeleted: 'Публикация удалена',
+  postDeleteFailed: 'Не удалось удалить публикацию',
   feed: 'Лента',
   chats: 'Чаты',
   apps: 'Приложения',
@@ -275,6 +289,20 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  commentsTitle: 'Пікірлер',
+  commentPlaceholder: 'Пікір жазу',
+  commentEmpty: 'Әзірге пікір жоқ',
+  commentFailed: 'Пікір жіберілмеді',
+  commentLoadFailed: 'Пікірлер жүктелмеді',
+  commentSent: 'Пікір қосылды',
+  loadMore: 'Тағы көрсету',
+  refresh: 'Жаңарту',
+  like: 'Ұнайды',
+  unlike: 'Ұнатуды алып тастау',
+  publicPostHint: 'Жарияланымды SruNal пайдаланушыларының бәрі көреді',
+  confirmDeletePost: 'Жарияланымды жою керек пе?',
+  postDeleted: 'Жарияланым жойылды',
+  postDeleteFailed: 'Жарияланым жойылмады',
   feed: 'Ағым',
   chats: 'Чаттар',
   apps: 'Қолданбалар',
@@ -535,6 +563,20 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  commentsTitle: 'Comments',
+  commentPlaceholder: 'Write a comment',
+  commentEmpty: 'No comments yet',
+  commentFailed: 'Could not send comment',
+  commentLoadFailed: 'Could not load comments',
+  commentSent: 'Comment added',
+  loadMore: 'Load more',
+  refresh: 'Refresh',
+  like: 'Like',
+  unlike: 'Unlike',
+  publicPostHint: 'Everyone on SruNal can see this post',
+  confirmDeletePost: 'Delete this post?',
+  postDeleted: 'Post deleted',
+  postDeleteFailed: 'Could not delete post',
   feed: 'Feed',
   chats: 'Chats',
   apps: 'Apps',

@@ -1,132 +1,76 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useFeed } from './api';
-import { useCreatePost, useToggleReaction } from './mutations';
-import { AppHeader, Avatar, Banner, Card, EmptyState, Icon, PrimaryButton, Screen, Skeleton } from '@/shared/ui';
+import { useCreatePost } from './mutations';
+import { PostCard } from './PostCard';
+import { AppHeader, Banner, Card, EmptyState, Icon, PrimaryButton, Screen, Skeleton } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
-import { useT, useI18n } from '@/shared/i18n';
-import { formatDateTime } from '@/shared/i18n/date';
+import { useT } from '@/shared/i18n';
 import { useSession } from '@/app/session';
 
-/** SruNal feed: the start screen of the shell. */
 export function FeedPage() {
   const t = useT();
-  const { lang } = useI18n();
   const feedback = useFeedback();
   const { status } = useSession();
-  const feed = useFeed(status === 'ready');
+  const ready = status === 'ready';
+  const feed = useFeed(ready);
   const createPost = useCreatePost();
-  const toggleReaction = useToggleReaction();
   const [draft, setDraft] = useState('');
   const [composerOpen, setComposerOpen] = useState(false);
+  const submitting = useRef(false);
 
   const submit = () => {
     const body = draft.trim();
-    if (!body) return;
-    createPost.mutate(
-      { body, audience: 'public' },
-      {
-        onSuccess: () => {
-          setDraft('');
-          setComposerOpen(false);
-          feedback(t('published'));
-        },
-        onError: () => feedback(t('publishFailed'), 'error'),
-      },
-    );
+    if (!body || !ready || submitting.current) return;
+    submitting.current = true;
+    createPost.mutate({ body, audience: 'public' }, {
+      onSuccess: () => { setDraft(''); setComposerOpen(false); feedback(t('published')); },
+      onError: () => feedback(t('publishFailed'), 'error'),
+      onSettled: () => { submitting.current = false; },
+    });
   };
 
   return (
-    <Screen header={<AppHeader title="SruNal" leadingIcon="dynamic_feed" />}>
-      {status === 'outside' ? (
-        <div className="pt-2">
-          <Banner tone="warning" icon="info" title={t('openInTelegram')}>
-            {t('feedOutside')}
-          </Banner>
-        </div>
-      ) : null}
-
+    <Screen header={<AppHeader title="SruNal" leadingIcon="dynamic_feed" trailing={
+      <button type="button" onClick={() => void feed.refetch()} disabled={!ready || feed.isFetching}
+        aria-label={t('refresh')} className="flex size-11 items-center justify-center text-accent disabled:opacity-40">
+        <Icon name="refresh" size={22} />
+      </button>
+    } />}>
+      {status === 'outside' ? <div className="pt-2"><Banner tone="warning" icon="info" title={t('openInTelegram')}>{t('feedOutside')}</Banner></div> : null}
       <div className="pt-2">
         {composerOpen ? (
           <Card className="p-3">
-            <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={t('postPlaceholder')}
-              rows={3}
-              maxLength={4000}
-              className="w-full resize-none rounded-xl bg-neutral-soft/60 p-3 text-body-lg text-ink outline-none placeholder:text-hint"
-            />
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                onClick={() => setComposerOpen(false)}
-                className="text-body-secondary text-ink-2"
-              >
-                {t('cancel')}
-              </button>
-              <PrimaryButton onClick={submit} disabled={!draft.trim()} progress={createPost.isPending}>
-                {t('send')}
-              </PrimaryButton>
+            <textarea value={draft} onChange={(event) => setDraft(event.target.value)} autoFocus
+              placeholder={t('postPlaceholder')} aria-label={t('postPlaceholder')} rows={4} maxLength={4000}
+              disabled={createPost.isPending}
+              className="w-full resize-y rounded-xl bg-neutral-soft/60 p-3 text-body-lg text-ink outline-none focus:ring-2 focus:ring-accent placeholder:text-hint disabled:opacity-60" />
+            <p className="px-1 pt-2 text-caption text-ink-2">{t('publicPostHint')}</p>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <button type="button" disabled={createPost.isPending} onClick={() => setComposerOpen(false)}
+                className="min-h-11 px-2 text-body-secondary text-ink-2 disabled:opacity-50">{t('cancel')}</button>
+              <span className="text-caption tabular-nums text-ink-2">{draft.length}/4000</span>
+              <PrimaryButton onClick={submit} disabled={!draft.trim() || !ready} progress={createPost.isPending}>{t('send')}</PrimaryButton>
             </div>
           </Card>
         ) : (
-          <button
-            type="button"
-            onClick={() => setComposerOpen(true)}
-            className="flex w-full items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-left text-body-lg text-hint"
-          >
-            <Icon name="edit" size={20} className="text-accent" />
-            {t('writePost')}
+          <button type="button" onClick={() => setComposerOpen(true)} disabled={!ready}
+            className="flex min-h-14 w-full items-center gap-3 rounded-[14px] bg-surface px-4 py-3 text-left text-body-lg text-hint disabled:opacity-50">
+            <Icon name="edit" size={22} className="text-accent" />{t('writePost')}
           </button>
         )}
       </div>
-
-      <div className="flex flex-col gap-2 pt-3">
-        {feed.isLoading ? (
-          <>
-            <Skeleton className="h-28 w-full" />
-            <Skeleton className="h-28 w-full" />
-          </>
+      <div className="flex flex-col gap-3 pt-3">
+        {feed.isLoading ? <><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></> : null}
+        {feed.isError && !feed.isFetchNextPageError ? (
+          <Banner tone="danger" icon="error" title={t('error')} action={
+            <button type="button" onClick={() => void feed.refetch()} className="min-h-11 font-semibold">{t('retry')}</button>
+          }>{t('retryConnection')}</Banner>
         ) : null}
-
-        {feed.isError ? (
-          <Banner tone="danger" icon="error" title={t('error')}>
-            {t('retryConnection')}
-          </Banner>
-        ) : null}
-
-        {feed.data && feed.data.length === 0 ? (
-          <EmptyState icon="dynamic_feed" title={t('empty')} text={t('feedEmpty')} />
-        ) : null}
-
-        {feed.data?.map((post) => (
-          <Card key={post.id} className="p-4">
-            <div className="flex items-center gap-2">
-              <Avatar name={post.author_name} size={36} />
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-body-strong text-ink">{post.author_name}</span>
-                <span className="text-caption text-ink-2">{formatDateTime(post.created_at, lang)}</span>
-              </div>
-            </div>
-            <p className="whitespace-pre-wrap pt-2 text-body-lg text-ink">{post.body}</p>
-            <div className="flex items-center gap-4 pt-3">
-              <button
-                type="button"
-                onClick={() => toggleReaction.mutate(post.id)}
-                className={`flex items-center gap-1 text-body-secondary ${
-                  post.liked_by_me ? 'text-accent' : 'text-ink-2'
-                }`}
-              >
-                <Icon name="favorite" size={18} filled={post.liked_by_me} />
-                {post.likes}
-              </button>
-              <span className="flex items-center gap-1 text-body-secondary text-ink-2">
-                <Icon name="chat_bubble" size={18} />
-                {post.comments}
-              </span>
-            </div>
-          </Card>
-        ))}
+        {ready && feed.data?.length === 0 ? <EmptyState icon="dynamic_feed" title={t('empty')} text={t('feedEmpty')} /> : null}
+        {feed.data?.map((post) => <PostCard key={post.id} post={post} />)}
+        {feed.isFetchNextPageError ? <p role="alert" className="text-body-secondary text-danger">{t('retryConnection')}</p> : null}
+        {feed.hasNextPage ? <PrimaryButton full onClick={() => void feed.fetchNextPage()}
+          disabled={feed.isFetching} progress={feed.isFetchingNextPage}>{feed.isFetchNextPageError ? t('retry') : t('loadMore')}</PrimaryButton> : null}
       </div>
     </Screen>
   );
