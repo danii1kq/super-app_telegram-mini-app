@@ -127,3 +127,44 @@ func TestWeekStart(t *testing.T) {
 		}
 	}
 }
+
+func TestExpandedPackUsesRarityInsteadOfPosition(t *testing.T) {
+	if len(Crops) != 12 {
+		t.Fatal("expected twelve plants")
+	}
+	seen := map[string]bool{}
+	for _, crop := range Crops {
+		if seen[crop.ID] || crop.Price <= crop.SeedPrice || crop.SeedPrice <= 0 {
+			t.Fatalf("invalid crop %+v", crop)
+		}
+		seen[crop.ID] = true
+	}
+	// Roll 65 selects the newly appended common radish, not a rare item.
+	s := initialState(time.Now())
+	s.Coins = 1000
+	rollRadish := func(int) (int, error) { return 65, nil }
+	_, drops, _, err := apply(&s, Action{Kind: "pack", Pack: "garden"}, time.Now(), rollRadish)
+	if err != nil || drops[0] != "radish" || s.Pity["garden"] != 3 {
+		t.Fatalf("common drop reset guarantee: %v %v", drops, err)
+	}
+	s.Pity["garden"] = 9
+	_, drops, _, err = apply(&s, Action{Kind: "pack", Pack: "garden"}, time.Now(), rollRadish)
+	if err != nil || drops[0] != "blueberry" || s.Pity["garden"] != 2 {
+		t.Fatal("new common seed bypassed guarantee")
+	}
+	for _, pack := range Packs {
+		hits := make(map[string]bool)
+		for value := 0; value < 100; value++ {
+			s = initialState(time.Now())
+			s.Coins = 1000
+			_, drops, _, err = apply(&s, Action{Kind: "pack", Pack: pack.ID}, time.Now(), func(int) (int, error) { return value, nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			hits[drops[0]] = true
+		}
+		if len(hits) != len(Crops) {
+			t.Fatalf("pack %s cannot drop every plant", pack.ID)
+		}
+	}
+}

@@ -26,6 +26,12 @@ var Crops = []Species{
 	{"pumpkin", "Тыква", "uncommon", 120, 60},
 	{"blueberry", "Голубика", "rare", 210, 110},
 	{"dragonfruit", "Драконий фрукт", "legendary", 450, 250},
+	{"radish", "Редис", "common", 38, 15},
+	{"cucumber", "Огурец", "common", 55, 24},
+	{"corn", "Кукуруза", "uncommon", 110, 55},
+	{"sunflower", "Подсолнух", "uncommon", 140, 70},
+	{"watermelon", "Арбуз", "rare", 300, 150},
+	{"moonflower", "Лунный цветок", "legendary", 800, 450},
 }
 
 type Plot struct {
@@ -82,8 +88,8 @@ type Pack struct {
 }
 
 var Packs = []Pack{
-	{"garden", "Садовый набор", 75, []int{40, 30, 18, 8, 3, 1}},
-	{"exotic", "Экзотический набор", 240, []int{10, 15, 25, 25, 20, 5}},
+	{"garden", "Садовый набор", 75, []int{20, 18, 12, 8, 5, 1, 12, 9, 6, 5, 3, 1}},
+	{"exotic", "Экзотический набор", 240, []int{3, 5, 10, 12, 16, 5, 4, 6, 12, 10, 12, 5}},
 }
 
 func initialState(now time.Time) State {
@@ -270,10 +276,11 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 				}
 			}
 			// Every tenth seed of this pack is rare or legendary if the streak had none.
-			if state.Pity[pack.ID] >= 9 && index < 4 {
+			isRare := func(index int) bool { return Crops[index].Rarity == "rare" || Crops[index].Rarity == "legendary" }
+			if state.Pity[pack.ID] >= 9 && !isRare(index) {
 				index = 4
 			}
-			if index >= 4 {
+			if isRare(index) {
 				state.Pity[pack.ID] = 0
 			} else {
 				state.Pity[pack.ID]++
