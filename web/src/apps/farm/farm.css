@@ -363,3 +363,10 @@
 @media(max-width:400px),(max-height:740px) { .farm-summon { padding: 15px 20px 18px; }.farm-summon .farm-opening-stage { height: 295px; }.farm-summon-core-button { width: 205px; height: 225px; }.farm-summon-core { height: 205px; width: 205px; }.farm-summon .farm-opening-revealed > .farm-crop-art { height: 169px; width: 169px; }.farm-summon .farm-opening-revealed h3 { font-size: 25px; }.farm-summon .farm-opening-bottom h3 { font-size: 20px; }.farm-summon .farm-opening-progress { padding-top: 12px; }.farm-summon .farm-opening-bottom { min-height: 113px; }.farm-summon .farm-opening-saved { font-size: 7px; margin-top: 17px; }.farm-summon .farm-opening-result > span { font-size: 6px; } }
 
 @media (prefers-reduced-motion: reduce) { .farm-app *, .farm-dialog * { animation: none !important; transition: none !important; } }
+
+.farm-level-claim { display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px; border: 1px solid #d8e0c2; border-radius: 9px; background: #f3f6e8; color: #6c7d4d; font-size: 9px; font-weight: 550; cursor: pointer; white-space: nowrap; transition: background .18s, transform .18s; }
+.farm-level-claim span { color: #9aa681; font-size: 8px; }
+.farm-level-claim:hover:not(:disabled) { background: #e8efd5; }
+.farm-level-claim:active:not(:disabled) { transform: scale(.96); }
+.farm-level-claim:disabled { opacity: .55; cursor: default; }
+.farm-level-claim svg { color: #a4b479; }

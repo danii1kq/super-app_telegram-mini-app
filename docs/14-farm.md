@@ -115,6 +115,24 @@ returns at most one seed of the harvested species, regardless of yield, quality
 or mutation. It can also recover a hybrid seed. The harvest transaction consumes
 the plot once and reports any recovered seeds in the success message.
 
+## Levels and rewards
+
+XP is earned only by harvesting: ten points per plot. The curve is
+`100 + (level-1)*40` per level, capped at level 10; XP keeps accumulating past
+the cap so the bar never freezes mid-track. The server owns the curve and
+returns `level`, `title`, `into`, `need`, `max`, `pending` and the full reward
+table, so the client never recomputes progression.
+
+Rewards are claimed once each, oldest pending first, and every claim is
+rejected if the level was not reached or was already paid. Coins and seeds are
+obvious; the two plot rewards raise the land upgrade level rather than appending
+beds directly, so the existing cap and price logic stays authoritative. If the
+garden is already at the land cap, the plot reward pays its base cost in coins
+instead of vanishing.
+
+Titles are cumulative milestones: Новичок at 1, Садовод at 3, Хозяин фермы at 5,
+Мастер урожая at 7, Легенда сада at 9.
+
 ## Growing plants
 
 Every species has its own growing silhouette, rather than a shared sprout. Roots

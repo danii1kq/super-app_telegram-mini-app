@@ -79,6 +79,7 @@ type State struct {
 	Pity        map[string]int       `json:"pity"`
 	Opened      int                  `json:"opened"`
 	Sold        int                  `json:"sold"`
+	ClaimedLevels []int              `json:"claimed_levels"`
 }
 
 type Action struct {
@@ -87,6 +88,7 @@ type Action struct {
 	Code    string `json:"code"`
 	Kind    string `json:"kind"`
 	Slot    int    `json:"slot"`
+	Level   int    `json:"level"`
 	Seed    string `json:"seed"`
 	Care    string `json:"care"`
 	Pack    string `json:"pack"`
@@ -143,6 +145,9 @@ func upgradesFor(state State) []Upgrade {
 
 func normalizeState(state *State) {
 	normalizeCollection(state)
+	if state.ClaimedLevels == nil {
+		state.ClaimedLevels = []int{}
+	}
 	if state.Theme == "" {
 		state.Theme = "garden"
 	}
@@ -270,6 +275,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		return true
 	}
 	switch action.Kind {
+	case "claim_level":
+		message, err := claimLevel(state, action.Level)
+		return message, nil, 0, err
 	case "breed", "claim_breed", "keep", "return_trophy":
 		message, err := collectionAction(state, action, now)
 		return message, nil, 0, err
