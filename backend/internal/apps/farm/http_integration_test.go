@@ -81,6 +81,13 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if _, err = pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
+	migration, err = os.ReadFile("../../../../db/migrations/000015_farm_flip_fee.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatal(err)
+	}
 	for id := 1; id <= 2; id++ {
 		if _, err := pool.Exec(ctx, `INSERT INTO sessions (token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 hour')`, secure.TokenHash(fmt.Sprintf("farm-test-%d", id)), id); err != nil {
 			t.Fatal(err)

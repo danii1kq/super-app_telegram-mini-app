@@ -291,11 +291,11 @@ A won plant follows the normal market rules when subsequently sold.
 
 One round per account, with stake debited at start. A crypto-random uniform
 integer `r` in `[0,1000000)` selects a private threshold
-`floor(96000000/(r+1))` in hundredths. The displayed multiplier is
+`floor(55000000/(r+1))` in hundredths. The displayed multiplier is
 `floor(exp(elapsed_seconds*0.08)*100)`, capped at 1000 (x10). A round busts when
 the multiplier exceeds its threshold; survivors automatically cash out at x10.
-There is a 4% immediate loss rate, 48% survival to x2, 19.2% to x5 and 9.6% to x10.
-The theoretical gross return is at most 96%, with integer coin payouts rounded
+There is a 45% immediate loss rate, 27.5% survival to x2, approximately18.33% to x3, 11% to x5 and 5.5% to x10.
+The theoretical gross return is at most 55%, with integer coin payouts rounded
 down. Numerical probability tests enumerate all one million roll values.
 
 Only the server clock and saved threshold decide payouts. Active responses omit
@@ -310,8 +310,8 @@ is determined when the server processes cashout under the player row lock.
 Migration000014 stores offers separately from player JSON. A host chooses sun or
 moon and escrows its stake. One open offer per host is enforced by a partial
 unique index. An authenticated, different player joins the opposite side with
-an equal stake. A crypto-random result pays the winner `floor(stake*1.8)`, taking
-10% of the combined bank, with rounding down. Offer and both player saves commit
+an equal stake. A crypto-random result pays the winner `floor(stake*1.5)`, taking
+25% of the combined bank, with rounding down. Offer and both player saves commit
 together. Offer rows lock before player rows, with paired account IDs ordered.
 Concurrent joins and join/cancel races have exactly one successful settlement.
 
@@ -324,7 +324,7 @@ creates an offer. The host's open offer stays visible ahead of the40-row limit.
 
 A player selects one barn specimen, a target species, target mutation and coin
 stake. Targets have perfect quality. The server quote uses market-upgraded
-prices and returns `min(7500,floor((source_unit_market+stake)*9000/target_market))`
+prices and returns `min(4500,floor((source_unit_market+stake)*6000/target_market))`
 as basis points. The target must cost more than the plant and coins combined.
 The action recalculates the quote while locked, consumes exactly one source
 specimen and the stake, then rolls once. Success adds the target to the barn
@@ -340,7 +340,17 @@ prevent duplicate payouts. History keeps the latest20 results, with current
 crash state persisted separately. Winning plant value is distinguished from coin
 payouts in the UI. Coinflip and upgrade reveals display already committed results;
 skipping, closing or muting them never changes a roll. Motion respects reduced
-motion. Eight Node tests cover sounds, plant character, stake validation and clock
+motion. Ten Node tests cover sounds, plant character, stake validation and clock
 interpolation. PostgreSQL integration tests use isolated schemas to exercise
 concurrent cashouts, joins, cancellation, expiry/refunds and single-plant use.
 No live player balances or clocks are changed by those fixtures.
+
+Balance changes affect new stakes. Existing crash rounds retain their saved
+threshold and declared return; old rounds without a return field report96%.
+Migration000015 preserves a10% fee for existing coinflip offers, while new offers
+snapshot25%. Both offer previews and payout settlement use the saved fee.
+
+Upgrade reveals now use five accelerating charge strikes and a2.35s finale.
+Seed reveals use faster accelerating strikes, a hexagonal energy sigil, a focused
+light beam and splitting shell fragments. Skip and close cancel pending reveal
+timers; effects preserve reduced-motion and sound preferences.

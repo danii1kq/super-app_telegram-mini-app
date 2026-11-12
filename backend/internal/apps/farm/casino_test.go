@@ -68,14 +68,14 @@ func TestCrashInstantLossAutoCashoutAndRequestReplay(t *testing.T) {
 }
 
 func TestCrashDistributionMatchesPublishedChances(t *testing.T) {
-	for _, bp := range []int{100, 200, 500, 1000} {
+	for bp, expected := range map[int]int{100: 550000, 200: 275000, 300: 183333, 500: 110000, 1000: 55000} {
 		wins := 0
 		for r := 0; r < 1000000; r++ {
-			if 96000000/(r+1) >= bp {
+			if crashThreshold(r) >= bp {
 				wins++
 			}
 		}
-		if wins != 96000000/bp {
+		if wins != expected {
 			t.Fatalf("chance mismatch at %d: %d", bp, wins)
 		}
 	}
@@ -93,7 +93,7 @@ func TestUpgradeQuoteConsumptionAndBoundaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if q.SourceValue != 40 || q.TargetValue != 18600 || q.ChanceBP != 503 {
+		if q.SourceValue != 40 || q.TargetValue != 18600 || q.ChanceBP != 335 {
 			t.Fatalf("quote mismatch %+v", q)
 		}
 		roll := q.ChanceBP
@@ -116,6 +116,28 @@ func TestUpgradeQuoteConsumptionAndBoundaries(t *testing.T) {
 		if _, _, _, err = apply(&s, a, time.Now(), fixed); err == nil || s.Coins != 9000 {
 			t.Fatal("upgrade request replayed")
 		}
+	}
+}
+
+func TestRebalancedRulesAndExistingCrash(t *testing.T) {
+	rules := gameRules()
+	if rules["crash_return_percent"] != 55 || rules["flip_fee_percent"] != 25 || rules["upgrade_return_percent"] != 60 || rules["upgrade_max_chance_bp"] != 4500 {
+		t.Fatal("published rules do not match rebalanced settings")
+	}
+	now := time.Now()
+	s := initialState(now)
+	normalizeState(&s)
+	s.Crash = &CrashRound{ID: "old", Stake: 1000, StartedAt: now.Add(-10 * time.Second), Status: "running", BustBP: 480}
+	if refreshCrash(&s, now) || publicGameState(s, now).Crash.ReturnPercent != 96 || s.Crash.BustBP != 480 {
+		t.Fatal("old crash threshold or published return changed")
+	}
+	s.Barn = []Harvest{{ID: "source", Seed: "carrot", Quantity: 1, Value: 32}}
+	q, err := plantUpgradeQuote(s, Action{Item: "source", Seed: "lotus", Upgrade: "crystal", Stake: 14000})
+	if err != nil || q.ChanceBP != 4500 {
+		t.Fatal("upgrade maximum is not 45%")
+	}
+	if coinflipPayout(1000, 25) != 1500 || coinflipPayout(1000, 10) != 1800 || coinflipPayout(101, 25) != 151 {
+		t.Fatal("current or legacy coinflip payout changed")
 	}
 }
 

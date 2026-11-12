@@ -12,15 +12,20 @@ import (
 const minGameStake = 100
 const maxGameStake = 100000
 const maxCrashBP = 1000
+const crashReturnPercent = 55
+const flipFeePercent = 25
+const upgradeReturnPercent = 60
+const upgradeMaxChanceBP = 4500
 
 type CrashRound struct {
-	ID           string    `json:"id"`
-	Stake        int       `json:"stake"`
-	StartedAt    time.Time `json:"started_at"`
-	Status       string    `json:"status"`
-	MultiplierBP int       `json:"multiplier_bp"`
-	Payout       int       `json:"payout"`
-	BustBP       int       `json:"bust_bp,omitempty"`
+	ReturnPercent int       `json:"return_percent"`
+	ID            string    `json:"id"`
+	Stake         int       `json:"stake"`
+	StartedAt     time.Time `json:"started_at"`
+	Status        string    `json:"status"`
+	MultiplierBP  int       `json:"multiplier_bp"`
+	Payout        int       `json:"payout"`
+	BustBP        int       `json:"bust_bp,omitempty"`
 }
 
 type GameResult struct {
@@ -46,8 +51,11 @@ type UpgradeQuote struct {
 }
 
 func gameRules() map[string]any {
-	return map[string]any{"min_stake": minGameStake, "max_stake": maxGameStake, "crash_max_bp": maxCrashBP, "crash_return_percent": 96, "crash_growth": 0.08, "flip_fee_percent": 10, "flip_expiry_seconds": 600, "upgrade_return_percent": 90, "upgrade_max_chance_bp": 7500}
+	return map[string]any{"min_stake": minGameStake, "max_stake": maxGameStake, "crash_max_bp": maxCrashBP, "crash_return_percent": crashReturnPercent, "crash_growth": 0.08, "flip_fee_percent": flipFeePercent, "flip_expiry_seconds": 600, "upgrade_return_percent": upgradeReturnPercent, "upgrade_max_chance_bp": upgradeMaxChanceBP}
 }
+
+func crashThreshold(roll int) int       { return crashReturnPercent * 1000000 / (roll + 1) }
+func coinflipPayout(stake, fee int) int { return stake * 2 * (100 - fee) / 100 }
 
 func appendGame(state *State, result GameResult) {
 	state.GameHistory = append(state.GameHistory, result)
@@ -123,6 +131,9 @@ func publicGameState(state State, now time.Time) State {
 	}
 	if state.Crash != nil {
 		copy := *state.Crash
+		if copy.ReturnPercent == 0 {
+			copy.ReturnPercent = 96
+		}
 		if copy.Status == "running" {
 			copy.BustBP = 0
 			copy.MultiplierBP = crashMultiplier(now, copy.StartedAt)
@@ -170,7 +181,7 @@ func plantUpgradeQuote(state State, action Action) (UpgradeQuote, error) {
 	if targetValue <= sourceValue+action.Stake {
 		return bad("Выбери результат дороже растения и ставки вместе")
 	}
-	chance := min(7500, (sourceValue+action.Stake)*9000/targetValue)
+	chance := min(upgradeMaxChanceBP, (sourceValue+action.Stake)*upgradeReturnPercent*100/targetValue)
 	if chance < 1 {
 		return bad("Для этого результата нужна ставка побольше")
 	}
@@ -202,7 +213,7 @@ func casinoAction(state *State, action Action, now time.Time, roll func(int) (in
 			return "", err
 		}
 		state.Coins -= action.Stake
-		state.Crash = &CrashRound{ID: id, Stake: action.Stake, StartedAt: now, Status: "running", MultiplierBP: 100, BustBP: 96000000 / (r + 1)}
+		state.Crash = &CrashRound{ID: id, Stake: action.Stake, StartedAt: now, Status: "running", MultiplierBP: 100, BustBP: crashThreshold(r), ReturnPercent: crashReturnPercent}
 		refreshCrash(state, now)
 		rememberGameRequest(state, action.RequestID)
 		return "Разгон начался. Забрать можно до взрыва, на ×10 сработает автосбор", nil

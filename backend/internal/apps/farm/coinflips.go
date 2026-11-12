@@ -14,6 +14,7 @@ import (
 )
 
 type Coinflip struct {
+	FeePercent int       `json:"fee_percent"`
 	ID         string    `json:"id"`
 	HostID     string    `json:"host_id"`
 	HostName   string    `json:"host_name"`
@@ -109,7 +110,7 @@ func (h *Handler) coinflipList(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, err)
 		return
 	}
-	rows, err := h.pool.Query(r.Context(), `SELECT f.id,f.host_id::text,h.public_name,coalesce(f.guest_id::text,''),coalesce(g.public_name,''),f.stake,f.host_side,f.result_side,coalesce(f.winner_id::text,''),f.status,f.created_at,f.expires_at
+	rows, err := h.pool.Query(r.Context(), `SELECT f.id,f.host_id::text,h.public_name,coalesce(f.guest_id::text,''),coalesce(g.public_name,''),f.stake,f.host_side,f.result_side,coalesce(f.winner_id::text,''),f.status,f.created_at,f.expires_at,f.fee_percent
  FROM farm_coinflips f JOIN users h ON h.id=f.host_id LEFT JOIN users g ON g.id=f.guest_id
  WHERE f.status='open' OR (f.host_id=$1 OR f.guest_id=$1) AND f.created_at>now()-interval '7 days'
  ORDER BY (f.host_id=$1 AND f.status='open') DESC,(f.status='open') DESC,f.created_at DESC LIMIT 40`, user.ID)
@@ -121,7 +122,7 @@ func (h *Handler) coinflipList(w http.ResponseWriter, r *http.Request) {
 	flips := []Coinflip{}
 	for rows.Next() {
 		var flip Coinflip
-		if err = rows.Scan(&flip.ID, &flip.HostID, &flip.HostName, &flip.GuestID, &flip.GuestName, &flip.Stake, &flip.HostSide, &flip.ResultSide, &flip.WinnerID, &flip.Status, &flip.CreatedAt, &flip.ExpiresAt); err != nil {
+		if err = rows.Scan(&flip.ID, &flip.HostID, &flip.HostName, &flip.GuestID, &flip.GuestName, &flip.Stake, &flip.HostSide, &flip.ResultSide, &flip.WinnerID, &flip.Status, &flip.CreatedAt, &flip.ExpiresAt, &flip.FeePercent); err != nil {
 			httpapi.WriteError(w, err)
 			return
 		}
@@ -175,7 +176,7 @@ func (h *Handler) coinflipAction(w http.ResponseWriter, r *http.Request, action 
 				return err
 			}
 			now := time.Now().UTC()
-			if _, err = tx.Exec(ctx, `INSERT INTO farm_coinflips(id,host_id,stake,host_side,status,created_at,expires_at) VALUES($1,$2,$3,$4,'open',$5,$6)`, id, user.ID, action.Stake, action.Side, now, now.Add(10*time.Minute)); err != nil {
+			if _, err = tx.Exec(ctx, `INSERT INTO farm_coinflips(id,host_id,stake,host_side,status,created_at,expires_at,fee_percent) VALUES($1,$2,$3,$4,'open',$5,$6,$7)`, id, user.ID, action.Stake, action.Side, now, now.Add(10*time.Minute), flipFeePercent); err != nil {
 				return err
 			}
 			mine.Coins -= action.Stake
@@ -185,9 +186,10 @@ func (h *Handler) coinflipAction(w http.ResponseWriter, r *http.Request, action 
 		}
 		var host int64
 		var stake int
+		var fee int
 		var side, status string
 		var expires time.Time
-		if err := tx.QueryRow(ctx, `SELECT host_id,stake,host_side,status,expires_at FROM farm_coinflips WHERE id=$1 FOR UPDATE`, action.Item).Scan(&host, &stake, &side, &status, &expires); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT host_id,stake,host_side,status,expires_at,fee_percent FROM farm_coinflips WHERE id=$1 FOR UPDATE`, action.Item).Scan(&host, &stake, &side, &status, &expires, &fee); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return bad("Этот коинфлип не найден")
 			}
@@ -250,7 +252,7 @@ func (h *Handler) coinflipAction(w http.ResponseWriter, r *http.Request, action 
 		if resultSide != side {
 			winner = user.ID
 		}
-		payout := stake * 180 / 100
+		payout := coinflipPayout(stake, fee)
 		now := time.Now().UTC()
 		for id, state := range states {
 			if id == user.ID {

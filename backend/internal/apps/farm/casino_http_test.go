@@ -46,7 +46,7 @@ func exerciseCasinoHTTP(t *testing.T, pool *pgxpool.Pool, request func(string, s
 		t.Fatal("host stake missing")
 	}
 	flips := lobby()
-	if len(flips) != 1 || flips[0].HostID != "1" || flips[0].Status != "open" {
+	if len(flips) != 1 || flips[0].HostID != "1" || flips[0].Status != "open" || flips[0].FeePercent != 25 {
 		t.Fatal("real open match missing")
 	}
 	id := flips[0].ID
@@ -86,7 +86,7 @@ func exerciseCasinoHTTP(t *testing.T, pool *pgxpool.Pool, request func(string, s
 	}
 	a := readState(request("GET", "/api/v1/farm", "", 1))
 	b := readState(request("GET", "/api/v1/farm", "", 2))
-	if a.Coins+b.Coins != 19800 || len(a.GameHistory) != 1 || len(b.GameHistory) != 1 || a.GameHistory[0].Payout+b.GameHistory[0].Payout != 1800 || a.Sold != 0 || b.Sold != 0 {
+	if a.Coins+b.Coins != 19500 || len(a.GameHistory) != 1 || len(b.GameHistory) != 1 || a.GameHistory[0].Payout+b.GameHistory[0].Payout != 1500 || a.Sold != 0 || b.Sold != 0 {
 		t.Fatal("coinflip minted money or credited harvest leaderboard")
 	}
 	flips = lobby()
@@ -138,7 +138,7 @@ func exerciseCasinoHTTP(t *testing.T, pool *pgxpool.Pool, request func(string, s
 	}
 	stateA := readState(request("GET", "/api/v1/farm", "", 1))
 	stateB := readState(request("GET", "/api/v1/farm", "", 2))
-	if total := stateA.Coins + stateB.Coins; total != 19800 && total != 19600 {
+	if total := stateA.Coins + stateB.Coins; total != 19500 && total != 19000 {
 		t.Fatalf("join/cancel race minted or lost stake: %d", total)
 	}
 	crash := readState(request("POST", "/api/v1/farm/actions", fmt.Sprintf(`{"kind":"crash_start","stake":1000,"request_id":%q}`, gameRequest(30)), 1))
@@ -191,5 +191,19 @@ func exerciseCasinoHTTP(t *testing.T, pool *pgxpool.Pool, request func(string, s
 	}
 	if request("GET", "/api/v1/farm/coinflips", "", 0).Code != 401 || request("POST", "/api/v1/farm/upgrade-quote", quoteBody, 0).Code != 401 {
 		t.Fatal("unauthenticated game route accepted")
+	}
+	create(1, 700)
+	id = lobby()[0].ID
+	if _, err := pool.Exec(ctx, `UPDATE farm_coinflips SET fee_percent=10 WHERE id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if lobby()[0].FeePercent != 10 {
+		t.Fatal("legacy offer commission hidden")
+	}
+	readState(request("POST", "/api/v1/farm/actions", act("flip_join", 701), 2))
+	legacyA := readState(request("GET", "/api/v1/farm", "", 1))
+	legacyB := readState(request("GET", "/api/v1/farm", "", 2))
+	if legacyA.GameHistory[len(legacyA.GameHistory)-1].Payout+legacyB.GameHistory[len(legacyB.GameHistory)-1].Payout != 1800 {
+		t.Fatal("legacy offer lost its original 10% commission")
 	}
 }

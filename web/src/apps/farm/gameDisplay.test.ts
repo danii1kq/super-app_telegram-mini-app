@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gameMultiplier, gameStake, multiplierText } from './gameDisplay.ts';
+import { coinflipPayout, gameMultiplier, gameStake, multiplierText } from './gameDisplay.ts';
 
 test('display grows from the server start time, stays capped, and handles clock skew',()=>{
   const start='2026-11-13T00:00:00Z',now=Date.parse(start);
@@ -9,6 +9,12 @@ test('display grows from the server start time, stays capped, and handles clock 
   assert.equal(gameMultiplier(now+100000,start,.08,1000),1000);
   assert.equal(gameMultiplier(now,'invalid',.08,1000),100);
   assert.equal(multiplierText(222),'×2.22');
+});
+
+test('coinflip preview uses the actual offer fee, including older matches',()=>{
+  assert.equal(coinflipPayout(1000,25),1500);
+  assert.equal(coinflipPayout(1000,10),1800);
+  assert.equal(coinflipPayout(101,25),151);
 });
 
 test('stake input accepts only whole amounts within the rules',()=>{

@@ -12,3 +12,4 @@ export function gameStake(value:string,min:number,max:number):number|null {
 
 export const gameNumber=(value:number)=>value.toLocaleString('ru-RU');
 export const multiplierText=(bp:number)=>`×${(bp/100).toFixed(2)}`;
+export const coinflipPayout=(stake:number,fee:number)=>Math.floor(stake*2*(100-fee)/100);
