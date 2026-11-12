@@ -39,15 +39,21 @@ func main() {
 	}
 	defer pool.Close()
 
-	// The worker only needs the delivery key: it must not be able to decrypt
-	// message text or note content.
+	// The worker needs two keys and no more: the delivery key opens the message
+	// payload, the identity key opens the Telegram chat id. It never gets the
+	// content key, so it cannot read message text or note content.
 	deliveryCipher, err := secure.NewCipher(cfg.DeliveryKey)
 	if err != nil {
 		slog.Error("delivery cipher", "err", err)
 		os.Exit(1)
 	}
+	identityCipher, err := secure.NewCipher(cfg.IdentityKey)
+	if err != nil {
+		slog.Error("identity cipher", "err", err)
+		os.Exit(1)
+	}
 
-	worker := notify.NewWorker(pool, telegram.NewClient(cfg.BotToken), deliveryCipher)
+	worker := notify.NewWorker(pool, telegram.NewClient(cfg.BotToken), deliveryCipher, identityCipher)
 	slog.Info("worker started")
 	worker.Run(ctx, 2*time.Second)
 	slog.Info("worker stopped")

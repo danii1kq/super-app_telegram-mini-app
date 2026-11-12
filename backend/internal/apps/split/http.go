@@ -6,15 +6,17 @@ import (
 
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/postgres"
 )
 
 type Handler struct {
 	service *Service
 	auth    *auth.Service
+	pool    *postgres.Pool
 }
 
-func NewHandler(service *Service, authService *auth.Service) *Handler {
-	return &Handler{service: service, auth: authService}
+func NewHandler(service *Service, authService *auth.Service, pool *postgres.Pool) *Handler {
+	return &Handler{service: service, auth: authService, pool: pool}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -25,6 +27,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/split/groups/{id}/balances", h.auth.Middleware(http.HandlerFunc(h.balances)))
 	mux.Handle("GET /api/v1/split/groups/{id}/members", h.auth.Middleware(http.HandlerFunc(h.members)))
 	h.RegisterReceipts(mux)
+	h.RegisterReport(mux)
 }
 
 func (h *Handler) listGroups(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +119,7 @@ type addExpenseRequest struct {
 	AmountMinor     string   `json:"amount_minor"`
 	PayerID         string   `json:"payer_id"`
 	Participants    []string `json:"participants"`
+	Category        string   `json:"category"`
 }
 
 func (h *Handler) addExpense(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +158,7 @@ func (h *Handler) addExpense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expense, err := h.service.AddExpense(r.Context(), user.ID, groupID, payerID,
-		body.ClientRequestID, body.Description, amount, participants)
+		body.ClientRequestID, body.Description, body.Category, amount, participants)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return

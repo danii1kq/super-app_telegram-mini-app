@@ -98,7 +98,16 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 		); err != nil {
 			return err
 		}
-		return nil
+
+		// The notice is committed with the debt: a rolled-back debt never leaves
+		// a message behind, and a retry with the same key is not a second one.
+		debt.GroupID = groupID
+		debt.AuthorID = authorID
+		debt.CreditorID = creditorID
+		debt.DebtorID = debtorID
+		debt.AmountMinor = amountMinor
+		debt.Outstanding = amountMinor
+		return s.notifyDebt(ctx, tx, debt, authorID)
 	})
 	if err != nil {
 		return Debt{}, err
@@ -365,7 +374,23 @@ func (s *Service) AddPayment(ctx context.Context, authorID, debtID, amountMinor 
 			`UPDATE split_debt_payments SET amount_sealed = $2, amount_key_id = $3 WHERE id = $1`,
 			paymentID, sealed.Ciphertext, sealed.KeyID,
 		)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// The message is committed with the repayment. The remainder here is the
+		// one this transaction just computed, so an already settled debt never
+		// produces a stale "you still owe" message.
+		noticeDebt := Debt{
+			ID:              debtID,
+			GroupID:         groupID,
+			CreditorID:      creditorID,
+			DebtorID:        debtorID,
+			AmountMinor:     debtAmount,
+			Outstanding:     debtAmount - paidTotal - amountMinor,
+			SourceExpenseID: nil,
+		}
+		return s.notifyPayment(ctx, tx, noticeDebt, amountMinor, authorID)
 	})
 	if err != nil {
 		return Debt{}, err

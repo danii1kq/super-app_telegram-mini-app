@@ -43,6 +43,12 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	if err != nil {
 		return nil, err
 	}
+	// The delivery key is separate from the content key: the worker can send a
+	// notification without being able to read every expense in the app.
+	delivery, err := secure.NewCipher(cfg.DeliveryKey)
+	if err != nil {
+		return nil, err
+	}
 
 	deps := Deps{Config: cfg, Pool: pool, Content: content, Index: index}
 
@@ -79,7 +85,7 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	notesService := notes.NewService(pool, content)
 	notes.NewHandler(notesService, authService).Register(mux)
 
-	split.NewHandler(split.NewService(pool, content, receiptReader(cfg)), authService).Register(mux)
+	split.NewHandler(split.NewService(pool, content, receiptReader(cfg), delivery), authService, pool).Register(mux)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 

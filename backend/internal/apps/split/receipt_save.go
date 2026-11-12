@@ -16,7 +16,7 @@ import (
 // The shares come from the item units, so a line that belongs to one person is
 // charged to that person only. The expense is the single source of the money:
 // recording a debt afterwards points at it and never adds the amount again.
-func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID int64, clientRequestID, description string) (Expense, error) {
+func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID int64, clientRequestID, description, category string) (Expense, error) {
 	if clientRequestID == "" {
 		return Expense{}, httpapi.BadRequest("missing_request_id", "Не передан client_request_id")
 	}
@@ -82,10 +82,10 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 		}
 
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO split_expenses (group_id, author_id, payer_id, description_sealed, amount_sealed, key_id, client_request_id)
-			 VALUES ($1, $2, $3, ''::bytea, ''::bytea, 'pending', $4)
+			`INSERT INTO split_expenses (group_id, author_id, payer_id, description_sealed, amount_sealed, key_id, client_request_id, category)
+			 VALUES ($1, $2, $3, ''::bytea, ''::bytea, 'pending', $4, $5)
 			 RETURNING id, spent_at, version`,
-			receipt.GroupID, authorID, payerID, clientRequestID,
+			receipt.GroupID, authorID, payerID, clientRequestID, normalizeCategory(category),
 		).Scan(&expense.ID, &expense.SpentAt, &expense.Version); err != nil {
 			return err
 		}

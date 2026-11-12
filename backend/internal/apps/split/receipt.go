@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/media"
 	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/secure"
 )
@@ -27,6 +28,13 @@ type Receipt struct {
 	Items       []ReceiptItem
 	SavedExpenseID *int64
 	CreatedAt   time.Time
+	// ImageState is none, stored, purged or processing.
+	ImageState string
+	// ImageExpiresAt is when the photo becomes eligible for deletion.
+	ImageExpiresAt *time.Time
+	ImageWidth     int
+	ImageHeight    int
+	ImageBytes     int
 }
 
 // ReceiptItem is one line, with how many units each person takes.
@@ -69,6 +77,17 @@ type DebtPayment struct {
 
 // maxImageBytes bounds a receipt photo. A phone photo is well under this.
 const maxImageBytes = 5 << 20
+
+// Retention of the photo, separate from the data it belongs to.
+//
+// Deleting a photo never deletes the receipt, its items, shares, expenses or
+// debts: those keep working in the report.
+const (
+	// draftImageTTL applies to a draft that never became an expense.
+	draftImageTTL = 24 * time.Hour
+	// savedImageTTL applies after the receipt is confirmed as an expense.
+	savedImageTTL = 30 * 24 * time.Hour
+)
 
 // allowedImageMime is the accepted set. The bytes are sniffed, not trusted from
 // the client's content type.
@@ -124,28 +143,43 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 	if len(image) > maxImageBytes {
 		return Receipt{}, httpapi.Validation(map[string]string{"image": "Файл больше 5 МБ"}, "Проверьте поля")
 	}
-	detected := detectImageMime(image)
-	if detected == "" {
+	if media.DetectMime(image) == "" {
 		return Receipt{}, httpapi.Validation(map[string]string{"image": "Поддерживаются JPEG, PNG и WebP"}, "Проверьте поля")
 	}
 
+	// Normalize before encrypting: compressing ciphertext would be pointless,
+	// and the stored bytes must already be the small, metadata-free version.
+	normalized, err := media.Normalize(image)
+	if err != nil {
+		switch {
+		case errors.Is(err, media.ErrTooLarge):
+			return Receipt{}, httpapi.Validation(map[string]string{"image": "Слишком большое разрешение"}, "Проверьте поля")
+		default:
+			return Receipt{}, httpapi.Validation(map[string]string{"image": "Файл не читается как изображение"}, "Проверьте поля")
+		}
+	}
+
 	var receipt Receipt
-	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
+	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		// The photo is scheduled for deletion from the start: a draft that never
+		// becomes an expense must not keep its image for long.
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO split_receipts (group_id, author_id, image_sealed, image_key_id, image_mime, image_bytes)
-			 VALUES ($1, $2, ''::bytea, 'pending', $3, $4)
+			`INSERT INTO split_receipts (group_id, author_id, image_sealed, image_key_id, image_mime, image_bytes,
+			                             image_state, image_width, image_height, image_expires_at)
+			 VALUES ($1, $2, ''::bytea, 'pending', $3, $4, 'processing', $5, $6, now() + $7::interval)
 			 RETURNING id, created_at`,
-			groupID, authorID, detected, len(image),
+			groupID, authorID, normalized.Mime, normalized.StoredBytes,
+			normalized.Width, normalized.Height, draftImageTTL,
 		).Scan(&receipt.ID, &receipt.CreatedAt); err != nil {
 			return err
 		}
 
-		sealed, err := s.content.Seal(image, receiptImageAAD(receipt.ID))
+		sealed, err := s.content.Seal(normalized.Data, receiptImageAAD(receipt.ID))
 		if err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`UPDATE split_receipts SET image_sealed = $2, image_key_id = $3 WHERE id = $1`,
+			`UPDATE split_receipts SET image_sealed = $2, image_key_id = $3, image_state = 'stored' WHERE id = $1`,
 			receipt.ID, sealed.Ciphertext, sealed.KeyID,
 		); err != nil {
 			return err
@@ -159,8 +193,13 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 	receipt.GroupID = groupID
 	receipt.AuthorID = authorID
 	receipt.Status = "draft"
+	receipt.ImageState = "stored"
+	expires := receipt.CreatedAt.Add(draftImageTTL)
+	receipt.ImageExpiresAt = &expires
 
-	result, ocrErr := s.reader.Read(ctx, image, detected)
+	// Recognition reads the normalized image, not the original: the text is the
+	// same and the payload is a fraction of the size.
+	result, ocrErr := s.reader.Read(ctx, normalized.Data, normalized.Mime)
 	if ocrErr != nil {
 		code := "unreadable"
 		if errors.Is(ocrErr, ocr.ErrUnavailable) {

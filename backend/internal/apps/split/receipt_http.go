@@ -206,6 +206,7 @@ type saveReceiptRequest struct {
 	PayerID         string   `json:"payer_id"`
 	ClientRequestID string   `json:"client_request_id"`
 	Description     string   `json:"description"`
+	Category        string   `json:"category"`
 }
 
 // saveReceipt turns the checked draft into one expense with item-level shares.
@@ -231,7 +232,7 @@ func (h *Handler) saveReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expense, err := h.service.SaveReceipt(r.Context(), user.ID, receiptID, payerID, body.ClientRequestID, body.Description)
+	expense, err := h.service.SaveReceipt(r.Context(), user.ID, receiptID, payerID, body.ClientRequestID, body.Description, body.Category)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return

@@ -20,16 +20,17 @@ import (
 )
 
 type Service struct {
-	pool    *postgres.Pool
-	content *secure.Cipher
-	reader  ocr.Reader
+	pool     *postgres.Pool
+	content  *secure.Cipher
+	reader   ocr.Reader
+	delivery *secure.Cipher
 }
 
-func NewService(pool *postgres.Pool, content *secure.Cipher, reader ocr.Reader) *Service {
+func NewService(pool *postgres.Pool, content *secure.Cipher, reader ocr.Reader, delivery *secure.Cipher) *Service {
 	if reader == nil {
 		reader = ocr.Disabled{}
 	}
-	return &Service{pool: pool, content: content, reader: reader}
+	return &Service{pool: pool, content: content, reader: reader, delivery: delivery}
 }
 
 type Group struct {
@@ -147,7 +148,7 @@ func (s *Service) CreateGroup(ctx context.Context, ownerID int64, title string, 
 //
 // The idempotency key is the author's client_request_id: a retry returns the
 // stored expense instead of creating a second one.
-func (s *Service) AddExpense(ctx context.Context, authorID, groupID, payerID int64, clientRequestID, description string, amountMinor int64, participants []int64) (Expense, error) {
+func (s *Service) AddExpense(ctx context.Context, authorID, groupID, payerID int64, clientRequestID, description, category string, amountMinor int64, participants []int64) (Expense, error) {
 	if clientRequestID == "" {
 		return Expense{}, httpapi.BadRequest("missing_request_id", "Не передан client_request_id")
 	}
@@ -245,10 +246,10 @@ func (s *Service) AddExpense(ctx context.Context, authorID, groupID, payerID int
 		}
 
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO split_expenses (group_id, author_id, payer_id, description_sealed, amount_sealed, key_id, client_request_id)
-			 VALUES ($1, $2, $3, ''::bytea, ''::bytea, 'pending', $4)
+			`INSERT INTO split_expenses (group_id, author_id, payer_id, description_sealed, amount_sealed, key_id, client_request_id, category)
+			 VALUES ($1, $2, $3, ''::bytea, ''::bytea, 'pending', $4, $5)
 			 RETURNING id, spent_at, version`,
-			groupID, authorID, payerID, clientRequestID,
+			groupID, authorID, payerID, clientRequestID, normalizeCategory(category),
 		).Scan(&expense.ID, &expense.SpentAt, &expense.Version); err != nil {
 			return err
 		}
