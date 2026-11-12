@@ -68,7 +68,7 @@ func TestCrashInstantLossAutoCashoutAndRequestReplay(t *testing.T) {
 }
 
 func TestCrashDistributionMatchesPublishedChances(t *testing.T) {
-	for bp, expected := range map[int]int{100: 550000, 200: 275000, 300: 183333, 500: 110000, 1000: 55000} {
+	for bp, expected := range map[int]int{100: 940000, 200: 470000, 300: 313333, 500: 188000, 1000: 94000} {
 		wins := 0
 		for r := 0; r < 1000000; r++ {
 			if crashThreshold(r) >= bp {
@@ -93,7 +93,7 @@ func TestUpgradeQuoteConsumptionAndBoundaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if q.SourceValue != 40 || q.TargetValue != 18600 || q.ChanceBP != 335 {
+		if q.SourceValue != 40 || q.TargetValue != 18600 || q.ChanceBP != 514 {
 			t.Fatalf("quote mismatch %+v", q)
 		}
 		roll := q.ChanceBP
@@ -121,7 +121,7 @@ func TestUpgradeQuoteConsumptionAndBoundaries(t *testing.T) {
 
 func TestRebalancedRulesAndExistingCrash(t *testing.T) {
 	rules := gameRules()
-	if rules["crash_return_percent"] != 55 || rules["flip_fee_percent"] != 25 || rules["upgrade_return_percent"] != 60 || rules["upgrade_max_chance_bp"] != 4500 {
+	if rules["crash_return_percent"] != 94 || rules["flip_fee_percent"] != 8 || rules["upgrade_return_percent"] != 92 || rules["upgrade_max_chance_bp"] != 8000 {
 		t.Fatal("published rules do not match rebalanced settings")
 	}
 	now := time.Now()
@@ -133,10 +133,10 @@ func TestRebalancedRulesAndExistingCrash(t *testing.T) {
 	}
 	s.Barn = []Harvest{{ID: "source", Seed: "carrot", Quantity: 1, Value: 32}}
 	q, err := plantUpgradeQuote(s, Action{Item: "source", Seed: "lotus", Upgrade: "crystal", Stake: 14000})
-	if err != nil || q.ChanceBP != 4500 {
-		t.Fatal("upgrade maximum is not 45%")
+	if err != nil || q.ChanceBP != 8000 {
+		t.Fatal("upgrade maximum is not 80%")
 	}
-	if coinflipPayout(1000, 25) != 1500 || coinflipPayout(1000, 10) != 1800 || coinflipPayout(101, 25) != 151 {
+	if coinflipPayout(1000, 8) != 1840 || coinflipPayout(1000, 25) != 1500 || coinflipPayout(101, 8) != 185 {
 		t.Fatal("current or legacy coinflip payout changed")
 	}
 }

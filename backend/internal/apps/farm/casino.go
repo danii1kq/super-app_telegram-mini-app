@@ -12,10 +12,10 @@ import (
 const minGameStake = 100
 const maxGameStake = 100000
 const maxCrashBP = 1000
-const crashReturnPercent = 55
-const flipFeePercent = 25
-const upgradeReturnPercent = 60
-const upgradeMaxChanceBP = 4500
+const crashReturnPercent = 94
+const flipFeePercent = 8
+const upgradeReturnPercent = 92
+const upgradeMaxChanceBP = 8000
 
 type CrashRound struct {
 	ReturnPercent int       `json:"return_percent"`
