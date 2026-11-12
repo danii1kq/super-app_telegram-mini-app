@@ -163,3 +163,37 @@ func TestOrderBoardSurvivesNormalization(t *testing.T) {
 		t.Fatal("fulfilled list must not be nil")
 	}
 }
+
+func TestOrderKeepsExpensiveSpecimensWhenCheaperPlantsExist(t *testing.T) {
+	s := initialState(time.Now())
+	s.Orders.Orders = []Order{{ID: "carrots", Seed: "carrot", Quantity: 2, Coins: 110}}
+	s.Barn = []Harvest{
+		{ID: "gold", Seed: "carrot", Quality: "perfect", Mutation: "gold", Quantity: 2, Value: 960},
+		{ID: "normal", Seed: "carrot", Quality: "normal", Mutation: "none", Quantity: 2, Value: 64},
+	}
+	coins := s.Coins
+	if _, err := fulfillOrder(&s, "carrots"); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Barn) != 1 || s.Barn[0].ID != "gold" || s.Barn[0].Value != 960 || s.Coins != coins+110 || s.Sold != 110 {
+		t.Fatalf("order consumed a rare specimen or lost sale revenue: %+v", s)
+	}
+}
+
+func TestOrderQuotePaysPremiumOverActualMarketValue(t *testing.T) {
+	s := initialState(time.Now())
+	s.Upgrades["market"] = 5
+	s.Orders.Orders = []Order{{ID: "gold", Seed: "tomato", Mutation: "gold", Quantity: 1, Coins: 600}}
+	s.Barn = []Harvest{{ID: "perfect", Seed: "tomato", Quality: "perfect", Mutation: "gold", Quantity: 1, Value: 720}}
+	quote := quotedOrders(s)
+	if quote.Orders[0].Coins != 1125 || s.Orders.Orders[0].Coins != 600 {
+		t.Fatal("quote missed market premium or changed base order")
+	}
+	coins := s.Coins
+	if _, err := fulfillOrder(&s, "gold"); err != nil {
+		t.Fatal(err)
+	}
+	if s.Coins != coins+1125 || s.Sold != 1125 || len(s.Barn) != 0 {
+		t.Fatal("paid less than the displayed quote")
+	}
+}

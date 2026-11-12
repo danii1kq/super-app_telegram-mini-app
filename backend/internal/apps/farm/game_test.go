@@ -129,8 +129,8 @@ func TestWeekStart(t *testing.T) {
 }
 
 func TestExpandedPackUsesRarityInsteadOfPosition(t *testing.T) {
-	if len(Crops) != 12 {
-		t.Fatal("expected twelve plants")
+	if len(Crops) != 18 {
+		t.Fatal("expected eighteen plants")
 	}
 	seen := map[string]bool{}
 	for _, crop := range Crops {
@@ -156,7 +156,7 @@ func TestExpandedPackUsesRarityInsteadOfPosition(t *testing.T) {
 		hits := make(map[string]bool)
 		for value := 0; value < 100; value++ {
 			s = initialState(time.Now())
-			s.Coins = 1000
+			s.Coins = pack.Price
 			_, drops, _, err = apply(&s, Action{Kind: "pack", Pack: pack.ID}, time.Now(), func(int) (int, error) { return value, nil })
 			if err != nil {
 				t.Fatal(err)

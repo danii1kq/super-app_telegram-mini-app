@@ -97,9 +97,10 @@ func (h *Handler) player(w http.ResponseWriter, r *http.Request, action *Action)
 		return
 	}
 	level, into, need := levelProgress(state.XP)
+	state.Orders = quotedOrders(state)
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"state": state, "crops": Crops, "recipes": Recipes, "mutations": mutationCatalog(state.Upgrades["genetics"]), "packs": packsFor(state.Upgrades["selection"]), "upgrades": upgradesFor(state), "themes": Themes, "stars_available": h.stars != nil, "server_time": now, "message": message, "drops": drops,
 		"level": map[string]any{"level": level, "title": titleFor(level), "into": into, "need": need, "max": MaxLevel, "pending": claimableLevels(state), "rewards": levelCatalog(state)},
-		"daily": dailyCatalog(state, now)})
+		"daily": dailyCatalog(state, now), "expeditions": expeditionCatalog()})
 }
 
 func weekStart(now time.Time) time.Time {

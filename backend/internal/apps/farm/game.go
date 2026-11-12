@@ -33,6 +33,12 @@ var Crops = []Species{
 	{"sunflower", "Подсолнух", "uncommon", 140, 70},
 	{"watermelon", "Арбуз", "rare", 300, 150},
 	{"moonflower", "Лунный цветок", "legendary", 800, 450},
+	{"pepper", "Сладкий перец", "common", 70, 28},
+	{"pear", "Груша", "uncommon", 180, 90},
+	{"lavender", "Лаванда", "rare", 380, 210},
+	{"lotus", "Лотос", "rare", 620, 350},
+	{"mango", "Манго", "legendary", 950, 540},
+	{"starfruit", "Карамбола", "legendary", 1400, 800},
 }
 
 type Plot struct {
@@ -64,24 +70,25 @@ type Discovery struct {
 }
 
 type State struct {
-	Breeding    *Breeding            `json:"breeding"`
-	Hybrids     []string             `json:"hybrids"`
-	Showcase    []Trophy             `json:"showcase"`
-	Theme       string               `json:"theme"`
-	OwnedThemes []string             `json:"owned_themes"`
-	Coins       int                  `json:"coins"`
-	XP          int                  `json:"xp"`
-	Seeds       map[string]int       `json:"seeds"`
-	Plots       []*Plot              `json:"plots"`
-	Barn        []Harvest            `json:"barn"`
-	Collection  map[string]Discovery `json:"collection"`
-	Upgrades    map[string]int       `json:"upgrades"`
-	Pity        map[string]int       `json:"pity"`
-	Opened      int                  `json:"opened"`
-	Sold        int                  `json:"sold"`
-	ClaimedLevels []int              `json:"claimed_levels"`
-	Orders      OrderBoard           `json:"orders"`
-	Daily       DailyStreak          `json:"daily"`
+	Expedition    *Expedition          `json:"expedition"`
+	Breeding      *Breeding            `json:"breeding"`
+	Hybrids       []string             `json:"hybrids"`
+	Showcase      []Trophy             `json:"showcase"`
+	Theme         string               `json:"theme"`
+	OwnedThemes   []string             `json:"owned_themes"`
+	Coins         int                  `json:"coins"`
+	XP            int                  `json:"xp"`
+	Seeds         map[string]int       `json:"seeds"`
+	Plots         []*Plot              `json:"plots"`
+	Barn          []Harvest            `json:"barn"`
+	Collection    map[string]Discovery `json:"collection"`
+	Upgrades      map[string]int       `json:"upgrades"`
+	Pity          map[string]int       `json:"pity"`
+	Opened        int                  `json:"opened"`
+	Sold          int                  `json:"sold"`
+	ClaimedLevels []int                `json:"claimed_levels"`
+	Orders        OrderBoard           `json:"orders"`
+	Daily         DailyStreak          `json:"daily"`
 }
 
 type Action struct {
@@ -107,9 +114,10 @@ type Pack struct {
 }
 
 var Packs = []Pack{
-	{"garden", "Садовый набор", 75, []int{20, 18, 12, 8, 5, 1, 12, 9, 6, 5, 3, 1}, 10, "rare"},
-	{"exotic", "Экзотический набор", 240, []int{3, 5, 10, 12, 16, 5, 4, 6, 12, 10, 12, 5}, 10, "rare"},
-	{"lunar", "Лунный набор", 900, []int{0, 0, 5, 5, 25, 15, 0, 0, 5, 5, 25, 15}, 6, "legendary"},
+	{"garden", "Садовый набор", 75, []int{20, 18, 12, 8, 5, 1, 12, 9, 6, 5, 3, 1, 0, 0, 0, 0, 0, 0}, 10, "rare"},
+	{"exotic", "Экзотический набор", 240, []int{3, 5, 10, 12, 16, 5, 4, 6, 12, 10, 12, 5, 0, 0, 0, 0, 0, 0}, 10, "rare"},
+	{"lunar", "Лунный набор", 900, []int{0, 0, 5, 5, 25, 15, 0, 0, 5, 5, 25, 15, 0, 0, 0, 0, 0, 0}, 6, "legendary"},
+	{"orchard", "Сад чудес", 1100, []int{0, 0, 0, 0, 5, 3, 0, 0, 0, 0, 5, 2, 15, 20, 18, 12, 12, 8}, 10, "rare"},
 }
 
 type Upgrade struct {
@@ -191,7 +199,7 @@ func packsFor(level int) []Pack {
 			result[i].Weights[donor]--
 			legendary := []int{}
 			for j, crop := range Crops {
-				if crop.Rarity == "legendary" {
+				if crop.Rarity == "legendary" && Packs[i].Weights[j] > 0 {
 					legendary = append(legendary, j)
 				}
 			}
@@ -277,6 +285,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		return true
 	}
 	switch action.Kind {
+	case "start_expedition", "claim_expedition":
+		message, err := expeditionAction(state, action, now)
+		return message, nil, 0, err
 	case "claim_level":
 		message, err := claimLevel(state, action.Level)
 		return message, nil, 0, err
@@ -284,8 +295,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		message, err := claimDaily(state, now)
 		return message, nil, 0, err
 	case "fulfill_order":
+		before := state.Sold
 		message, err := fulfillOrder(state, action.Item)
-		return message, nil, 0, err
+		return message, nil, state.Sold - before, err
 	case "breed", "claim_breed", "keep", "return_trophy":
 		message, err := collectionAction(state, action, now)
 		return message, nil, 0, err

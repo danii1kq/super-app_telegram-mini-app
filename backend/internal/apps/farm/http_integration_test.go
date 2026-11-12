@@ -206,7 +206,7 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if err := json.Unmarshal(upgraded.Body.Bytes(), &metadata); err != nil {
 		t.Fatal(err)
 	}
-	if upgraded.Code != 200 || metadata.State.Upgrades["selection"] != 1 || len(metadata.Upgrades) != 9 || len(metadata.Packs) != 3 {
+	if upgraded.Code != 200 || metadata.State.Upgrades["selection"] != 1 || len(metadata.Upgrades) != 9 || len(metadata.Packs) != 4 {
 		t.Fatalf("missing upgrade metadata: %s", upgraded.Body)
 	}
 	legend := 0
@@ -321,6 +321,67 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	}
 	if request("POST", "/api/v1/farm/actions", `{"kind":"claim_breed"}`, 2).Code != 400 {
 		t.Fatal("double HTTP breeding claim")
+	}
+	started := readState(request("POST", "/api/v1/farm/actions", `{"kind":"start_expedition","item":"meadow"}`, 2))
+	if started.Expedition == nil || started.Coins != claimed.Coins-90 {
+		t.Fatal("expedition did not persist its price and route")
+	}
+	if request("POST", "/api/v1/farm/actions", `{"kind":"claim_expedition"}`, 2).Code != 400 {
+		t.Fatal("early expedition claim accepted")
+	}
+	if _, err = pool.Exec(ctx, `UPDATE farm_players SET state=jsonb_set(state,'{expedition,ready_at}',to_jsonb(now()-interval '1 second')) WHERE user_id=2`); err != nil {
+		t.Fatal(err)
+	}
+	statuses = make(chan int, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			statuses <- request("POST", "/api/v1/farm/actions", `{"kind":"claim_expedition"}`, 2).Code
+		}()
+	}
+	wg.Wait()
+	close(statuses)
+	success = 0
+	for status := range statuses {
+		if status == 200 {
+			success++
+		} else if status != 400 {
+			t.Fatalf("unexpected expedition claim status %d", status)
+		}
+	}
+	returned := readState(request("GET", "/api/v1/farm", "", 2))
+	if success != 1 || returned.Expedition != nil || returned.Seeds["pepper"] != started.Seeds["pepper"]+2 || returned.Seeds["lavender"] != started.Seeds["lavender"]+1 || returned.XP != started.XP+10 || returned.Coins != started.Coins {
+		t.Fatal("concurrent expedition claims duplicated or lost rewards")
+	}
+	if readState(request("GET", "/api/v1/farm", "", 1)).Expedition != nil {
+		t.Fatal("expedition leaked to another account")
+	}
+
+	// Test an order against actual daily metadata, then verify its shared weekly ledger.
+	order := returned.Orders.Orders[0]
+	if order.Seed != "carrot" && order.Seed != "radish" && order.Seed != "cucumber" {
+		t.Fatal("expected an easy order")
+	}
+	fixture := []Harvest{{ID: "order-fixture", Seed: order.Seed, Quality: "normal", Mutation: "none", Quantity: order.Quantity, Value: 32 * order.Quantity}}
+	fixtureJSON, err := json.Marshal(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE farm_players SET state=jsonb_set(state,'{barn}',$1::jsonb) WHERE user_id=2`, fixtureJSON); err != nil {
+		t.Fatal(err)
+	}
+	beforeOrder := readState(request("GET", "/api/v1/farm", "", 2))
+	fulfilled := readState(request("POST", "/api/v1/farm/actions", fmt.Sprintf(`{"kind":"fulfill_order","item":%q}`, order.ID), 2))
+	if fulfilled.Sold-beforeOrder.Sold != order.Coins || fulfilled.Coins-beforeOrder.Coins != order.Coins {
+		t.Fatal("order sale not counted")
+	}
+	var weekly int
+	if err = pool.QueryRow(ctx, `SELECT revenue FROM farm_weekly_sales WHERE week=$1 AND user_id=2`, weekStart(time.Now().UTC())).Scan(&weekly); err != nil {
+		t.Fatal(err)
+	}
+	if weekly != fulfilled.Sold {
+		t.Fatal("order sale missing from weekly leaderboard")
 	}
 }
 

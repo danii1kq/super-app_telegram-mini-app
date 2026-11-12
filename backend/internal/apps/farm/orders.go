@@ -3,6 +3,7 @@ package farm
 import (
 	"fmt"
 	"hash/fnv"
+	"sort"
 	"time"
 
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
@@ -108,6 +109,48 @@ func availableFor(state State, order Order) int {
 	return total
 }
 
+// Spend the cheapest suitable specimens first so village errands preserve rare finds.
+func orderBatches(state State, order Order) []int {
+	indices := []int{}
+	for i, item := range state.Barn {
+		if item.Quantity > 0 && matchesOrder(item, order) {
+			indices = append(indices, i)
+		}
+	}
+	sort.SliceStable(indices, func(i, j int) bool {
+		a, b := state.Barn[indices[i]], state.Barn[indices[j]]
+		return a.Value/a.Quantity < b.Value/b.Quantity
+	})
+	return indices
+}
+
+func orderPayout(state State, order Order) int {
+	remaining, value := order.Quantity, 0
+	for _, i := range orderBatches(state, order) {
+		item := state.Barn[i]
+		take := min(remaining, item.Quantity)
+		value += item.Value / item.Quantity * take
+		remaining -= take
+		if remaining == 0 {
+			break
+		}
+	}
+	if remaining > 0 {
+		return order.Coins
+	}
+	market := value * (100 + state.Upgrades["market"]*5) / 100
+	return max(order.Coins, (market*125+99)/100)
+}
+
+func quotedOrders(state State) OrderBoard {
+	board := state.Orders
+	board.Orders = append([]Order(nil), board.Orders...)
+	for i := range board.Orders {
+		board.Orders[i].Coins = orderPayout(state, board.Orders[i])
+	}
+	return board
+}
+
 // consumeFor removes exactly the requested amount, keeping each batch's unit
 // value consistent so a partial take does not inflate the rest.
 func consumeFor(state *State, order Order) bool {
@@ -115,12 +158,8 @@ func consumeFor(state *State, order Order) bool {
 		return false
 	}
 	remaining := order.Quantity
-	for i := 0; i < len(state.Barn) && remaining > 0; {
+	for _, i := range orderBatches(*state, order) {
 		item := &state.Barn[i]
-		if !matchesOrder(*item, order) {
-			i++
-			continue
-		}
 		take := item.Quantity
 		if take > remaining {
 			take = remaining
@@ -129,12 +168,17 @@ func consumeFor(state *State, order Order) bool {
 		item.Quantity -= take
 		item.Value -= unit * take
 		remaining -= take
-		if item.Quantity == 0 {
-			state.Barn = append(state.Barn[:i], state.Barn[i+1:]...)
-			continue
+		if remaining == 0 {
+			break
 		}
-		i++
 	}
+	kept := state.Barn[:0]
+	for _, item := range state.Barn {
+		if item.Quantity > 0 {
+			kept = append(kept, item)
+		}
+	}
+	state.Barn = kept
 	return true
 }
 
@@ -155,12 +199,14 @@ func fulfillOrder(state *State, orderID string) (string, error) {
 			return bad("Этот заказ уже выполнен")
 		}
 	}
+	payout := orderPayout(*state, *order)
 	if !consumeFor(state, *order) {
 		return bad("В амбаре не хватает подходящих растений")
 	}
 	state.Orders.Fulfilled = append(state.Orders.Fulfilled, orderID)
-	state.Coins += order.Coins
+	state.Coins += payout
+	state.Sold += payout
 	state.XP += order.XP
 	crop, _ := species(order.Seed)
-	return fmt.Sprintf("Заказ выполнен: %s ×%d. +%d монет", crop.Name, order.Quantity, order.Coins), nil
+	return fmt.Sprintf("Заказ выполнен: %s ×%d. +%d монет", crop.Name, order.Quantity, payout), nil
 }

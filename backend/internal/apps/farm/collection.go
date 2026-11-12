@@ -21,6 +21,9 @@ var Recipes = []Recipe{
 	{[]string{"pumpkin", "watermelon"}, Species{"ghost_pumpkin", "Призрачная тыква", "hybrid", 450, 0}, "pumpkin"},
 	{[]string{"corn", "sunflower"}, Species{"solar_corn", "Солнечная кукуруза", "hybrid", 350, 0}, "corn"},
 	{[]string{"dragonfruit", "moonflower"}, Species{"crystal_bloom", "Кристальный цветок", "hybrid", 1800, 0}, "moonflower"},
+	{[]string{"pepper", "lavender"}, Species{"flame_pepper", "Огненный перец", "hybrid", 700, 0}, "pepper"},
+	{[]string{"pear", "mango"}, Species{"honey_pear", "Медовая груша", "hybrid", 1200, 0}, "pear"},
+	{[]string{"lotus", "starfruit"}, Species{"astral_lotus", "Астральный лотос", "hybrid", 2000, 0}, "lotus"},
 }
 
 type Breeding struct {
@@ -156,6 +159,18 @@ func plantWeight(seed string, roll int) int {
 		base = 35
 	case "dragonfruit":
 		base = 550
+	case "pepper", "flame_pepper":
+		base = 220
+	case "pear", "honey_pear":
+		base = 280
+	case "lavender":
+		base = 80
+	case "lotus", "astral_lotus":
+		base = 160
+	case "mango":
+		base = 650
+	case "starfruit":
+		base = 350
 	}
 	return base * (70 + roll) / 100
 }
