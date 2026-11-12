@@ -24,6 +24,7 @@ import (
 	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
+	"github.com/danii1kq/srunal/internal/platform/telegram"
 )
 
 // Deps carries what every module needs.
@@ -89,7 +90,16 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	split.NewHandler(split.NewService(pool, content, receiptReader(cfg), delivery), authService, pool).Register(mux)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
-	farm.NewHandler(pool, authService).Register(mux)
+	farmHandler := farm.NewHandler(pool, authService)
+	if cfg.DevInsecureKeys {
+		if err := farmHandler.SeedDevThemes(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.FarmStarsEnabled {
+		farmHandler.EnableStars(telegram.NewClient(cfg.BotToken), index, cfg.WebhookSecret)
+	}
+	farmHandler.Register(mux)
 
 	integration.NewHandler(
 		integration.NewService(pool, docService, dayService, notesService, authService),

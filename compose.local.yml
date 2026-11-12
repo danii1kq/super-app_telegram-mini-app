@@ -19,6 +19,9 @@ services:
     environment:
       SRUNAL_DATABASE_URL: postgres://srunal:local-preview-only@db:5432/srunal?sslmode=disable
       SRUNAL_DEV_INSECURE_KEYS: "1"
+      SRUNAL_FARM_STARS_ENABLED: ${SRUNAL_FARM_STARS_ENABLED:-0}
+      SRUNAL_BOT_TOKEN: ${SRUNAL_BOT_TOKEN:-}
+      SRUNAL_WEBHOOK_SECRET: ${SRUNAL_WEBHOOK_SECRET:-}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

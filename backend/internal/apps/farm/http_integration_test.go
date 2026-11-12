@@ -2,6 +2,7 @@ package farm
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
+	"github.com/danii1kq/srunal/internal/platform/telegram"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -46,7 +48,7 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `CREATE TABLE users (id bigint PRIMARY KEY, public_name text NOT NULL, username text, status text NOT NULL DEFAULT 'active');
+	if _, err := pool.Exec(ctx, `CREATE TABLE users (id bigint PRIMARY KEY, public_name text NOT NULL, username text,telegram_id_lookup text, status text NOT NULL DEFAULT 'active');
 	CREATE TABLE sessions (token_hash text PRIMARY KEY,user_id bigint,revoked_at timestamptz,expires_at timestamptz);
 	INSERT INTO users (id,public_name) VALUES (1,'Alice'),(2,'Bob');`); err != nil {
 		t.Fatal(err)
@@ -58,6 +60,13 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if _, err := pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
+	migration, err = os.ReadFile("../../../../db/migrations/000012_farm_themes.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatal(err)
+	}
 	for id := 1; id <= 2; id++ {
 		if _, err := pool.Exec(ctx, `INSERT INTO sessions (token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 hour')`, secure.TokenHash(fmt.Sprintf("farm-test-%d", id)), id); err != nil {
 			t.Fatal(err)
@@ -65,11 +74,29 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	}
 	db := &postgres.Pool{Pool: pool}
 	mux := http.NewServeMux()
-	NewHandler(db, auth.NewService(db, nil, nil, time.Hour)).Register(mux)
+	index, err := secure.NewLookupIndex(base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := 1; id <= 2; id++ {
+		if _, err = pool.Exec(ctx, `UPDATE users SET telegram_id_lookup=$2 WHERE id=$1`, id, index.Of(strconv.Itoa(id*101))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bot := &fakePaymentBot{}
+	handler := NewHandler(db, auth.NewService(db, nil, nil, time.Hour))
+	handler.EnableStars(bot, index, "test-secret")
+	if err = handler.SeedDevThemes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	handler.Register(mux)
 	request := func(method, path, body string, user int) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		if user > 0 {
 			r.Header.Set("Authorization", fmt.Sprintf("Bearer farm-test-%d", user))
+			if path == "/bot/webhook" {
+				r.Header.Set("X-Telegram-Bot-Api-Secret-Token", "test-secret")
+			}
 		}
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, r)
@@ -192,4 +219,69 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if bob.Coins != 250 || bob.Plots[0] == nil || len(bob.Collection) != 0 {
 		t.Fatal("player state leaked")
 	}
+	if request("POST", "/api/v1/farm/actions", `{"kind":"theme","theme":"lunar"}`, 1).Code != 400 {
+		t.Fatal("locked theme was usable")
+	}
+	invoice := request("POST", "/api/v1/farm/themes/invoice", `{"theme":"lunar"}`, 1)
+	if invoice.Code != 200 || bot.invoice.Currency != "XTR" || len(bot.invoice.Prices) != 1 || bot.invoice.Prices[0].Amount != 200 {
+		t.Fatalf("invalid invoice: %s", invoice.Body)
+	}
+	checkoutBody := fmt.Sprintf(`{"pre_checkout_query":{"id":"test-q","from":{"id":101},"currency":"XTR","total_amount":200,"invoice_payload":%q}}`, bot.invoice.Payload)
+	if request("POST", "/bot/webhook", checkoutBody, 0).Code != 401 {
+		t.Fatal("unauthenticated payment webhook accepted")
+	}
+	if request("POST", "/bot/webhook", checkoutBody, 1).Code != 200 || !bot.approved {
+		t.Fatal("valid precheckout denied")
+	}
+	if ownsTheme(readState(request("GET", "/api/v1/farm", "", 1)), "lunar") {
+		t.Fatal("precheckout delivered unpaid theme")
+	}
+	paidBody := fmt.Sprintf(`{"message":{"from":{"id":101},"successful_payment":{"currency":"XTR","total_amount":200,"invoice_payload":%q,"telegram_payment_charge_id":"charge-1"}}}`, bot.invoice.Payload)
+	wrongPayer := strings.Replace(paidBody, `"id":101`, `"id":202`, 1)
+	if request("POST", "/bot/webhook", wrongPayer, 1).Code != 400 {
+		t.Fatal("another user could claim invoice")
+	}
+	wrongAmount := strings.Replace(paidBody, `"total_amount":200`, `"total_amount":1`, 1)
+	if request("POST", "/bot/webhook", wrongAmount, 1).Code != 400 {
+		t.Fatal("wrong payment amount accepted")
+	}
+	for i := 0; i < 2; i++ {
+		if w := request("POST", "/bot/webhook", paidBody, 1); w.Code != 200 {
+			t.Fatalf("payment retry failed: %s", w.Body)
+		}
+	}
+	paid := readState(request("GET", "/api/v1/farm", "", 1))
+	if paid.Theme != "lunar" || len(paid.OwnedThemes) != 2 || paid.Coins != persisted.Coins {
+		t.Fatal("paid theme not delivered exactly once")
+	}
+	redeemed := readState(request("POST", "/api/v1/farm/actions", `{"kind":"redeem","code":"  tropic  "}`, 1))
+	if redeemed.Theme != "tropical" || len(redeemed.OwnedThemes) != 3 || redeemed.Coins != paid.Coins {
+		t.Fatal("promo did not unlock cosmetic")
+	}
+	if request("POST", "/api/v1/farm/actions", `{"kind":"redeem","code":"TROPIC"}`, 1).Code != 400 {
+		t.Fatal("code redeemed twice")
+	}
+	if request("POST", "/api/v1/farm/actions", `{"kind":"redeem","code":"NOT-A-CODE"}`, 1).Code != 400 {
+		t.Fatal("unknown code accepted")
+	}
+	if readState(request("POST", "/api/v1/farm/actions", `{"kind":"theme","theme":"lunar"}`, 1)).Theme != "lunar" {
+		t.Fatal("owned theme cannot be selected")
+	}
+	if ownsTheme(readState(request("GET", "/api/v1/farm", "", 2)), "lunar") {
+		t.Fatal("theme purchase leaked to another player")
+	}
+}
+
+type fakePaymentBot struct {
+	invoice  telegram.InvoiceRequest
+	approved bool
+}
+
+func (b *fakePaymentBot) CreateInvoiceLink(_ context.Context, invoice telegram.InvoiceRequest) (string, error) {
+	b.invoice = invoice
+	return "https://t.me/$test-invoice", nil
+}
+func (b *fakePaymentBot) AnswerPreCheckout(_ context.Context, _ string, ok bool, _ string) error {
+	b.approved = ok
+	return nil
 }

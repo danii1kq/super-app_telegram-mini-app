@@ -13,18 +13,23 @@ import (
 )
 
 type Handler struct {
-	pool *postgres.Pool
-	auth *auth.Service
+	pool  *postgres.Pool
+	auth  *auth.Service
+	stars *Stars
 }
 
 func NewHandler(pool *postgres.Pool, authService *auth.Service) *Handler {
-	return &Handler{pool, authService}
+	return &Handler{pool: pool, auth: authService}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/farm", h.auth.Middleware(http.HandlerFunc(h.state)))
 	mux.Handle("POST /api/v1/farm/actions", h.auth.Middleware(http.HandlerFunc(h.action)))
 	mux.Handle("GET /api/v1/farm/leaderboard", h.auth.Middleware(http.HandlerFunc(h.leaderboard)))
+	mux.Handle("POST /api/v1/farm/themes/invoice", h.auth.Middleware(http.HandlerFunc(h.invoice)))
+	if h.stars != nil {
+		mux.HandleFunc("POST /bot/webhook", h.paymentWebhook)
+	}
 }
 
 func (h *Handler) state(w http.ResponseWriter, r *http.Request) { h.player(w, r, nil) }
@@ -64,7 +69,12 @@ func (h *Handler) player(w http.ResponseWriter, r *http.Request, action *Action)
 			return nil
 		}
 		var revenue int
-		message, drops, revenue, err = apply(&state, *action, now, random)
+		if action.Kind == "redeem" {
+			err = redeemTheme(r.Context(), tx, user.ID, &state, action.Code)
+			message = "Тема открыта и применена"
+		} else {
+			message, drops, revenue, err = apply(&state, *action, now, random)
+		}
 		if err != nil {
 			return err
 		}
@@ -85,7 +95,7 @@ func (h *Handler) player(w http.ResponseWriter, r *http.Request, action *Action)
 		httpapi.WriteError(w, err)
 		return
 	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"state": state, "crops": Crops, "packs": packsFor(state.Upgrades["selection"]), "upgrades": upgradesFor(state), "server_time": now, "message": message, "drops": drops})
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"state": state, "crops": Crops, "packs": packsFor(state.Upgrades["selection"]), "upgrades": upgradesFor(state), "themes": Themes, "stars_available": h.stars != nil, "server_time": now, "message": message, "drops": drops})
 }
 
 func weekStart(now time.Time) time.Time {

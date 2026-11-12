@@ -31,6 +31,7 @@ services:
       dockerfile: deploy/Dockerfile
     environment:
       SRUNAL_ADDR: ":8080"
+      SRUNAL_FARM_STARS_ENABLED: ${SRUNAL_FARM_STARS_ENABLED:-0}
       SRUNAL_DATABASE_URL: postgres://srunal:${POSTGRES_PASSWORD}@db:5432/srunal?sslmode=disable
       SRUNAL_BOT_TOKEN: ${SRUNAL_BOT_TOKEN}
       SRUNAL_WEBHOOK_SECRET: ${SRUNAL_WEBHOOK_SECRET}

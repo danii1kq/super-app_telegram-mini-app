@@ -59,19 +59,23 @@ type Discovery struct {
 }
 
 type State struct {
-	Coins      int                  `json:"coins"`
-	XP         int                  `json:"xp"`
-	Seeds      map[string]int       `json:"seeds"`
-	Plots      []*Plot              `json:"plots"`
-	Barn       []Harvest            `json:"barn"`
-	Collection map[string]Discovery `json:"collection"`
-	Upgrades   map[string]int       `json:"upgrades"`
-	Pity       map[string]int       `json:"pity"`
-	Opened     int                  `json:"opened"`
-	Sold       int                  `json:"sold"`
+	Theme       string               `json:"theme"`
+	OwnedThemes []string             `json:"owned_themes"`
+	Coins       int                  `json:"coins"`
+	XP          int                  `json:"xp"`
+	Seeds       map[string]int       `json:"seeds"`
+	Plots       []*Plot              `json:"plots"`
+	Barn        []Harvest            `json:"barn"`
+	Collection  map[string]Discovery `json:"collection"`
+	Upgrades    map[string]int       `json:"upgrades"`
+	Pity        map[string]int       `json:"pity"`
+	Opened      int                  `json:"opened"`
+	Sold        int                  `json:"sold"`
 }
 
 type Action struct {
+	Theme   string `json:"theme"`
+	Code    string `json:"code"`
 	Kind    string `json:"kind"`
 	Slot    int    `json:"slot"`
 	Seed    string `json:"seed"`
@@ -126,6 +130,12 @@ func upgradesFor(state State) []Upgrade {
 }
 
 func normalizeState(state *State) {
+	if state.Theme == "" {
+		state.Theme = "garden"
+	}
+	if !ownsTheme(*state, "garden") {
+		state.OwnedThemes = append(state.OwnedThemes, "garden")
+	}
 	if state.Upgrades == nil {
 		state.Upgrades = map[string]int{}
 	}
@@ -252,6 +262,12 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		return true
 	}
 	switch action.Kind {
+	case "theme":
+		if _, ok := findTheme(action.Theme); !ok || !ownsTheme(*state, action.Theme) {
+			return bad("Эта тема пока не открыта")
+		}
+		state.Theme = action.Theme
+		return "Тема фермы изменена", nil, 0, nil
 	case "plant":
 		if action.Slot < 0 || action.Slot >= len(state.Plots) {
 			return bad("Грядка не найдена")

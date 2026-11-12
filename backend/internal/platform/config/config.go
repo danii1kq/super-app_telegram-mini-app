@@ -22,12 +22,13 @@ type Config struct {
 	DatabaseURL string
 
 	// Telegram
-	BotToken          string
-	WebhookSecret     string
-	AllowedBotID      int64
-	InitDataMaxAge    time.Duration
-	SessionTTL        time.Duration
-	MiniAppShortName  string
+	BotToken         string
+	FarmStarsEnabled bool
+	WebhookSecret    string
+	AllowedBotID     int64
+	InitDataMaxAge   time.Duration
+	SessionTTL       time.Duration
+	MiniAppShortName string
 
 	// Existing services SruNal adapts to.
 	DocAPIURL   string
@@ -43,10 +44,10 @@ type Config struct {
 
 	// Cryptography: base64-encoded 32-byte keys. Empty in development means
 	// the process refuses to start unless DevInsecureKeys is set.
-	ContentKey     string
-	IdentityKey    string
-	DeliveryKey    string
-	HMACIndexKey   string
+	ContentKey      string
+	IdentityKey     string
+	DeliveryKey     string
+	HMACIndexKey    string
 	DevInsecureKeys bool
 }
 
@@ -55,6 +56,7 @@ func Load() (Config, error) {
 		Addr:             env("SRUNAL_ADDR", ":8080"),
 		DatabaseURL:      env("SRUNAL_DATABASE_URL", ""),
 		BotToken:         env("SRUNAL_BOT_TOKEN", ""),
+		FarmStarsEnabled: envBool("SRUNAL_FARM_STARS_ENABLED", false),
 		WebhookSecret:    env("SRUNAL_WEBHOOK_SECRET", ""),
 		AllowedBotID:     envInt("SRUNAL_BOT_ID", 0),
 		InitDataMaxAge:   envDuration("SRUNAL_INITDATA_MAX_AGE", 24*time.Hour),
@@ -76,6 +78,9 @@ func Load() (Config, error) {
 
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("SRUNAL_DATABASE_URL is required")
+	}
+	if cfg.FarmStarsEnabled && (cfg.BotToken == "" || cfg.WebhookSecret == "") {
+		return Config{}, fmt.Errorf("farm Stars require SRUNAL_BOT_TOKEN and SRUNAL_WEBHOOK_SECRET")
 	}
 
 	if cfg.DevInsecureKeys {
