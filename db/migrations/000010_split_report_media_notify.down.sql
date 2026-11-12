@@ -1,0 +1,11 @@
+ALTER TABLE user_settings DROP COLUMN IF EXISTS split_debt_show_amounts;
+ALTER TABLE user_settings DROP COLUMN IF EXISTS split_debt_notifications;
+DROP TABLE IF EXISTS notification_delivery;
+DROP INDEX IF EXISTS split_receipts_purge_idx;
+ALTER TABLE split_receipts DROP COLUMN IF EXISTS image_height;
+ALTER TABLE split_receipts DROP COLUMN IF EXISTS image_width;
+ALTER TABLE split_receipts DROP COLUMN IF EXISTS image_expires_at;
+ALTER TABLE split_receipts DROP COLUMN IF EXISTS image_state;
+DROP INDEX IF EXISTS split_expenses_report_idx;
+ALTER TABLE split_receipt_items DROP COLUMN IF EXISTS category;
+ALTER TABLE split_expenses DROP COLUMN IF EXISTS category;
