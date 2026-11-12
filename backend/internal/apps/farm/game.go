@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/secure"
 )
 
 const GrowTime = 3 * time.Hour
@@ -45,6 +46,8 @@ type Plot struct {
 }
 
 type Harvest struct {
+	ID       string `json:"id"`
+	Weight   int    `json:"weight"`
 	Seed     string `json:"seed"`
 	Quality  string `json:"quality"`
 	Mutation string `json:"mutation"`
@@ -59,6 +62,9 @@ type Discovery struct {
 }
 
 type State struct {
+	Breeding    *Breeding            `json:"breeding"`
+	Hybrids     []string             `json:"hybrids"`
+	Showcase    []Trophy             `json:"showcase"`
 	Theme       string               `json:"theme"`
 	OwnedThemes []string             `json:"owned_themes"`
 	Coins       int                  `json:"coins"`
@@ -74,6 +80,7 @@ type State struct {
 }
 
 type Action struct {
+	Item    string `json:"item"`
 	Theme   string `json:"theme"`
 	Code    string `json:"code"`
 	Kind    string `json:"kind"`
@@ -130,6 +137,7 @@ func upgradesFor(state State) []Upgrade {
 }
 
 func normalizeState(state *State) {
+	normalizeCollection(state)
 	if state.Theme == "" {
 		state.Theme = "garden"
 	}
@@ -202,6 +210,11 @@ func species(id string) (Species, bool) {
 			return crop, true
 		}
 	}
+	for _, recipe := range Recipes {
+		if recipe.Crop.ID == id {
+			return recipe.Crop, true
+		}
+	}
 	return Species{}, false
 }
 
@@ -245,7 +258,7 @@ func outcome(plot Plot, qualityRoll, mutationRoll int) Harvest {
 	if plot.Care == "soil" {
 		quantity++
 	}
-	return Harvest{plot.Seed, quality, mutation, quantity, crop.Price * multiplier * bonus * quantity}
+	return Harvest{Seed: plot.Seed, Quality: quality, Mutation: mutation, Quantity: quantity, Value: crop.Price * multiplier * bonus * quantity}
 }
 
 // apply mutates only server-owned state while the player row is locked.
@@ -262,6 +275,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		return true
 	}
 	switch action.Kind {
+	case "breed", "claim_breed", "keep", "return_trophy":
+		message, err := collectionAction(state, action, now)
+		return message, nil, 0, err
 	case "theme":
 		if _, ok := findTheme(action.Theme); !ok || !ownsTheme(*state, action.Theme) {
 			return bad("Эта тема пока не открыта")
@@ -309,9 +325,25 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 				return "", nil, 0, err
 			}
 			crop := outcome(*plot, q, m)
+			weight, err := roll(100)
+			if err != nil {
+				return "", nil, 0, err
+			}
+			crop.Weight = plantWeight(plot.Seed, weight)
+			if crop.Mutation == "giant" {
+				crop.Weight *= 3
+			}
+			crop.ID, err = secure.NewToken(16)
+			if err != nil {
+				return "", nil, 0, err
+			}
 			state.Barn = append(state.Barn, crop)
 			key := crop.Seed + ":" + crop.Mutation
-			state.Collection[key] = Discovery{crop.Seed, crop.Quality, crop.Mutation}
+			previous, exists := state.Collection[key]
+			qualityRank := map[string]int{"normal": 0, "choice": 1, "perfect": 2}
+			if !exists || qualityRank[crop.Quality] > qualityRank[previous.Quality] {
+				state.Collection[key] = Discovery{crop.Seed, crop.Quality, crop.Mutation}
+			}
 			state.Plots[i] = nil
 			state.XP += 10
 			count++
@@ -335,7 +367,7 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		return fmt.Sprintf("Урожай продан за %d монет", amount), nil, amount, nil
 	case "buy":
 		crop, ok := species(action.Seed)
-		if !ok {
+		if !ok || crop.SeedPrice <= 0 {
 			return bad("Семена не найдены")
 		}
 		if !spend(crop.SeedPrice) {

@@ -95,7 +95,7 @@ func (h *Handler) player(w http.ResponseWriter, r *http.Request, action *Action)
 		httpapi.WriteError(w, err)
 		return
 	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"state": state, "crops": Crops, "packs": packsFor(state.Upgrades["selection"]), "upgrades": upgradesFor(state), "themes": Themes, "stars_available": h.stars != nil, "server_time": now, "message": message, "drops": drops})
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"state": state, "crops": Crops, "recipes": Recipes, "packs": packsFor(state.Upgrades["selection"]), "upgrades": upgradesFor(state), "themes": Themes, "stars_available": h.stars != nil, "server_time": now, "message": message, "drops": drops})
 }
 
 func weekStart(now time.Time) time.Time {

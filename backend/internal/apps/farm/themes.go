@@ -22,6 +22,9 @@ var Themes = []Theme{
 	{"garden", "Тихий сад", "Знакомая зелень и мягкое утреннее солнце.", 0},
 	{"tropical", "Тропический остров", "Бирюзовая вода, пальмы и тёплый песок вокруг твоих грядок.", 150},
 	{"lunar", "Лунная оранжерея", "Ночное небо, светящиеся растения и сад под луной.", 200},
+	{"enchanted", "Лес духов", "Лиловые сумерки, светлячки и мятное сияние зачарованного леса.", 250},
+	{"autumn", "Янтарный урожай", "Тёплая медь, осенняя листва и ферма в золотой час.", 150},
+	{"frost", "Полярный сад", "Хвойный лес, снежная пыль и ледяные узоры северного сада.", 200},
 }
 
 func findTheme(id string) (Theme, bool) {
@@ -53,7 +56,7 @@ func codeHash(code string) string {
 
 // Development codes are seeded only when insecure local development is enabled.
 func (h *Handler) SeedDevThemes(ctx context.Context) error {
-	for code, theme := range map[string]string{"TROPIC": "tropical", "LUNA": "lunar"} {
+	for code, theme := range map[string]string{"TROPIC": "tropical", "LUNA": "lunar", "FOREST": "enchanted", "AUTUMN": "autumn", "FROST": "frost"} {
 		if _, err := h.pool.Exec(ctx, `INSERT INTO farm_theme_codes(code_hash,theme,max_uses) VALUES ($1,$2,100000) ON CONFLICT DO NOTHING`, codeHash(code), theme); err != nil {
 			return err
 		}

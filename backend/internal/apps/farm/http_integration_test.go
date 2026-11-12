@@ -67,6 +67,13 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if _, err = pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
+	migration, err = os.ReadFile("../../../../db/migrations/000013_farm_theme_worlds.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatal(err)
+	}
 	for id := 1; id <= 2; id++ {
 		if _, err := pool.Exec(ctx, `INSERT INTO sessions (token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 hour')`, secure.TokenHash(fmt.Sprintf("farm-test-%d", id)), id); err != nil {
 			t.Fatal(err)
@@ -269,6 +276,51 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	}
 	if ownsTheme(readState(request("GET", "/api/v1/farm", "", 2)), "lunar") {
 		t.Fatal("theme purchase leaked to another player")
+	}
+	bobHarvest := readState(request("POST", "/api/v1/farm/actions", `{"kind":"harvest"}`, 2))
+	specimen := bobHarvest.Barn[0]
+	statuses = make(chan int, 6)
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			statuses <- request("POST", "/api/v1/farm/actions", fmt.Sprintf(`{"kind":"keep","item":%q}`, specimen.ID), 2).Code
+		}()
+	}
+	wg.Wait()
+	close(statuses)
+	success = 0
+	for status := range statuses {
+		if status == 200 {
+			success++
+		} else if status != 400 {
+			t.Fatalf("unexpected trophy status %d", status)
+		}
+	}
+	protected := readState(request("GET", "/api/v1/farm", "", 2))
+	if success != 1 || len(protected.Showcase) != 1 || len(protected.Barn) != 1 {
+		t.Fatal("parallel keep duplicated specimen")
+	}
+	if len(readState(request("GET", "/api/v1/farm", "", 1)).Showcase) != 0 {
+		t.Fatal("trophy leaked to another player")
+	}
+	breeding := readState(request("POST", "/api/v1/farm/actions", `{"kind":"breed","seed":"carrot"}`, 2))
+	if breeding.Breeding == nil || breeding.Seeds["carrot"] != 2 {
+		t.Fatal("breeding not saved")
+	}
+	if request("POST", "/api/v1/farm/actions", `{"kind":"claim_breed"}`, 2).Code != 400 {
+		t.Fatal("early HTTP breeding claim")
+	}
+	// Advance only this test schema's fixture job, never live player clocks.
+	if _, err = pool.Exec(ctx, `UPDATE farm_players SET state=jsonb_set(state,'{breeding,ready_at}',to_jsonb(now()-interval '1 second')) WHERE user_id=2`); err != nil {
+		t.Fatal(err)
+	}
+	claimed := readState(request("POST", "/api/v1/farm/actions", `{"kind":"claim_breed"}`, 2))
+	if claimed.Seeds["aurora_root"] != 1 || claimed.Breeding != nil || len(claimed.Hybrids) != 1 {
+		t.Fatal("HTTP breeding claim not persisted")
+	}
+	if request("POST", "/api/v1/farm/actions", `{"kind":"claim_breed"}`, 2).Code != 400 {
+		t.Fatal("double HTTP breeding claim")
 	}
 }
 
