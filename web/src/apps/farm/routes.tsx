@@ -20,6 +20,7 @@ import { DailyPanel } from './DailyPanel';
 import { Tutorial } from './Tutorial';
 import { Expeditions } from './Expeditions';
 import { GardenScenery } from './GardenScenery';
+import { Games } from './Games';
 import { mutationNames, plantCharacter, plantWeight } from './character';
 import './farm.css';
 import './collection.css';
@@ -27,9 +28,10 @@ import './mutations.css';
 import './worlds.css';
 import './expeditions.css';
 import './garden-visuals.css';
+import './games.css';
 
 const tabs = [
-  ['garden', 'garden', 'Моя ферма'], ['seeds', 'seed', 'Семена'], ['collection', 'book', 'Коллекция'],
+  ['garden', 'garden', 'Моя ферма'], ['games','game','Игры'], ['seeds', 'seed', 'Семена'], ['collection', 'book', 'Коллекция'],
   ['lab', 'spark', 'Лаборатория'], ['explore', 'explore', 'Экспедиции'], ['showcase', 'trophy', 'Витрина'],
   ['upgrades', 'upgrade', 'Улучшения'], ['themes', 'spark', 'Темы'], ['top', 'trophy', 'Топ фермеров'],
 ] as const;
@@ -61,7 +63,7 @@ export default function FarmRoutes() {
   const cache = useQueryClient();
   const sound = useFarmSound();
   const [effect, setEffect] = useState<{ kind: string; slot?: number; coins: number } | null>(null);
-  const [tab, setTab] = useState<Tab>('garden');
+  const [tab, setTab] = useState<Tab>(() => new URLSearchParams(window.location.search).get('tab') === 'games' ? 'games' : 'garden');
   const [modal, setModal] = useState<Modal | null>(null);
   const [seed, setSeed] = useState('carrot');
   const [care, setCare] = useState('water');
@@ -71,10 +73,11 @@ export default function FarmRoutes() {
   const markSeen = () => { try { window.localStorage.setItem('srufarm-tutorial', '1'); } catch { /* private mode */ } };
   const queryKey = ['farm', session.me?.id];
   const boardKey = ['farm-leaderboard', session.me?.id];
-  const farm = useQuery({ queryKey, queryFn: getFarm, enabled: session.status === 'ready', refetchInterval: 30_000 });
+  const farm = useQuery({ queryKey, queryFn: getFarm, enabled: session.status === 'ready', refetchInterval: (query) => query.state.data?.state.crash?.status === 'running' ? 350 : tab === 'games' ? 2000 : 30_000 });
   const leaderboard = useQuery({ queryKey: boardKey, queryFn: getLeaderboard, enabled: session.status === 'ready', refetchInterval: 60_000 });
   const mutation = useMutation({
     mutationFn: actOnFarm,
+    onMutate: () => { void cache.cancelQueries({ queryKey }); },
     onSuccess: (data: FarmResponse, action: FarmAction) => {
       cache.setQueryData(queryKey, data);
       setEffect({ kind: action.kind, slot: action.slot, coins: data.state.coins - (farm.data?.state.coins ?? data.state.coins) });
@@ -83,14 +86,15 @@ export default function FarmRoutes() {
           const collected = data.state.barn.slice(farm.data?.state.barn.length ?? 0);
           const special = collected.find(item => item.mutation === 'rainbow') ?? collected.find(item => item.mutation === 'ancient' || item.mutation === 'crystal') ?? collected.find(item => item.mutation !== 'none') ?? collected[0];
           sound.play(special ? plantCharacter(special.seed,special.mutation).sound : 'harvest');
-        } else sound.play(action.kind === 'theme' ? 'tap' : action.kind === 'redeem' || action.kind === 'breed' ? 'upgrade' : action.kind === 'keep' || action.kind === 'claim_breed' || action.kind === 'claim_level' || action.kind === 'fulfill_order' || action.kind === 'claim_daily' || action.kind === 'claim_expedition' ? 'rare' : action.kind === 'return_trophy' || action.kind === 'start_expedition' ? 'plant' : action.kind);
+        } else sound.play(action.kind === 'crash_cashout' || action.kind === 'plant_upgrade' || action.kind === 'flip_join' ? 'tap' : action.kind === 'crash_start' || action.kind === 'flip_create' || action.kind === 'flip_cancel' ? 'plant' : action.kind === 'theme' ? 'tap' : action.kind === 'redeem' || action.kind === 'breed' ? 'upgrade' : action.kind === 'keep' || action.kind === 'claim_breed' || action.kind === 'claim_level' || action.kind === 'fulfill_order' || action.kind === 'claim_daily' || action.kind === 'claim_expedition' ? 'rare' : action.kind === 'return_trophy' || action.kind === 'start_expedition' ? 'plant' : action.kind);
       }
+      if (action.kind.startsWith('flip_')) void cache.invalidateQueries({ queryKey: ['farm-coinflips', session.me?.id] });
       if (action.kind === 'sell' || action.kind === 'fulfill_order') void cache.invalidateQueries({ queryKey: boardKey });
       if (action.kind === 'plant') setModal(null);
       if (action.kind === 'pack') setModal({ kind: 'drops', drops: data.drops ?? [], pack: action.pack ?? 'garden' });
-      else feedback(data.message);
+      else if (action.kind !== 'plant_upgrade' && action.kind !== 'flip_join') feedback(data.message);
     },
-    onError: (error: Error) => feedback(error.message, 'error'),
+    onError: (error: Error) => { feedback(error.message, 'error'); void cache.invalidateQueries({ queryKey }); void cache.invalidateQueries({ queryKey: ['farm-coinflips', session.me?.id] }); },
   });
   useEffect(() => { const timer = window.setInterval(() => setTick(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { if (!effect) return; const timer = window.setTimeout(() => setEffect(null), 1100); return () => window.clearTimeout(timer); }, [effect]);
@@ -100,7 +104,7 @@ export default function FarmRoutes() {
     try { if (window.localStorage.getItem('srufarm-tutorial')) return; } catch { return; }
     setModal({ kind: 'help' });
   }, []);
-  const act = (action: FarmAction) => { if (!mutation.isPending) { sound.prime(); mutation.mutate(action); } };
+  const act = (action: FarmAction) => { if (!mutation.isPending) { sound.prime(); mutation.mutate(['crash_start','crash_cashout','plant_upgrade','flip_create','flip_join','flip_cancel'].includes(action.kind) ? {...action,request_id:crypto.randomUUID()} : action); } };
   const back = () => navigate('/apps');
 
   if (session.status !== 'ready' || !farm.data) {
@@ -110,7 +114,7 @@ export default function FarmRoutes() {
     </div>;
   }
 
-  const { state, crops, recipes = [], mutations = [], packs, upgrades = [], themes = [], stars_available = false, server_time, level, daily, expeditions = [] } = farm.data;
+  const { state, crops, recipes = [], mutations = [], packs, upgrades = [], themes = [], stars_available = false, server_time, level, daily, expeditions = [], games } = farm.data;
   const allCrops = [...crops, ...recipes.map(recipe => recipe.crop)];
   const collectionSize = allCrops.length * Object.keys(mutationNames).length;
   const showcaseCapacity = 6 + (state.upgrades.gallery ?? 0) * 2;
@@ -125,6 +129,7 @@ export default function FarmRoutes() {
   const cropByID = (id: string) => allCrops.find((crop) => crop.id === id)!;
   const openPlant = (slot: number) => { setSeed(allCrops.find((crop) => (state.seeds[crop.id] ?? 0) > 0)?.id ?? 'carrot'); setCare('water'); setModal({ kind: 'plant', slot }); };
   const heading = {
+    games: ['Рискни монетами.', 'Поймай свой момент.', 'Три игры: разгон растения, коинфлип с соперником и апгрейд урожая.'],
     garden: ['Маленькая ферма.', 'Большие находки.', 'Посади что-нибудь хорошее. Остальное сделает время.'],
     seeds: ['Всё начинается', 'с одного семечка.', 'Выбирай знакомые сорта или доверься удаче.'],
     collection: ['Твои маленькие', 'открытия.', 'Каждое новое растение остаётся здесь. Даже после продажи.'],
@@ -199,6 +204,7 @@ export default function FarmRoutes() {
 
         {tab === 'upgrades' && <><div className="farm-upgrade-note"><Glyph name="spark"/><p>Улучшения остаются навсегда. Бонусы растений фиксируются при посадке. {upgrades.length} направлений развития: от новых грядок до редких мутаций и возврата семян.</p></div><div className="farm-upgrades-grid">{upgrades.map((upgrade) => { const current = upgrade.level; const cost = upgrade.cost; return <article key={upgrade.id} className={`farm-upgrade-card ${upgrade.id}`}><span className="farm-upgrade-art"><Glyph name={upgrade.icon} size={50}/></span><span className="farm-eyebrow">УРОВЕНЬ {current} / {upgrade.max_level}</span><h2>{upgrade.name}</h2><p>{upgrade.description}</p><div className="farm-upgrade-levels">{Array.from({ length: upgrade.max_level }, (_,i) => i + 1).map((n) => <span key={n} className={n <= current ? 'filled' : ''}/>)}</div><div className="farm-upgrade-benefit">{upgrade.benefit}</div><button className="farm-primary full" disabled={current >= upgrade.max_level || state.coins < cost || mutation.isPending} onClick={() => act({ kind: 'upgrade', upgrade: upgrade.id })}>{current === upgrade.max_level ? 'Максимальный уровень' : <>Улучшить<Coins value={cost}/></>}</button></article>; })}</div><div className="farm-current-chances"><h3>Твои базовые шансы сейчас</h3><span>Идеальное качество <strong>{5 + (state.upgrades.water ?? 0) * 2}%</strong></span><span>Отборное качество <strong>{20 + (state.upgrades.water ?? 0) * 3}%</strong></span><span>Любая мутация <strong>{3 + (state.upgrades.lamp ?? 0) * 2 + (state.upgrades.genetics ?? 0) * 2}%</strong></span><span>Возврат семени <strong>{(state.upgrades.nursery ?? 0) * 10}%</strong></span><p>Шансы действуют на новые посадки. Уход добавляет бонус качества или мутации. Питомник возвращает максимум одно семя с грядки.</p></div><MutationGuide mutations={mutations}/></>}
 
+        {tab === 'games' && games && <Games state={state} crops={allCrops} mutations={mutations} rules={games} serverTime={server_time} receivedAt={farm.dataUpdatedAt} me={session.me!.id} busy={mutation.isPending} onAction={act} play={sound.play}/>}
         {tab === 'explore' && <Expeditions routes={expeditions} journey={state.expedition} crops={allCrops} coins={state.coins} now={now} busy={mutation.isPending} onAction={act}/>}
         {tab === 'lab' && <Laboratory state={state} recipes={recipes} crops={crops} now={now} busy={mutation.isPending} onAction={act}/> }
         {tab === 'showcase' && <Showcase capacity={showcaseCapacity} trophies={state.showcase ?? []} crops={allCrops} busy={mutation.isPending} onAction={act} onGarden={() => setTab('garden')}/> }

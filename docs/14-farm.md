@@ -277,3 +277,70 @@ The leaderboard refreshes after fulfilment. Tests cover preserving gold plants,
 paying the quoted premium and recording HTTP order revenue in the shared top.
 Closing the tutorial by its close button, Escape or backdrop records the same
 local preference as its skip and finish buttons.
+
+
+## Games on earned coins
+
+The Игры tab contains Переросток, player coinflips and plant upgrades.
+`/apps/farm?tab=games` opens it directly. Game coins remain earned virtual
+currency; cosmetic Stars invoices are separate. Stakes range from 100 to 100000.
+Direct coin winnings never increment harvest revenue or the weekly farm top.
+A won plant follows the normal market rules when subsequently sold.
+
+### Crash: Переросток
+
+One round per account, with stake debited at start. A crypto-random uniform
+integer `r` in `[0,1000000)` selects a private threshold
+`floor(96000000/(r+1))` in hundredths. The displayed multiplier is
+`floor(exp(elapsed_seconds*0.08)*100)`, capped at 1000 (x10). A round busts when
+the multiplier exceeds its threshold; survivors automatically cash out at x10.
+There is a 4% immediate loss rate, 48% survival to x2, 19.2% to x5 and 9.6% to x10.
+The theoretical gross return is at most 96%, with integer coin payouts rounded
+down. Numerical probability tests enumerate all one million roll values.
+
+Only the server clock and saved threshold decide payouts. Active responses omit
+the threshold, while the raw JSONB save retains it for restarts. GET state settles
+an expired round once, including after disconnect. UI polls every350ms during an
+active round and interpolates its display only; a client multiplier is never
+accepted as input. Closing a browser does not pause the round. The paid amount
+is determined when the server processes cashout under the player row lock.
+
+### Player coinflips
+
+Migration000014 stores offers separately from player JSON. A host chooses sun or
+moon and escrows its stake. One open offer per host is enforced by a partial
+unique index. An authenticated, different player joins the opposite side with
+an equal stake. A crypto-random result pays the winner `floor(stake*1.8)`, taking
+10% of the combined bank, with rounding down. Offer and both player saves commit
+together. Offer rows lock before player rows, with paired account IDs ordered.
+Concurrent joins and join/cancel races have exactly one successful settlement.
+
+The host may cancel an unaccepted offer for a full refund. Offers expire after
+ten minutes; list/action requests lazily refund expired offers once. No bot or
+fictional opponent is inserted. An empty lobby stays empty until a real player
+creates an offer. The host's open offer stays visible ahead of the40-row limit.
+
+### Plant upgrades
+
+A player selects one barn specimen, a target species, target mutation and coin
+stake. Targets have perfect quality. The server quote uses market-upgraded
+prices and returns `min(7500,floor((source_unit_market+stake)*9000/target_market))`
+as basis points. The target must cost more than the plant and coins combined.
+The action recalculates the quote while locked, consumes exactly one source
+specimen and the stake, then rolls once. Success adds the target to the barn
+and collection; failure consumes the contribution. Showcase trophies are not
+eligible. The current market bonus is included, so upgrading does not create an
+extra return through a later market sale. Old barn IDs are normalized for quotes.
+
+### Requests, history and feedback
+
+Each game action carries a UUID. The latest100 successful request IDs are kept
+per account to reject recent retries; completed rounds and coinflip status also
+prevent duplicate payouts. History keeps the latest20 results, with current
+crash state persisted separately. Winning plant value is distinguished from coin
+payouts in the UI. Coinflip and upgrade reveals display already committed results;
+skipping, closing or muting them never changes a roll. Motion respects reduced
+motion. Eight Node tests cover sounds, plant character, stake validation and clock
+interpolation. PostgreSQL integration tests use isolated schemas to exercise
+concurrent cashouts, joins, cancellation, expiry/refunds and single-plant use.
+No live player balances or clocks are changed by those fixtures.

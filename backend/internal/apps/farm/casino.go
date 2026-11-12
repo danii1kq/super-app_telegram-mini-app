@@ -74,6 +74,7 @@ func checkGameRequest(state State, id string) error {
 }
 
 func rememberGameRequest(state *State, id string) {
+	// shortcut: retain 100 recent request IDs; use a separate ledger for longer retry windows.
 	state.GameRequests = append(state.GameRequests, id)
 	if len(state.GameRequests) > 100 {
 		state.GameRequests = state.GameRequests[len(state.GameRequests)-100:]

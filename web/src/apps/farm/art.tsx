@@ -5,6 +5,7 @@ import { hybridArt, plantCharacter } from './character';
 const paths: Record<string, string> = {
   sprout: 'M12 21v-9M12 16C4 16 3 11 3 7c6 0 9 3 9 9Zm0-4c0-6 3-9 9-9 0 6-3 9-9 9Z',
   garden: 'M3 21h18M5 17V9m14 8V9M3 9l9-6 9 6M8 21v-8h8v8',
+  game: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 4h.01M16 7h.01M12 12h.01M8 17h.01M16 17h.01',
   explore: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-5-5-2 7-7 3 3-7 6-3Z',
   seed: 'M19 5C7 3 2 10 6 17s15 2 13-12ZM6 18 16 8',
   book: 'M12 6c-3-3-7-3-10-2v15c4-1 7 0 10 2 3-2 6-3 10-2V4c-3-1-7-1-10 2Zm0 0v15',
