@@ -11,7 +11,16 @@ export interface Conversation {
   unread: number;
   updated_at: string;
   partner_id: string | null;
-  last_message: Pick<Message, 'text' | 'sender_id' | 'sender_name' | 'created_at'> | null;
+  last_message: Pick<Message, 'text' | 'sender_id' | 'sender_name' | 'created_at' | 'attachment'> | null;
+}
+
+export interface Attachment {
+  kind: 'photo' | 'file';
+  name: string;
+  mime: string;
+  size: number;
+  width?: number;
+  height?: number;
 }
 
 export interface Message {
@@ -22,6 +31,7 @@ export interface Message {
   seq: string;
   text: string;
   created_at: string;
+  attachment: Attachment | null;
 }
 
 export const chatKeys = {

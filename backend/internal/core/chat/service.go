@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -22,12 +23,14 @@ import (
 )
 
 type Service struct {
-	pool    *postgres.Pool
-	content *secure.Cipher
+	pool          *postgres.Pool
+	content       *secure.Cipher
+	uploadSlots   chan struct{}
+	downloadSlots chan struct{}
 }
 
 func NewService(pool *postgres.Pool, content *secure.Cipher) *Service {
-	return &Service{pool: pool, content: content}
+	return &Service{pool: pool, content: content, uploadSlots: make(chan struct{}, 2), downloadSlots: make(chan struct{}, 4)}
 }
 
 type Conversation struct {
@@ -50,13 +53,14 @@ type Message struct {
 	Seq            int64
 	Text           string
 	CreatedAt      time.Time
+	Attachment     *Attachment
 }
 
-// Payload is the sealed message body. Text is the only kind in the first
-// version; the struct leaves room for a card without changing the table.
+// File metadata lives in the encrypted payload along with its caption.
 type Payload struct {
-	Kind string `json:"kind"`
-	Text string `json:"text"`
+	Kind       string      `json:"kind"`
+	Text       string      `json:"text"`
+	Attachment *Attachment `json:"attachment,omitempty"`
 }
 
 // List returns the viewer's conversations with unread counts.
@@ -117,13 +121,13 @@ func (s *Service) List(ctx context.Context, viewerID int64) ([]Conversation, err
 			conversation.Title = partnerName
 		}
 		if latestKeyID != nil {
-			text, err := s.openPayload(latestSealed, *latestKeyID, conversation.ID, latest.Seq)
+			payload, err := s.decodePayload(latestSealed, *latestKeyID, conversation.ID, latest.Seq)
 			if err != nil {
 				return nil, err
 			}
 			latest.ConversationID = conversation.ID
 			latest.CreatedAt = conversation.UpdatedAt
-			latest.Text = text
+			latest.Text, latest.Attachment = payload.Text, payload.Attachment
 			conversation.LastMessage = &latest
 		}
 		out = append(out, conversation)
@@ -177,11 +181,11 @@ func (s *Service) History(ctx context.Context, viewerID, conversationID int64, q
 		); err != nil {
 			return nil, false, err
 		}
-		text, err := s.openPayload(sealed, keyID, message.ConversationID, message.Seq)
+		payload, err := s.decodePayload(sealed, keyID, message.ConversationID, message.Seq)
 		if err != nil {
 			return nil, false, err
 		}
-		message.Text = text
+		message.Text, message.Attachment = payload.Text, payload.Attachment
 		out = append(out, message)
 	}
 	if err := rows.Err(); err != nil {
@@ -200,14 +204,19 @@ func (s *Service) History(ctx context.Context, viewerID, conversationID int64, q
 // Send stores a message idempotently: the same client id returns the stored
 // message, a different body with the same id is a conflict.
 func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clientID, text string) (Message, error) {
-	text = strings.TrimSpace(text)
+	return s.send(ctx, senderID, conversationID, clientID, Payload{Kind: "text", Text: text}, nil)
+}
+
+func (s *Service) send(ctx context.Context, senderID, conversationID int64, clientID string, input Payload, file []byte) (Message, error) {
+	text := strings.TrimSpace(input.Text)
+	input.Text = text
 	if clientID == "" {
 		return Message{}, httpapi.BadRequest("missing_client_id", "Не передан client_message_id")
 	}
 	if len(clientID) > 128 {
 		return Message{}, httpapi.BadRequest("invalid_client_id", "Слишком длинный client_message_id")
 	}
-	if text == "" {
+	if text == "" && input.Attachment == nil {
 		return Message{}, httpapi.Validation(map[string]string{"text": "Сообщение не может быть пустым"}, "Проверьте поля")
 	}
 	if len([]rune(text)) > 4000 {
@@ -262,16 +271,16 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 			if existingConversationID != conversationID {
 				return httpapi.Conflict("idempotency_conflict", "Этот ключ уже использован в другом диалоге")
 			}
-			existingText, err := s.openPayload(existingSealed, existingKeyID, conversationID, existingSeq)
+			existing, err := s.decodePayload(existingSealed, existingKeyID, conversationID, existingSeq)
 			if err != nil {
 				return err
 			}
-			if existingText != text {
+			if !reflect.DeepEqual(existing, input) {
 				return httpapi.Conflict("idempotency_conflict", "Этот ключ уже использован с другим сообщением")
 			}
 			message = Message{
 				ID: existingID, ConversationID: conversationID, SenderID: senderID,
-				Seq: existingSeq, Text: existingText,
+				Seq: existingSeq, Text: existing.Text, Attachment: existing.Attachment,
 				CreatedAt: existingCreatedAt, SenderName: senderName,
 			}
 			return nil
@@ -281,7 +290,20 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 		}
 
 		nextSeq := lastSeq + 1
-		payload, err := json.Marshal(Payload{Kind: "text", Text: text})
+		if input.Attachment != nil {
+			// Serialize quota checks across this sender's conversations.
+			if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id = $1 FOR UPDATE`, senderID); err != nil {
+				return err
+			}
+			var used, count int64
+			if err := tx.QueryRow(ctx, `SELECT coalesce(sum(byte_size), 0), count(*) FROM chat_attachments WHERE sender_id = $1`, senderID).Scan(&used, &count); err != nil {
+				return err
+			}
+			if used+int64(len(file)) > 200<<20 || count >= 1000 {
+				return httpapi.BadRequest("storage_limit", "Достигнут лимит вложений: 200 МБ или 1000 файлов")
+			}
+		}
+		payload, err := json.Marshal(input)
 		if err != nil {
 			return err
 		}
@@ -302,6 +324,15 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 			}
 			return err
 		}
+		if input.Attachment != nil {
+			sealedFile, err := s.content.Seal(file, attachmentAAD(conversationID, message.ID))
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO chat_attachments (message_id, sender_id, byte_size, body_sealed, key_id) VALUES ($1,$2,$3,$4,$5)`, message.ID, senderID, len(file), sealedFile.Ciphertext, sealedFile.KeyID); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE chat_conversations SET last_message_seq = $2 WHERE id = $1`,
 			conversationID, nextSeq,
@@ -313,6 +344,7 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 		message.SenderID = senderID
 		message.Seq = nextSeq
 		message.Text = text
+		message.Attachment = input.Attachment
 		if err := tx.QueryRow(ctx, `SELECT public_name FROM users WHERE id = $1`, senderID).Scan(&message.SenderName); err != nil {
 			return err
 		}
@@ -363,16 +395,16 @@ func (s *Service) requireMember(ctx context.Context, q querier, userID, conversa
 	return nil
 }
 
-func (s *Service) openPayload(sealed []byte, keyID string, conversationID, seq int64) (string, error) {
+func (s *Service) decodePayload(sealed []byte, keyID string, conversationID, seq int64) (Payload, error) {
 	raw, err := s.content.Open(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, messageAAD(conversationID, seq))
 	if err != nil {
-		return "", err
+		return Payload{}, err
 	}
 	var payload Payload
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return "", err
+		return Payload{}, err
 	}
-	return payload.Text, nil
+	return payload, nil
 }
 
 func messageAAD(conversationID, seq int64) string {

@@ -21,6 +21,7 @@ func NewHandler(service *Service, authService *auth.Service, events *Hub) *Handl
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
+	h.registerAttachments(mux)
 	mux.Handle("GET /api/v1/conversations", h.auth.Middleware(http.HandlerFunc(h.list)))
 	mux.Handle("POST /api/v1/conversations", h.auth.Middleware(http.HandlerFunc(h.openDirect)))
 	mux.Handle("GET /api/v1/conversations/{id}/messages", h.auth.Middleware(http.HandlerFunc(h.history)))
@@ -179,6 +180,7 @@ func conversationJSON(conversation Conversation) map[string]any {
 	if message := conversation.LastMessage; message != nil {
 		preview = map[string]any{
 			"text":        message.Text,
+			"attachment":  message.Attachment,
 			"sender_id":   strconv.FormatInt(message.SenderID, 10),
 			"sender_name": message.SenderName,
 			"created_at":  message.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
@@ -201,6 +203,7 @@ func messageJSON(message Message) map[string]any {
 		"sender_name":     message.SenderName,
 		"seq":             strconv.FormatInt(message.Seq, 10),
 		"text":            message.Text,
+		"attachment":      message.Attachment,
 		"created_at":      message.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 }

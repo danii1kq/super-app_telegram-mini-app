@@ -70,6 +70,20 @@ export async function apiUpload<T>(path: string, file: Blob, mime: string): Prom
   return readResponse<T>(response);
 }
 
+export async function apiMultipart<T>(path: string, body: FormData): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
+  return readResponse<T>(await fetch(`/api/v1${path}`, { method: 'POST', headers, body }));
+}
+
+export async function apiBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
+  const response = await fetch(`/api/v1${path}`, { headers, signal, cache: 'no-store' });
+  if (!response.ok) return readResponse<never>(response);
+  return response.blob();
+}
+
 async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     clearSessionToken();

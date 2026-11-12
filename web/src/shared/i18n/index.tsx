@@ -13,6 +13,13 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  chatPhoto: 'Фото',
+  chatAttachPhoto: 'Прикрепить фото',
+  chatAttachFile: 'Прикрепить файл',
+  chatDownload: 'Скачать фото',
+  chatAttachmentFailed: 'Не удалось скачать вложение',
+  chatFileSize: 'Выберите файл от 1 байта до 20 МБ',
+  chatRemoveAttachment: 'Убрать вложение',
   chatOpenFailed: 'Не удалось открыть диалог',
   searchChats: 'Поиск диалогов',
   noSearchResults: 'Ничего не найдено',
@@ -297,6 +304,13 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  chatPhoto: 'Фото',
+  chatAttachPhoto: 'Фото тіркеу',
+  chatAttachFile: 'Файл тіркеу',
+  chatDownload: 'Фотоны жүктеп алу',
+  chatAttachmentFailed: 'Тіркемені жүктеп алу мүмкін болмады',
+  chatFileSize: '1 байттан 20 МБ дейінгі файлды таңдаңыз',
+  chatRemoveAttachment: 'Тіркемені алып тастау',
   chatOpenFailed: 'Диалогты ашу мүмкін болмады',
   searchChats: 'Диалогтарды іздеу',
   noSearchResults: 'Ештеңе табылмады',
@@ -579,6 +593,13 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  chatPhoto: 'Photo',
+  chatAttachPhoto: 'Attach photo',
+  chatAttachFile: 'Attach file',
+  chatDownload: 'Download photo',
+  chatAttachmentFailed: 'Could not download attachment',
+  chatFileSize: 'Choose a file between 1 byte and 20 MB',
+  chatRemoveAttachment: 'Remove attachment',
   chatOpenFailed: 'Could not open the conversation',
   searchChats: 'Search conversations',
   noSearchResults: 'No results found',

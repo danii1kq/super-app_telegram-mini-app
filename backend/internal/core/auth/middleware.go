@@ -32,6 +32,7 @@ func BearerToken(r *http.Request) string {
 // the context.
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "private, no-store")
 		user, err := s.Authenticate(r.Context(), BearerToken(r))
 		if err != nil {
 			httpapi.WriteError(w, err)

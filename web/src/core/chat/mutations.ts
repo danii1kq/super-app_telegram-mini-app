@@ -1,15 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/shared/api/client';
+import { api, apiMultipart } from '@/shared/api/client';
 import { chatKeys, type Message } from './api';
 
 export function useSendMessage(conversationId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { clientMessageId: string; text: string }) =>
-      api<Message>(`/conversations/${conversationId}/messages`, {
+    mutationFn: (input: { clientMessageId: string; text: string; file?: File; kind?: 'photo' | 'file' }) => {
+      if (input.file) {
+        const form = new FormData();
+        form.append('client_message_id', input.clientMessageId);
+        form.append('text', input.text);
+        form.append('kind', input.kind ?? 'file');
+        form.append('file', input.file);
+        return apiMultipart<Message>(`/conversations/${conversationId}/attachments`, form);
+      }
+      return api<Message>(`/conversations/${conversationId}/messages`, {
         method: 'POST',
         body: { client_message_id: input.clientMessageId, text: input.text },
-      }),
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: chatKeys.history(conversationId) });
       void queryClient.invalidateQueries({ queryKey: chatKeys.list });

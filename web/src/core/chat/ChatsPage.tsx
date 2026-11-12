@@ -75,7 +75,7 @@ export function ChatsPage() {
           <Card>
             {shownChats?.map((conversation, index) => {
               const latest = conversation.last_message;
-              const preview = latest ? `${latest.sender_id === me?.id ? `${t('you')}: ` : ''}${latest.text}` : t('chatEmptyMessages');
+              const preview = latest ? `${latest.sender_id === me?.id ? `${t('you')}: ` : ''}${latest.text || (latest.attachment?.kind === 'photo' ? t('chatPhoto') : latest.attachment?.name) || t('chatEmptyMessages')}` : t('chatEmptyMessages');
               return (
                 <div key={conversation.id}>
                   {index ? <Hairline /> : null}
