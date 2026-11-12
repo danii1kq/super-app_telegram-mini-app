@@ -1,6 +1,8 @@
 # SruFarm
 
 An independent game at `/apps/farm`, registered in the existing catalogue.
+The initial game interface is in Russian; the catalogue description supports
+the shell's Russian, Kazakh and English language settings.
 Design: warm illustrated garden, cream canvas, forest green ink, lime highlights,
 ochre coins. Existing system typeface, an 8px spacing rhythm, 16-24px panels,
 small feedback animations and reduced-motion support. Mobile first; on desktop

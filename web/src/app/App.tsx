@@ -13,6 +13,7 @@ const DayApp = lazy(() => import('@/apps/day/routes'));
 const PulseApp = lazy(() => import('@/apps/pulse/routes'));
 const NotesApp = lazy(() => import('@/apps/notes/routes'));
 const SplitApp = lazy(() => import('@/apps/split/routes'));
+const FarmApp = lazy(() => import('@/apps/farm/routes'));
 
 function AppFallback() {
   return (
@@ -40,6 +41,7 @@ export function App() {
           <Route path="/apps/pulse/*" element={<PulseApp />} />
           <Route path="/apps/notes/*" element={<NotesApp />} />
           <Route path="/apps/split/*" element={<SplitApp />} />
+          <Route path="/apps/farm/*" element={<FarmApp />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/feed" replace />} />
         </Route>

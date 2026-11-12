@@ -1,0 +1,165 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
+import { useSession } from '@/app/session';
+import { BackButton } from '@/shared/telegram/hooks';
+import { useFeedback } from '@/shared/ui/toast';
+import { actOnFarm, countdown, getFarm, getLeaderboard, type FarmAction, type FarmResponse } from './api';
+import { CropArt, Glyph, SeedPacket } from './art';
+import './farm.css';
+
+const tabs = [
+  ['garden', 'garden', 'Моя ферма'], ['seeds', 'seed', 'Семена'], ['collection', 'book', 'Коллекция'],
+  ['upgrades', 'upgrade', 'Улучшения'], ['top', 'trophy', 'Топ фермеров'],
+] as const;
+type Tab = typeof tabs[number][0];
+type Modal = { kind: 'plant'; slot: number } | { kind: 'pack'; id: string } | { kind: 'drops'; drops: string[] } | { kind: 'help' };
+const mutationNames: Record<string, string> = { none: 'Обычное', giant: 'Гигантское', gold: 'Золотое', crystal: 'Кристальное' };
+const qualityNames: Record<string, string> = { normal: 'Обычное', choice: 'Отборное', perfect: 'Идеальное' };
+const rarityNames: Record<string, string> = { common: 'Обычное', uncommon: 'Необычное', rare: 'Редкое', legendary: 'Легендарное' };
+const upgrades = [
+  { id: 'water', icon: 'water', name: 'Бережный полив', description: 'Больше отборных и идеальных растений.', benefit: '+2% идеального и +3% отборного за уровень' },
+  { id: 'soil', icon: 'soil', name: 'Плодородная почва', description: 'Больше урожая с каждой грядки.', benefit: '+1 растение с грядки за уровень' },
+  { id: 'lamp', icon: 'lamp', name: 'Лаборатория света', description: 'Повышает шанс необычных мутаций.', benefit: '+2% к шансу мутации за уровень' },
+];
+const careOptions = [
+  { id: 'water', icon: 'water', name: 'Полив', cost: 0, description: '+5% идеального, +10% отборного' },
+  { id: 'soil', icon: 'soil', name: 'Удобрение', cost: 12, description: '+1 растение в урожае' },
+  { id: 'lamp', icon: 'lamp', name: 'Лампа', cost: 20, description: '+5% к шансу мутации' },
+];
+const number = (value: number) => value.toLocaleString('ru-RU');
+
+function Coins({ value }: { value: number }) { return <span className="farm-coins"><Glyph name="coin" size={17}/>{number(value)}</span>; }
+
+function Dialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
+  return <dialog ref={ref} className="farm-dialog" aria-labelledby="farm-dialog-title" onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="farm-dialog-inner"><header><h2 id="farm-dialog-title">{title}</h2><button className="farm-icon-button" onClick={onClose} aria-label="Закрыть"><Glyph name="close"/></button></header>{children}</div>
+  </dialog>;
+}
+
+export default function FarmRoutes() {
+  const session = useSession();
+  const navigate = useNavigate();
+  const feedback = useFeedback();
+  const cache = useQueryClient();
+  const [tab, setTab] = useState<Tab>('garden');
+  const [modal, setModal] = useState<Modal | null>(null);
+  const [seed, setSeed] = useState('carrot');
+  const [care, setCare] = useState('water');
+  const [filter, setFilter] = useState('none');
+  const [tick, setTick] = useState(Date.now());
+  const queryKey = ['farm', session.me?.id];
+  const boardKey = ['farm-leaderboard', session.me?.id];
+  const farm = useQuery({ queryKey, queryFn: getFarm, enabled: session.status === 'ready', refetchInterval: 30_000 });
+  const leaderboard = useQuery({ queryKey: boardKey, queryFn: getLeaderboard, enabled: session.status === 'ready', refetchInterval: 60_000 });
+  const mutation = useMutation({
+    mutationFn: actOnFarm,
+    onSuccess: (data: FarmResponse, action: FarmAction) => {
+      cache.setQueryData(queryKey, data);
+      if (action.kind === 'sell') void cache.invalidateQueries({ queryKey: boardKey });
+      if (action.kind === 'plant') setModal(null);
+      if (action.kind === 'pack') setModal({ kind: 'drops', drops: data.drops ?? [] });
+      feedback(data.message);
+    },
+    onError: (error: Error) => feedback(error.message, 'error'),
+  });
+  useEffect(() => { const timer = window.setInterval(() => setTick(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  const act = (action: FarmAction) => { if (!mutation.isPending) mutation.mutate(action); };
+  const back = () => navigate('/apps');
+
+  if (session.status !== 'ready' || !farm.data) {
+    const failed = farm.isError || session.status === 'error' || session.status === 'outside';
+    return <div className="farm-app farm-loading"><BackButton onClick={back}/><Glyph name="sprout" size={48}/><h1>SruFarm</h1><p>{failed ? 'Не удалось открыть ферму' : 'Готовим твой маленький сад…'}</p>
+      {failed && <><button className="farm-primary" onClick={() => { session.retry(); void farm.refetch(); }}>Попробовать ещё</button><Link to="/apps">Вернуться к приложениям</Link></>}
+    </div>;
+  }
+
+  const { state, crops, packs, server_time } = farm.data;
+  const now = Date.parse(server_time) + (tick - farm.dataUpdatedAt);
+  const ready = state.plots.filter((plot) => plot && Date.parse(plot.ready_at) <= now).length;
+  const occupied = state.plots.filter(Boolean).length;
+  const barnValue = state.barn.reduce((sum, item) => sum + item.value, 0);
+  const totalSeeds = Object.values(state.seeds).reduce((sum, count) => sum + count, 0);
+  const level = Math.floor(state.xp / 100) + 1;
+  const myRank = leaderboard.data?.entries.find((entry) => entry.mine);
+  const cropByID = (id: string) => crops.find((crop) => crop.id === id)!;
+  const openPlant = (slot: number) => { setSeed(crops.find((crop) => (state.seeds[crop.id] ?? 0) > 0)?.id ?? 'carrot'); setCare('water'); setModal({ kind: 'plant', slot }); };
+  const heading = {
+    garden: ['Маленькая ферма.', 'Большие находки.', 'Посади что-нибудь хорошее. Остальное сделает время.'],
+    seeds: ['Всё начинается', 'с одного семечка.', 'Выбирай знакомые сорта или доверься удаче.'],
+    collection: ['Твои маленькие', 'открытия.', 'Каждое новое растение остаётся здесь. Даже после продажи.'],
+    upgrades: ['Немного заботы.', 'Больше чудес.', 'Улучшай ферму и повышай шансы на особенный урожай.'],
+    top: ['Растём вместе.', 'Соревнуемся честно.', 'Собирай урожай, продавай и поднимайся в недельном топе.'],
+  }[tab];
+
+  const seedGrid = (selectable: boolean) => <div className={`farm-seed-grid ${selectable ? 'selectable' : ''}`}>{crops.map((crop) => <button key={crop.id} disabled={selectable ? !state.seeds[crop.id] : mutation.isPending || state.coins < crop.seed_price} className={`farm-seed-card ${selectable && seed === crop.id ? 'selected' : ''}`} onClick={() => selectable ? setSeed(crop.id) : act({ kind: 'buy', seed: crop.id })}>
+    <span className={`farm-rarity-dot ${crop.rarity}`}/><span className="farm-owned">{state.seeds[crop.id] ?? 0} шт.</span><CropArt seed={crop.id}/><strong>{crop.name}</strong><small>{selectable ? `Продажа от ${crop.price}` : rarityNames[crop.rarity]}</small>
+    {!selectable && <span className="farm-seed-buy"><span>Купить семя</span><Coins value={crop.seed_price}/></span>}
+  </button>)}</div>;
+
+  return <div className="farm-app">
+    <BackButton onClick={back}/>
+    <header className="farm-topbar"><div className="farm-topbar-inner">
+      <Link to="/apps" className="farm-back" aria-label="К приложениям"><Glyph name="arrow" size={19}/></Link>
+      <Link className="farm-brand" to="/apps/farm" onClick={() => setTab('garden')}><span className="farm-brand-mark"><Glyph name="sprout" size={25}/></span>Sru<span>Farm</span><span className="farm-beta">BETA</span></Link>
+      <div className="farm-topbar-right"><span className="farm-wallet"><Coins value={state.coins}/></span><button className="farm-avatar" onClick={() => setTab('top')} aria-label="Мой рейтинг">{(session.me?.public_name ?? 'Ф').slice(0,1).toUpperCase()}</button></div>
+    </div></header>
+
+    <div className="farm-layout">
+      <nav className="farm-tabs" aria-label="Разделы фермы">{tabs.map(([id, icon, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}><Glyph name={icon}/><span>{label}</span>{id === 'collection' && <small>{Object.keys(state.collection).length}</small>}</button>)}</nav>
+      <main>
+        <section className="farm-intro"><div><span className="farm-eyebrow"><span/> ТВОЙ УГОЛОК СПОКОЙСТВИЯ</span><h1>{heading[0]}<br/><em>{heading[1]}</em></h1><p>{heading[2]}</p></div><div className="farm-intro-art"><span className="farm-intro-orbit"/><CropArt seed={tab === 'seeds' ? 'dragonfruit' : tab === 'collection' ? 'blueberry' : 'carrot'}/><span className="farm-art-spark"><Glyph name="spark" size={24}/></span></div></section>
+
+        {tab === 'garden' && <div className="farm-columns"><div>
+          <section className="farm-garden-panel">
+            <header className="farm-section-heading"><div><h2>Мой участок <span className="farm-count">{occupied}/{state.plots.length}</span></h2><p>{ready ? `${ready} грядки готовы к сбору` : occupied ? 'Тихо растёт что-то прекрасное' : 'Свободные грядки ждут семена'}</p></div><span className="farm-weather"><Glyph name="sun"/>Хороший день</span></header>
+            <div className="farm-garden">
+              <div className="farm-garden-scenery" aria-hidden="true"><span className="farm-tree tree-one"/><span className="farm-tree tree-two"/><span className="farm-tree tree-three"/><span className="farm-fence"/><span className="farm-garden-sign">мой сад</span><span className="farm-flower flower-one"/><span className="farm-flower flower-two"/></div>
+              <div className="farm-plots">{state.plots.map((plot, slot) => {
+                const mature = plot && Date.parse(plot.ready_at) <= now;
+                const remaining = plot ? Date.parse(plot.ready_at) - now : 0;
+                const progress = plot ? Math.min(100, Math.max(0, (1 - remaining / (3 * 3600_000)) * 100)) : 0;
+                return <button key={slot} className={`farm-plot ${plot ? mature ? 'ready' : 'growing' : 'empty'}`} disabled={mutation.isPending} onClick={() => plot ? mature ? act({ kind: 'harvest' }) : feedback(`Растёт ${cropByID(plot.seed).name.toLowerCase()}. До сбора ${countdown(remaining)}`) : openPlant(slot)} aria-label={plot ? `${cropByID(plot.seed).name}, ${mature ? 'собрать урожай' : `до сбора ${countdown(remaining)}`}` : `Посадить на грядке ${slot + 1}`}>
+                  <span className="farm-plot-soil"/>
+                  {plot ? <><CropArt seed={plot.seed} growing={!mature}/><span className="farm-plot-name">{cropByID(plot.seed).name}</span><span className={`farm-plot-status ${mature ? 'mature' : ''}`}><Glyph name={mature ? 'check' : 'clock'} size={13}/>{mature ? 'Собрать' : countdown(remaining)}</span>{!mature && <span className="farm-growth-track"><span style={{ width: `${progress}%` }}/></span>}<span className="farm-plot-care"><Glyph name={plot.care} size={15}/></span></> : <><span className="farm-plot-plus"><Glyph name="plus" size={25}/></span><span className="farm-plot-name">Посадить семя</span><span className="farm-empty-caption">Здесь всё начинается</span></>}
+                </button>;
+              })}</div>
+            </div>
+            <footer className="farm-garden-footer"><span><Glyph name="clock" size={17}/>Один урожай каждые 3 часа</span><button className="farm-primary" disabled={!ready || mutation.isPending} onClick={() => act({ kind: 'harvest' })}><Glyph name="seed" size={17}/>{ready ? `Собрать всё · ${ready}` : 'Урожай растёт'}</button></footer>
+          </section>
+          <div className="farm-gentle-note"><Glyph name="sprout" size={18}/><p>{state.xp === 0 ? 'Два первых растения уже выросли. Это подарок для знакомства с фермой.' : 'Растения растут, пока ты занят. Готовый урожай не портится и всегда дождётся тебя.'}</p><button onClick={() => setModal({ kind: 'help' })}>Как играть<Glyph name="arrow" size={13}/></button></div>
+          <section className="farm-inventory"><header className="farm-section-heading"><div><h2>Запас семян <span className="farm-count">{totalSeeds}</span></h2><p>Что посадим в следующий раз?</p></div><button className="farm-text-button" onClick={() => setTab('seeds')}>В магазин <span>↗</span></button></header><div className="farm-seed-strip">{crops.filter((crop) => state.seeds[crop.id]).map((crop) => <button key={crop.id} onClick={() => { const empty = state.plots.findIndex((plot) => !plot); if (empty >= 0) { openPlant(empty); setSeed(crop.id); } else feedback('Все грядки заняты. Семена сохранятся до следующей посадки.'); }}><CropArt seed={crop.id}/><span>{crop.name}<small>{state.seeds[crop.id]} шт.</small></span></button>)}{totalSeeds === 0 && <p>Семена закончились. Новые ждут в магазине.</p>}</div></section>
+        </div><aside className="farm-sidebar">
+          <section className="farm-barn"><header className="farm-section-heading"><div><h2><Glyph name="box"/>Амбар</h2><p>Собрано с заботой</p></div><span className="farm-count">{state.barn.reduce((sum,item) => sum + item.quantity,0)}</span></header>
+            {state.barn.length ? <div className="farm-barn-items">{state.barn.map((item,i) => <div className="farm-barn-item" key={i}><CropArt seed={item.seed} mutation={item.mutation}/><div><strong>{cropByID(item.seed).name}<small> ×{item.quantity}</small></strong><span>{item.mutation !== 'none' ? mutationNames[item.mutation] : qualityNames[item.quality]}</span></div><Coins value={item.value}/></div>)}</div> : <div className="farm-barn-empty"><Glyph name="box" size={38}/><strong>Здесь будет твой урожай</strong><p>Собери созревшие растения,<br/>чтобы продать их за монеты.</p></div>}
+            <div className="farm-barn-total"><span>Стоимость урожая</span><Coins value={barnValue}/></div><button className="farm-primary full" disabled={!barnValue || mutation.isPending} onClick={() => act({ kind: 'sell' })}>Продать урожай<Glyph name="arrow" size={16}/></button>
+          </section>
+          <button className="farm-pack-teaser" onClick={() => setModal({ kind: 'pack', id: 'garden' })}><div><span className="farm-eyebrow">НЕМНОГО МАГИИ</span><h3>А что внутри?</h3><p>Три семени.<br/>Шанс на редкую находку.</p><span className="farm-teaser-cta">Открыть набор <Glyph name="arrow" size={14}/></span></div><SeedPacket/></button>
+          <section className="farm-level"><span className="farm-level-badge">{level}</span><div><strong>Начинающий садовод</strong><span>{state.xp % 100} / 100 опыта до уровня {level + 1}</span><span className="farm-level-track"><span style={{ width: `${state.xp % 100}%` }}/></span></div></section>
+        </aside></div>}
+
+        {tab === 'seeds' && <>
+          <section className="farm-packs-grid">{packs.map((pack) => <article key={pack.id} className={`farm-pack-card ${pack.id === 'exotic' ? 'exotic' : ''}`}><div className="farm-pack-visual"><SeedPacket exotic={pack.id === 'exotic'}/><span className="farm-pack-orbit"/></div><div className="farm-pack-copy"><span className="farm-eyebrow">3 СЕМЕНИ ВНУТРИ</span><h2>{pack.name}</h2><p>{pack.id === 'garden' ? 'Знакомые любимцы и маленький шанс на большое чудо.' : 'Больше необычных сортов. Для тех, кто любит открывать новое.'}</p><button className="farm-primary" onClick={() => setModal({ kind: 'pack', id: pack.id })}>Посмотреть набор<Coins value={pack.price}/></button></div></article>)}</section>
+          <header className="farm-section-heading spaced"><div><h2>Знаешь, что хочешь вырастить?</h2><p>Любое семя можно купить напрямую.</p></div></header>{seedGrid(false)}
+        </>}
+
+        {tab === 'collection' && <><div className="farm-collection-summary"><Glyph name="book" size={28}/><div><strong>{Object.keys(state.collection).length}<span> / 24 открытия</span></strong><p>Шесть видов. Четыре облика. Целая коллекция историй.</p></div><div className="farm-collection-progress"><span style={{ width: `${Object.keys(state.collection).length / 24 * 100}%` }}/></div></div><div className="farm-filters" aria-label="Мутация">{Object.entries(mutationNames).map(([id,name]) => <button key={id} aria-pressed={filter === id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{name}</button>)}</div><div className="farm-collection-grid">{crops.map((crop) => { const discovered = state.collection[`${crop.id}:${filter}`]; return <article key={crop.id} className={`farm-discovery ${discovered ? '' : 'locked'}`}><span className={`farm-rarity-label ${crop.rarity}`}>{rarityNames[crop.rarity]}</span><CropArt seed={crop.id} mutation={filter}/><h3>{crop.name}</h3><p>{discovered ? `${mutationNames[filter]} · ${qualityNames[discovered.quality]}` : 'Ещё не найдено'}</p><span className="farm-discovered-mark">{discovered ? <><Glyph name="check" size={14}/>В коллекции</> : <><Glyph name="seed" size={14}/>Вырасти, чтобы открыть</>}</span></article>; })}</div></>}
+
+        {tab === 'upgrades' && <><div className="farm-upgrade-note"><Glyph name="spark"/><p>Улучшения остаются навсегда и действуют на новые посадки. Пять уровней в каждой ветке.</p></div><div className="farm-upgrades-grid">{upgrades.map((upgrade) => { const current = state.upgrades[upgrade.id] ?? 0; const cost = 100 * (current + 1) ** 2; return <article key={upgrade.id} className={`farm-upgrade-card ${upgrade.id}`}><span className="farm-upgrade-art"><Glyph name={upgrade.icon} size={50}/></span><span className="farm-eyebrow">УРОВЕНЬ {current} / 5</span><h2>{upgrade.name}</h2><p>{upgrade.description}</p><div className="farm-upgrade-levels">{[1,2,3,4,5].map((n) => <span key={n} className={n <= current ? 'filled' : ''}/>)}</div><div className="farm-upgrade-benefit">{upgrade.benefit}</div><button className="farm-primary full" disabled={current >= 5 || state.coins < cost || mutation.isPending} onClick={() => act({ kind: 'upgrade', upgrade: upgrade.id })}>{current === 5 ? 'Максимальный уровень' : <>Улучшить<Coins value={cost}/></>}</button></article>; })}</div><div className="farm-current-chances"><h3>Твои базовые шансы сейчас</h3><span>Идеальное качество <strong>{5 + (state.upgrades.water ?? 0) * 2}%</strong></span><span>Отборное качество <strong>{20 + (state.upgrades.water ?? 0) * 3}%</strong></span><span>Любая мутация <strong>{3 + (state.upgrades.lamp ?? 0) * 2}%</strong></span><p>Уход при посадке добавляет бонус к этим шансам. Остальные растения вырастают обычными.</p></div></>}
+
+        {tab === 'top' && <div className="farm-ranking-layout"><section className="farm-ranking"><header className="farm-section-heading"><div><span className="farm-eyebrow">НЕДЕЛЬНАЯ ЯРМАРКА</span><h2>Топ фермеров</h2><p>{leaderboard.data ? `До нового сезона: ${Math.max(0, Math.ceil((Date.parse(leaderboard.data.ends_at) - now) / 86400_000))} дн. · сброс в понедельник, 00:00 UTC` : 'Загружаем результаты…'}</p></div><Glyph name="trophy" size={32}/></header><div className="farm-ranking-labels"><span>МЕСТО / ФЕРМЕР</span><span>ПРОДАНО НА</span></div>{leaderboard.isError ? <div className="farm-ranking-empty"><p>Не удалось загрузить рейтинг</p><button className="farm-secondary" onClick={() => void leaderboard.refetch()}>Повторить</button></div> : leaderboard.data?.entries.length ? leaderboard.data.entries.map((entry) => <div key={entry.id} className={`farm-ranking-row ${entry.mine ? 'mine' : ''}`}><span className={`farm-rank rank-${entry.rank}`}>{entry.rank}</span><span className="farm-ranking-avatar">{entry.name.slice(0,1).toUpperCase()}</span><strong>{entry.name}{entry.mine && <small>Это ты</small>}</strong><Coins value={entry.revenue}/></div>) : <div className="farm-ranking-empty"><Glyph name="trophy" size={44}/><h3>Первый урожай. Первое место.</h3><p>Продай урожай, чтобы открыть рейтинг этой недели.</p><button className="farm-primary" onClick={() => setTab('garden')}>На ферму</button></div>}</section><aside className="farm-ranking-about"><span className="farm-ranking-big"><Glyph name="trophy" size={56}/></span><h2>{myRank ? `Ты на ${myRank.rank} месте` : 'Твоё место ждёт'}</h2><p>В зачёт идёт стоимость проданных растений за эту неделю. Покупка семян и наборов очков не добавляет.</p><div><span>Продано за всё время</span><Coins value={state.sold}/></div><small>В топе только настоящие игроки. При равном результате выше тот, кто раньше зарегистрировался.</small></aside></div>}
+      </main>
+      <footer className="farm-page-footer"><span><Glyph name="sprout" size={15}/> SruFarm · Растём в своём ритме</span><button onClick={() => setModal({ kind: 'help' })}>Правила игры <Glyph name="plus" size={14}/></button></footer>
+    </div>
+
+    {modal && <Dialog title={modal.kind === 'plant' ? `Посадка · грядка ${modal.slot + 1}` : modal.kind === 'drops' ? 'Твои новые семена' : modal.kind === 'pack' ? packs.find((pack) => pack.id === modal.id)!.name : 'Маленький путеводитель'} onClose={() => setModal(null)}>
+      {mutation.isError && <p className="farm-inline-error" role="alert">{mutation.error.message}</p>}
+      {modal.kind === 'plant' && <><p className="farm-dialog-subtitle">Выбери семя. Через 3 часа здесь вырастет что-то хорошее.</p>{seedGrid(true)}{totalSeeds === 0 ? <button className="farm-primary full" onClick={() => { setModal(null); setTab('seeds'); }}>За семенами в магазин</button> : <><h3 className="farm-care-title">Немного заботы</h3><div className="farm-care-options">{careOptions.map((option) => <button key={option.id} aria-pressed={care === option.id} className={care === option.id ? 'selected' : ''} onClick={() => setCare(option.id)}><Glyph name={option.icon} size={24}/><strong>{option.name}</strong><small>{option.cost ? `${option.cost} монет` : 'Бесплатно'}</small><span>{option.description}</span></button>)}</div><button className="farm-primary full large" disabled={mutation.isPending || !state.seeds[seed] || state.coins < (careOptions.find((option) => option.id === care)?.cost ?? 0)} onClick={() => act({ kind: 'plant', slot: modal.slot, seed, care })}><Glyph name="sprout"/>{mutation.isPending ? 'Сажаем…' : 'Посадить семя'}<span>03:00</span></button><p className="farm-dialog-footnote">Уход действует весь цикл. Возвращаться для полива не нужно.</p></>}</>}
+      {modal.kind === 'pack' && (() => { const pack = packs.find((item) => item.id === modal.id)!; return <><div className="farm-pack-modal-art"><SeedPacket exotic={pack.id === 'exotic'}/></div><p className="farm-dialog-subtitle center">Три случайных семени. У каждого есть шанс стать началом чего-то особенного.</p><div className="farm-pack-odds">{crops.map((crop,i) => <span key={crop.id}><span className={`farm-rarity-dot ${crop.rarity}`}/>{crop.name}<strong>{pack.weights[i]}%</strong></span>)}</div><div className="farm-pity"><Glyph name="spark" size={18}/><p>До гарантированного редкого: <strong>{10 - (state.pity[pack.id] ?? 0)} семян</strong><small>Каждое 10-е семя без редкой находки станет редким. Счётчик отдельный для каждого набора.</small></p></div><button className="farm-primary full large" disabled={mutation.isPending || state.coins < pack.price} onClick={() => act({ kind: 'pack', pack: pack.id })}>{mutation.isPending ? 'Открываем…' : state.coins < pack.price ? 'Не хватает монет' : 'Открыть набор'}<Coins value={pack.price}/></button></>; })()}
+      {modal.kind === 'drops' && <><p className="farm-dialog-subtitle center">Уже в твоём запасе. Осталось найти им грядку.</p><div className="farm-drops">{modal.drops.map((id,i) => { const crop = cropByID(id); return <div key={i} className={`farm-drop ${crop.rarity}`} style={{ animationDelay: `${i * 120}ms` }}><span className={`farm-rarity-label ${crop.rarity}`}>{rarityNames[crop.rarity]}</span><CropArt seed={id}/><strong>{crop.name}</strong><small>1 семя</small></div>; })}</div><button className="farm-primary full large" onClick={() => { setModal(null); setTab('garden'); }}>На ферму<Glyph name="sprout"/></button></>}
+      {modal.kind === 'help' && <div className="farm-help"><p>Твой ритм: посадить, вернуться через 3 часа, собрать, продать и попробовать что-то новое.</p><h3>Каждое растение может удивить</h3><p>Вид задаёт базовую цену. Отборное качество умножает её на 2, идеальное на 3. Мутации дают ещё один множитель: гигантское ×2, золотое ×5, кристальное ×8.</p><h3>Уход и улучшения</h3><p>Полив улучшает качество, удобрение добавляет растение, лампа повышает шанс мутации. Выбирай уход при посадке. Постоянные улучшения действуют только на новые посадки.</p><h3>Наборы семян</h3><p>Каждый содержит 3 семени. Вероятности видны до открытия. После 9 семян без редкого следующее гарантированно будет редким или лучше. Редкая находка сбрасывает счётчик.</p><h3>Коллекция и топ</h3><p>Каждый вид и его мутации записываются в альбом при сборе. В недельный топ идёт выручка от продажи урожая. Новая неделя начинается в понедельник в 00:00 UTC.</p><p className="farm-help-note">Монеты только игровые, их нельзя купить за деньги или вывести. Урожай никогда не портится.</p></div>}
+    </Dialog>}
+  </div>;
+}

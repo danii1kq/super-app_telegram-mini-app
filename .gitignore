@@ -22,4 +22,5 @@ deploy/SSH.local.md
 
 # Local dev server output
 web/dev.log
+web/dev.error.log
 backend/bin/

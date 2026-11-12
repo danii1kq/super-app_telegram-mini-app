@@ -10,7 +10,7 @@
 
 import type { DictKey } from '@/shared/i18n';
 
-export type AppId = 'doc' | 'day' | 'pulse' | 'notes' | 'split';
+export type AppId = 'doc' | 'day' | 'pulse' | 'notes' | 'split' | 'farm';
 
 export interface AppMeta {
   id: AppId;
@@ -25,6 +25,14 @@ export interface AppMeta {
 }
 
 export const APPS: readonly AppMeta[] = [
+  {
+    id: 'farm',
+    path: '/apps/farm',
+    title: 'SruFarm',
+    tagline: 'appFarmTagline',
+    icon: 'potted_plant',
+    ready: true,
+  },
   {
     id: 'doc',
     path: '/apps/doc',
