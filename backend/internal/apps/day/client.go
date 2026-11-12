@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -125,7 +126,7 @@ func (c *Client) ListEvents(ctx context.Context, initData string, from, to time.
 		} `json:"occurrences"`
 	}
 	if err := c.do(ctx, http.MethodGet, "/api/v1/events?"+query.Encode(), session.Token, nil, &out); err != nil {
-		c.forget(initData)
+		c.forgetOnAuthError(initData, err)
 		return nil, err
 	}
 	if out.Occurrences == nil {
@@ -157,7 +158,7 @@ func (c *Client) CreateEvent(ctx context.Context, initData string, input CreateE
 	}
 	body := map[string]any{"title": input.Title, "starts_at": input.StartsAt, "ends_at": input.EndsAt, "all_day": input.AllDay, "location": input.Location, "visibility": "private"}
 	if err := c.do(ctx, http.MethodPost, "/api/v1/events", session.Token, body, &out); err != nil {
-		c.forget(initData)
+		c.forgetOnAuthError(initData, err)
 		return Event{}, err
 	}
 	if out.ID <= 0 || out.Title == "" || out.StartsAt.IsZero() || !out.EndsAt.After(out.StartsAt) {
@@ -170,6 +171,13 @@ func (c *Client) forget(initData string) {
 	c.mu.Lock()
 	delete(c.sessions, sha256.Sum256([]byte(initData)))
 	c.mu.Unlock()
+}
+
+func (c *Client) forgetOnAuthError(initData string, err error) {
+	var apiErr *httpapi.Error
+	if errors.As(err, &apiErr) && apiErr.Code == "day_reauth_required" {
+		c.forget(initData)
+	}
 }
 
 func (c *Client) do(ctx context.Context, method, path, token string, body any, dst any) error {

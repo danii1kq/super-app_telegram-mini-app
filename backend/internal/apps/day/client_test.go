@@ -56,6 +56,11 @@ func TestActualSruDayContractAndPrivateCreation(t *testing.T) {
 	if err != nil || len(events) != 2 || events[0].ID != "123" || events[1].ID != "123" || events[0].Location != "Cafe" {
 		t.Fatalf("actual occurrences: %#v %v", events, err)
 	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := client.ListEvents(cancelled, testInitData("42"), from, from.AddDate(0, 0, 7)); err == nil {
+		t.Fatal("cancelled week fetch should fail")
+	}
 	event, err := client.CreateEvent(context.Background(), testInitData("42"), CreateEventInput{Title: "Meeting", StartsAt: "2026-11-10T09:00:00Z", EndsAt: "2026-11-10T10:00:00Z", SourceRef: "pulse:123"})
 	if err != nil || event.ID != "124" {
 		t.Fatalf("create: %#v %v", event, err)
