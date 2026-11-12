@@ -186,7 +186,7 @@ export function Row({
         </span>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col py-2.5">
-        <span className={`truncate text-body-strong ${destructive ? 'text-danger' : 'text-ink'}`}>
+        <span className={`line-clamp-2 text-body-strong ${destructive ? 'text-danger' : 'text-ink'}`}>
           {title}
         </span>
         {subtitle ? (
