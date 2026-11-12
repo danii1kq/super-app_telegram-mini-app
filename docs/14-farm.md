@@ -13,13 +13,13 @@ Visual variance 5, motion 3, density 5, asset dependence 5, shell fidelity 10.
 
 - Four plots, each crop takes exactly three real hours. Mature crops never rot.
 - A new account receives 250 coins, seven seeds and two mature welcome plants.
-- Six species, three qualities, four mutation states (including ordinary).
+- Twelve species, three qualities, four mutation states (including ordinary).
 - Care is selected at planting: water (free, better quality), fertilizer (12 coins,
   one extra plant), or lamp (20 coins, five extra percentage points of mutation).
 - Water, soil and lamp upgrades have five levels. Cost: `100 * (level + 1)^2`.
   Their effects are snapshotted at planting, so later upgrades cannot reroll crops.
-- Plants sell as a batch. Discoveries persist after sale. Collection is 6 species
-  times 4 mutation states, 24 entries. Quality affects value, not album completion.
+- Plants sell as a batch. Discoveries persist after sale. Collection is 12 species
+  times 4 mutation states, 48 entries. Quality affects value, not album completion.
 - Packs each contain three seeds. Per-seed probabilities are returned by the API.
   Every tenth seed in a pack-specific streak is at least rare. A natural rare or
   legendary seed resets that streak. No real money, payment or cash-out.
@@ -51,6 +51,16 @@ one second. Seedlings sway, planting pops into place, harvest highlights the bar
 sales animate the wallet, and pack drops reveal in sequence. Reduced-motion
 preferences disable all game animations. `node --test src/apps/farm/sounds.test.ts`
 checks audio duration, gain, node cleanup and suspended-context behavior.
+
+Pack purchases now enter a dedicated reveal scene. Each seed is revealed on tap,
+with a brief charge, a burst, rotating light rays and rarity-specific colors.
+Legendary seeds have gold stars and a longer sound cue. A summary shows all three
+seeds; skipping or closing the scene cannot lose rewards, because the server
+credits them in the purchase transaction before the animation begins. Revealing
+or replaying an animation never rolls or buys again. Reduced motion disables
+visual effects. New species: radish, cucumber, corn, sunflower, watermelon and
+legendary moonflower. Pack weights and the guarantee use species rarity, so adding
+a new common seed cannot accidentally reset the rare-seed guarantee.
 
 ## Validation
 

@@ -1,8 +1,9 @@
-export type FarmSound = 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'rare' | 'upgrade' | 'tap';
+export type FarmSound = 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'rare' | 'legendary' | 'upgrade' | 'tap';
 
 const melodies: Record<FarmSound, number[]> = {
   plant: [262, 392], harvest: [523, 659, 784], sell: [784, 1047, 1319],
   buy: [440, 587], pack: [392, 494, 587, 784], rare: [523, 659, 784, 1047, 1319],
+  legendary: [262, 392, 523, 659, 784, 1047, 1319, 1568],
   upgrade: [330, 440, 554, 659], tap: [587],
 };
 

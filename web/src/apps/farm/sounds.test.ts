@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { playFarmSound, type FarmSound } from './sounds.ts';
 
 test('sounds are brief, quiet, and release their audio nodes', () => {
-  for (const sound of ['plant', 'harvest', 'sell', 'buy', 'pack', 'rare', 'upgrade', 'tap'] satisfies FarmSound[]) {
+  for (const sound of ['plant', 'harvest', 'sell', 'buy', 'pack', 'rare', 'legendary', 'upgrade', 'tap'] satisfies FarmSound[]) {
     const notes: { start: number; stop: number; peak: number; disconnected: boolean }[] = [];
     const fake = {
       state: 'running', currentTime: 10, destination: {},
