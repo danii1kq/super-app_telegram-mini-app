@@ -34,7 +34,7 @@ export function CropArt({ seed = 'carrot', mutation = 'none', growing = false, p
   const hybrid = hybridArt[seed];
   const character = plantCharacter(seed,mutation);
   if(hybrid)seed=hybrid.base;
-  const filters=[hybrid ? `hue-rotate(${hybrid.hue}deg)` : '',mutation === 'gold' ? 'sepia(.8) saturate(2)' : mutation === 'crystal' ? 'hue-rotate(155deg) saturate(.8)' : ''].filter(Boolean).join(' ');
+  const filters=[hybrid ? `hue-rotate(${hybrid.hue}deg)` : '',mutation === 'gold' ? 'sepia(.8) saturate(2)' : mutation === 'crystal' ? 'hue-rotate(155deg) saturate(.8)' : mutation === 'ancient' ? 'sepia(.6)' : mutation === 'electric' ? 'hue-rotate(20deg) saturate(1.4)' : ''].filter(Boolean).join(' ');
   const style: CSSProperties = { filter: filters || undefined };
   return <svg className={`farm-crop-art ${!growing ? `farm-character-${character.kind}` : ''} ${hybrid ? 'farm-hybrid-art' : ''} ${className}`} style={style} viewBox="0 0 120 120" fill="none" aria-hidden="true">
     <ellipse cx="60" cy="104" rx="32" ry="7" fill="#213b21" opacity=".12" />
@@ -63,7 +63,11 @@ export function CropArt({ seed = 'carrot', mutation = 'none', growing = false, p
     </g>}
     </g>
     {!growing && (character.kind==='moon' || character.kind==='ember' || mutation==='crystal' || mutation==='gold' || hybrid) && <g className="farm-character-motes" fill={character.kind==='moon'?'#d5c3ff':character.kind==='crystal'?'#b8e8f7':'#f4d17b'}><path d="m19 28 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z"/><path d="m101 63 2 4 4 2-4 2-2 4-2-4-4-2 4-2Z"/><circle cx="88" cy="17" r="2"/></g>}
-    {mutation !== 'none' && <g fill={mutation === 'crystal' ? '#c3a4f0' : '#ecc55c'}><path d="m100 24 3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z"/><path d="m19 40 2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4Z"/></g>}
+    {!growing && mutation === 'dew' && <g className="farm-dew-drops" fill="#b6eff5" stroke="#f3ffff" strokeWidth="1.2"><path d="M34 45s-5 7-5 10a5 5 0 0 0 10 0c0-3-5-10-5-10Zm47 21s-4 6-4 9a4 4 0 0 0 8 0c0-3-4-9-4-9ZM63 24s-3 5-3 7a3 3 0 0 0 6 0c0-2-3-7-3-7Z"/></g>}
+    {!growing && mutation === 'electric' && <g className="farm-electric-arcs" fill="#e7f6ff" stroke="#b7d9ff" strokeWidth="1.5" strokeLinejoin="round"><path d="m28 20-9 25h9l-4 19 18-29H31l6-15Zm62 33-7 19h7l-2 17 14-25h-8l6-11Z"/></g>}
+    {!growing && mutation === 'ancient' && <g className="farm-ancient-runes" stroke="#e8d499" strokeWidth="2" strokeLinecap="round"><ellipse cx="60" cy="70" rx="49" ry="37" strokeDasharray="4 9"/><path d="m17 55 5-7 5 7-5 7-5-7Zm74-27v14m-5-10 5-4 5 4M32 93l4 8 4-8m42 4h9m-4-5v10"/></g>}
+    {!growing && mutation === 'rainbow' && <g className="farm-rainbow-halo" strokeWidth="3" strokeLinecap="round"><path d="M12 64a48 48 0 0 1 96 0" stroke="#f397b5"/><path d="M17 64a43 43 0 0 1 86 0" stroke="#f3d37f"/><path d="M22 64a38 38 0 0 1 76 0" stroke="#9bdcae"/><path d="m18 82 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm83-5 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#b4c3ff" stroke="none"/></g>}
+    {!growing && ['giant','gold','crystal'].includes(mutation) && <g fill={mutation === 'crystal' ? '#c3a4f0' : '#ecc55c'}><path d="m100 24 3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z"/><path d="m19 40 2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4Z"/></g>}
   </svg>;
 }
 

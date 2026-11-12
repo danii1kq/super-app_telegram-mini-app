@@ -8,6 +8,8 @@ test('mutations override the plant personality and select their own sound',()=>{
   assert.equal(plantCharacter('carrot','giant').kind,'giant');
   assert.equal(plantCharacter('moonflower').kind,'moon');
   assert.equal(plantCharacter('dragonfruit').kind,'ember');
+  for(const mutation of ['dew','electric','ancient','rainbow'])assert.equal(plantCharacter('moonflower',mutation).kind,mutation);
+  assert.equal(plantCharacter('carrot','rainbow').sound,'legendary');
 });
 
 test('hybrids have drawable source species and trophy weights handle old saves',()=>{

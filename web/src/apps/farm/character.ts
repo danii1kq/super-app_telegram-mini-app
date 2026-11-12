@@ -1,5 +1,10 @@
 import type { FarmSound } from './sounds';
 
+export const mutationNames: Record<string,string> = {
+  none:'Обычное', giant:'Гигантское', dew:'Росистое', gold:'Золотое',
+  electric:'Грозовое', crystal:'Кристальное', ancient:'Древнее', rainbow:'Радужное',
+};
+
 export const hybridArt: Record<string,{ base: string; hue: number }> = {
   aurora_root:{base:'carrot',hue:285}, jade_tomato:{base:'tomato',hue:75},
   moonberry:{base:'strawberry',hue:250}, ghost_pumpkin:{base:'pumpkin',hue:35},
@@ -7,6 +12,10 @@ export const hybridArt: Record<string,{ base: string; hue: number }> = {
 };
 
 export function plantCharacter(seed: string,mutation = 'none'): { label: string; sound: FarmSound; kind: string } {
+  if(mutation==='rainbow')return{label:'Переливается всеми цветами радуги',sound:'legendary',kind:'rainbow'};
+  if(mutation==='ancient')return{label:'Хранит тёплый свет древних рун',sound:'rare',kind:'ancient'};
+  if(mutation==='electric')return{label:'Потрескивает маленькими молниями',sound:'hit5',kind:'electric'};
+  if(mutation==='dew')return{label:'Прячет утреннюю росу на листьях',sound:'plant',kind:'dew'};
   if(mutation==='crystal')return{label:'Звенит, как маленький колокольчик',sound:'rare',kind:'crystal'};
   if(mutation==='gold')return{label:'Ловит каждый солнечный луч',sound:'sell',kind:'gold'};
   if(mutation==='giant')return{label:'Еле помещается на грядке',sound:'hit1',kind:'giant'};

@@ -1,0 +1,26 @@
+.farm-mutation-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.farm-mutation-card{display:flex;align-items:center;gap:8px;background:var(--farm-surface);border:1px solid var(--farm-line);border-radius:16px;padding:18px 12px;min-width:0}
+.farm-mutation-card>.farm-crop-art{width:70px;height:80px;flex-shrink:0}
+.farm-mutation-card h3{font-size:12px;font-weight:550;letter-spacing:-.2px}
+.farm-mutation-card strong{display:block;font-size:11px;color:var(--world-accent);margin-top:6px}
+.farm-mutation-card small{display:flex;align-items:center;gap:4px;font-size:8px;color:var(--farm-muted);margin-top:10px;line-height:1.6}
+.farm-mutation-card.locked{border-style:dashed;background:var(--world-soft)}
+.farm-mutation-card.locked>.farm-crop-art{opacity:.55}
+.farm-character-dew .farm-crop-body{filter:drop-shadow(0 0 4px #a5f4ed66)}
+.farm-dew-drops{animation:farm-dew-shine 3.5s ease-in-out infinite}
+.farm-electric-arcs{animation:farm-electric-flicker 2.8s infinite}
+.farm-character-electric .farm-crop-body{filter:drop-shadow(0 0 5px #97bfff77)}
+.farm-ancient-runes{transform-origin:60px 70px;animation:farm-rune-drift 7s ease-in-out infinite}
+.farm-character-ancient .farm-crop-body{filter:drop-shadow(0 0 7px #e7c87a66)}
+.farm-rainbow-halo{transform-origin:60px 64px;animation:farm-rainbow-breathe 4s ease-in-out infinite}
+.farm-character-rainbow .farm-crop-body{animation:farm-rainbow-colors 7s linear infinite}
+.mutation-rainbow .farm-trophy-dome{box-shadow:inset 0 0 30px #d4a9ed22,0 0 18px #b2c5f318}
+.mutation-electric .farm-trophy-dome{box-shadow:inset 0 0 30px #93c7ff22}
+.mutation-ancient .farm-trophy-dome{box-shadow:inset 0 0 30px #dabb6f22}
+@keyframes farm-dew-shine{0%,100%{opacity:.5;transform:translateY(0)}50%{opacity:1;transform:translateY(2px)}}
+@keyframes farm-electric-flicker{0%,30%,42%,100%{opacity:.2}32%,38%{opacity:1}35%,40%{opacity:.45}}
+@keyframes farm-rune-drift{0%,100%{opacity:.4;transform:rotate(-5deg)}50%{opacity:1;transform:rotate(5deg)}}
+@keyframes farm-rainbow-breathe{0%,100%{opacity:.45;transform:scale(.97)}50%{opacity:1;transform:scale(1.04)}}
+@keyframes farm-rainbow-colors{0%{filter:hue-rotate(0deg) drop-shadow(0 0 5px #e3b4ed77)}100%{filter:hue-rotate(360deg) drop-shadow(0 0 5px #e3b4ed77)}}
+@media(max-width:1100px){.farm-mutation-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.farm-mutation-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.farm-mutation-card{padding:14px 8px;gap:5px}.farm-mutation-card>.farm-crop-art{width:55px;height:65px}.farm-mutation-card h3{font-size:11px}.farm-mutation-card small{font-size:7px}}

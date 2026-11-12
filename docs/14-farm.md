@@ -13,7 +13,7 @@ Visual variance 5, motion 3, density 5, asset dependence 5, shell fidelity 10.
 
 - Four initial plots, expandable to eight. Each crop takes exactly three real hours. Mature crops never rot.
 - A new account receives 250 coins, seven seeds and two mature welcome plants.
-- Twelve species, three qualities, four mutation states (including ordinary).
+- Twelve base species and six craftable hybrids, three qualities, eight mutation states (including ordinary).
 - Care is selected at planting: water (free, better quality), fertilizer (12 coins,
   one extra plant), or lamp (20 coins, five extra percentage points of mutation).
 - Water, soil and lamp upgrades have five levels. Cost: `100 * (level + 1)^2`.
@@ -21,10 +21,14 @@ Visual variance 5, motion 3, density 5, asset dependence 5, shell fidelity 10.
 - Land adds one plot per level (four levels, base cost 300). Market adds 5% sale
   revenue per level (five levels, base cost 200). Selection adds one percentage
   point of legendary seed probability per level (five levels, base cost 250).
+  Genetics adds 2 percentage points to mutation chance per level (five levels, base 350),
+  unlocking electric at level 1, ancient at 2 and rainbow at 3. Nursery returns one
+  seed per harvested plot with a 10% chance per level (five levels, base 180).
+  Gallery adds two trophy slots per level (three levels, base 300), up to twelve.
   Upgrade cost is `base * (level + 1)^2`; server metadata supplies actual levels,
   caps and prices. Personalized weights are returned by the same logic used to roll.
-- Plants sell as a batch. Discoveries persist after sale. Collection is 12 species
-  times 4 mutation states, 48 entries. Quality affects value, not album completion.
+- Plants sell as a batch. Discoveries persist after sale. Collection is 18 species
+  times 8 mutation states, 144 entries. Quality affects value, not album completion.
 - Packs each contain three seeds. Per-seed probabilities are returned by the API.
   Garden/exotic guarantee at least rare after ten seeds without a qualifying drop.
   The lunar pack costs 900 coins, has no common seeds, a base 30% legendary chance
@@ -70,8 +74,6 @@ visual effects. New species: radish, cucumber, corn, sunflower, watermelon and
 legendary moonflower. Pack weights and the guarantee use species rarity, so adding
 a new common seed cannot accidentally reset the rare-seed guarantee.
 
-## Growing plants
-
 ## Breeding, trophies and worlds
 
 The laboratory consumes two copies of a base seed and creates one hybrid seed
@@ -82,7 +84,7 @@ only once. There is one laboratory job at a time.
 
 New harvest batches carry unique IDs and specimen weight. Keeping a trophy moves
 exactly one plant and its unit value out of the barn. Six display slots are
-available initially. Selling harvest never sells trophies; returning a trophy
+available initially, expandable to twelve with the gallery upgrade. Selling harvest never sells trophies; returning a trophy
 moves the same specimen back to the barn. Legacy harvest receives stable local
 IDs and displays an unknown weight instead of inventing a record. Collection
 quality retains the best observed grade.
@@ -96,6 +98,24 @@ buttons, scenery and CSS atmosphere. New worlds are enchanted forest, autumn
 and frost, unlocked locally by `FOREST`, `AUTUMN`, `FROST`. Existing Stars and
 promo-code transactions support them through migration 000013. The mobile menu
 uses two visible rows rather than hiding the new sections offscreen.
+
+## Genetics and recovery
+
+There is at most one mutation per plant. Lamp and genetics levels plus care give
+`3 + 2*lamp + 2*genetics + (lamp care ? 5 : 0)` percent chance, at most 28%.
+An independent weighted roll then selects from unlocked mutation types:
+giant x2, dew x2, gold x5, electric x6, crystal x8, ancient x10, rainbow x12.
+Classic mutations remain obtainable at every genetics level. Mutation metadata
+supplies value multipliers and unlock levels to the client. Dew droplets,
+lightning arcs, ancient runes and a rainbow halo distinguish the new forms.
+Reduced-motion preferences disable their animations.
+
+Genetics and nursery levels are saved with the plot at planting. A nursery roll
+returns at most one seed of the harvested species, regardless of yield, quality
+or mutation. It can also recover a hybrid seed. The harvest transaction consumes
+the plot once and reports any recovered seeds in the success message.
+
+## Growing plants
 
 Every species has its own growing silhouette, rather than a shared sprout. Roots
 have distinct foliage, vines spread close to the ground, corn grows upright,
