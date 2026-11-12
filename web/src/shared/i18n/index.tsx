@@ -13,6 +13,14 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  chatOpenFailed: 'Не удалось открыть диалог',
+  searchChats: 'Поиск диалогов',
+  noSearchResults: 'Ничего не найдено',
+  chatEmptyMessages: 'Пока нет сообщений',
+  chatStartHint: 'Напишите первое сообщение',
+  chatLoadOlder: 'Загрузить ранние сообщения',
+  messageSent: 'Отправлено',
+  chatLatest: 'К последним сообщениям',
   commentsTitle: 'Комментарии',
   commentPlaceholder: 'Написать комментарий',
   commentEmpty: 'Комментариев пока нет',
@@ -289,6 +297,14 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  chatOpenFailed: 'Диалогты ашу мүмкін болмады',
+  searchChats: 'Диалогтарды іздеу',
+  noSearchResults: 'Ештеңе табылмады',
+  chatEmptyMessages: 'Әзірге хабарламалар жоқ',
+  chatStartHint: 'Алғашқы хабарламаны жазыңыз',
+  chatLoadOlder: 'Алдыңғы хабарламаларды жүктеу',
+  messageSent: 'Жіберілді',
+  chatLatest: 'Соңғы хабарламаларға',
   commentsTitle: 'Пікірлер',
   commentPlaceholder: 'Пікір жазу',
   commentEmpty: 'Әзірге пікір жоқ',
@@ -563,6 +579,14 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  chatOpenFailed: 'Could not open the conversation',
+  searchChats: 'Search conversations',
+  noSearchResults: 'No results found',
+  chatEmptyMessages: 'No messages yet',
+  chatStartHint: 'Write the first message',
+  chatLoadOlder: 'Load earlier messages',
+  messageSent: 'Sent',
+  chatLatest: 'Latest messages',
   commentsTitle: 'Comments',
   commentPlaceholder: 'Write a comment',
   commentEmpty: 'No comments yet',

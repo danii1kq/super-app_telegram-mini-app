@@ -9,9 +9,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
@@ -28,13 +31,15 @@ func NewService(pool *postgres.Pool, content *secure.Cipher) *Service {
 }
 
 type Conversation struct {
-	ID        int64
-	Kind      string
-	Title     string
-	LastSeq   int64
-	LastRead  int64
-	Unread    int
-	UpdatedAt time.Time
+	ID          int64
+	Kind        string
+	Title       string
+	LastSeq     int64
+	LastRead    int64
+	Unread      int
+	UpdatedAt   time.Time
+	PartnerID   int64
+	LastMessage *Message
 }
 
 type Message struct {
@@ -56,16 +61,30 @@ type Payload struct {
 
 // List returns the viewer's conversations with unread counts.
 func (s *Service) List(ctx context.Context, viewerID int64) ([]Conversation, error) {
-	// title_sealed is bytea: coalesce with '' would make the driver hand back a
-	// bytea value for a string destination, so the column is read as nullable
-	// and the title is opened only when it exists.
 	rows, err := s.pool.Query(ctx,
 		`SELECT c.id, c.kind, c.title_sealed, c.key_id,
-		        c.last_message_seq, m.last_read_seq, c.created_at
+		        c.last_message_seq, m.last_read_seq, COALESCE(latest.created_at, c.created_at),
+		        COALESCE(partner.id, 0), COALESCE(partner.public_name, ''),
+		        COALESCE(latest.sender_id, 0), COALESCE(latest.public_name, ''),
+		        COALESCE(latest.seq, 0), latest.payload_sealed, latest.key_id,
+		        (SELECT count(*) FROM chat_messages unread
+		          WHERE unread.conversation_id = c.id AND unread.seq > m.last_read_seq
+		            AND unread.sender_id <> $1)
 		   FROM chat_conversations c
 		   JOIN chat_members m ON m.conversation_id = c.id
+		   LEFT JOIN LATERAL (
+		       SELECT u.id, u.public_name FROM chat_members peer
+		       JOIN users u ON u.id = peer.user_id
+		       WHERE c.kind = 'direct' AND peer.conversation_id = c.id AND peer.user_id <> $1
+		       ORDER BY peer.user_id LIMIT 1
+		   ) partner ON true
+		   LEFT JOIN LATERAL (
+		       SELECT msg.sender_id, u.public_name, msg.seq, msg.payload_sealed, msg.key_id, msg.created_at
+		       FROM chat_messages msg JOIN users u ON u.id = msg.sender_id
+		       WHERE msg.conversation_id = c.id ORDER BY msg.seq DESC LIMIT 1
+		   ) latest ON true
 		  WHERE m.user_id = $1 AND m.request_state = 'accepted'
-		  ORDER BY c.last_message_seq DESC, c.id DESC`, viewerID)
+		  ORDER BY COALESCE(latest.created_at, c.created_at) DESC, c.id DESC`, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +95,14 @@ func (s *Service) List(ctx context.Context, viewerID int64) ([]Conversation, err
 		var conversation Conversation
 		var sealed []byte
 		var keyID *string
+		var partnerName string
+		var latest Message
+		var latestSealed []byte
+		var latestKeyID *string
 		if err := rows.Scan(&conversation.ID, &conversation.Kind, &sealed,
 			&keyID, &conversation.LastSeq, &conversation.LastRead, &conversation.UpdatedAt,
+			&conversation.PartnerID, &partnerName, &latest.SenderID, &latest.SenderName,
+			&latest.Seq, &latestSealed, &latestKeyID, &conversation.Unread,
 		); err != nil {
 			return nil, err
 		}
@@ -88,21 +113,41 @@ func (s *Service) List(ctx context.Context, viewerID int64) ([]Conversation, err
 			}
 			conversation.Title = title
 		}
-		if conversation.LastSeq > conversation.LastRead {
-			conversation.Unread = int(conversation.LastSeq - conversation.LastRead)
+		if conversation.Kind == "direct" {
+			conversation.Title = partnerName
+		}
+		if latestKeyID != nil {
+			text, err := s.openPayload(latestSealed, *latestKeyID, conversation.ID, latest.Seq)
+			if err != nil {
+				return nil, err
+			}
+			latest.ConversationID = conversation.ID
+			latest.CreatedAt = conversation.UpdatedAt
+			latest.Text = text
+			conversation.LastMessage = &latest
 		}
 		out = append(out, conversation)
 	}
 	return out, rows.Err()
 }
 
-// History returns messages after the given seq, oldest first.
-func (s *Service) History(ctx context.Context, viewerID, conversationID, afterSeq int64, limit int) ([]Message, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
+type HistoryQuery struct {
+	After  *int64
+	Before *int64
+	Limit  int
+}
+
+// History defaults to the latest page, with ascending display order in every mode.
+func (s *Service) History(ctx context.Context, viewerID, conversationID int64, query HistoryQuery) ([]Message, bool, error) {
+	if query.Limit < 1 || query.Limit > 100 {
+		query.Limit = 50
 	}
 	if err := s.requireMember(ctx, s.pool, viewerID, conversationID); err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	order := "DESC"
+	if query.After != nil {
+		order = "ASC"
 	}
 
 	rows, err := s.pool.Query(ctx,
@@ -110,15 +155,19 @@ func (s *Service) History(ctx context.Context, viewerID, conversationID, afterSe
 		        m.payload_sealed, m.key_id, m.created_at
 		   FROM chat_messages m
 		   JOIN users u ON u.id = m.sender_id
-		  WHERE m.conversation_id = $1 AND m.seq > $2
-		  ORDER BY m.seq
-		  LIMIT $3`, conversationID, afterSeq, limit)
+		   JOIN chat_members member ON member.conversation_id = m.conversation_id
+		    AND member.user_id = $2 AND member.request_state = 'accepted'
+		  WHERE m.conversation_id = $1
+		    AND ($3::bigint IS NULL OR m.seq > $3)
+		    AND ($4::bigint IS NULL OR m.seq < $4)
+		  ORDER BY m.seq `+order+`
+		  LIMIT $5`, conversationID, viewerID, query.After, query.Before, query.Limit+1)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 
-	out := make([]Message, 0, limit)
+	out := make([]Message, 0, query.Limit+1)
 	for rows.Next() {
 		var message Message
 		var sealed []byte
@@ -126,23 +175,37 @@ func (s *Service) History(ctx context.Context, viewerID, conversationID, afterSe
 		if err := rows.Scan(&message.ID, &message.ConversationID, &message.SenderID,
 			&message.SenderName, &message.Seq, &sealed, &keyID, &message.CreatedAt,
 		); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		text, err := s.openPayload(sealed, keyID, message.ConversationID, message.Seq)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		message.Text = text
 		out = append(out, message)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	hasMore := len(out) > query.Limit
+	if hasMore {
+		out = out[:query.Limit]
+	}
+	if query.After == nil {
+		slices.Reverse(out)
+	}
+	return out, hasMore, nil
 }
 
 // Send stores a message idempotently: the same client id returns the stored
 // message, a different body with the same id is a conflict.
 func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clientID, text string) (Message, error) {
+	text = strings.TrimSpace(text)
 	if clientID == "" {
 		return Message{}, httpapi.BadRequest("missing_client_id", "Не передан client_message_id")
+	}
+	if len(clientID) > 128 {
+		return Message{}, httpapi.BadRequest("invalid_client_id", "Слишком длинный client_message_id")
 	}
 	if text == "" {
 		return Message{}, httpapi.Validation(map[string]string{"text": "Сообщение не может быть пустым"}, "Проверьте поля")
@@ -168,17 +231,37 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 		if err := s.requireMember(ctx, tx, senderID, conversationID); err != nil {
 			return err
 		}
+		var blocked bool
+		if err := tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			   SELECT 1 FROM chat_conversations c
+			   JOIN chat_members peer ON peer.conversation_id = c.id AND peer.user_id <> $2
+			   JOIN social_blocks b ON (b.blocker_id = $2 AND b.blocked_id = peer.user_id)
+			                         OR (b.blocker_id = peer.user_id AND b.blocked_id = $2)
+			   WHERE c.id = $1 AND c.kind = 'direct')`, conversationID, senderID,
+		).Scan(&blocked); err != nil {
+			return err
+		}
+		if blocked {
+			return httpapi.NotFound("Диалог не найден")
+		}
 
 		// Idempotency: the same sender + client id returns the stored message.
-		var existingID, existingSeq int64
+		var existingID, existingSeq, existingConversationID int64
 		var existingSealed []byte
 		var existingKeyID string
+		var existingCreatedAt time.Time
+		var senderName string
 		err := tx.QueryRow(ctx,
-			`SELECT id, seq, payload_sealed, key_id FROM chat_messages
-			  WHERE sender_id = $1 AND client_message_id = $2`,
+			`SELECT m.id, m.seq, m.conversation_id, m.payload_sealed, m.key_id, m.created_at, u.public_name
+			   FROM chat_messages m JOIN users u ON u.id = m.sender_id
+			  WHERE m.sender_id = $1 AND m.client_message_id = $2`,
 			senderID, clientID,
-		).Scan(&existingID, &existingSeq, &existingSealed, &existingKeyID)
+		).Scan(&existingID, &existingSeq, &existingConversationID, &existingSealed, &existingKeyID, &existingCreatedAt, &senderName)
 		if err == nil {
+			if existingConversationID != conversationID {
+				return httpapi.Conflict("idempotency_conflict", "Этот ключ уже использован в другом диалоге")
+			}
 			existingText, err := s.openPayload(existingSealed, existingKeyID, conversationID, existingSeq)
 			if err != nil {
 				return err
@@ -189,6 +272,7 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 			message = Message{
 				ID: existingID, ConversationID: conversationID, SenderID: senderID,
 				Seq: existingSeq, Text: existingText,
+				CreatedAt: existingCreatedAt, SenderName: senderName,
 			}
 			return nil
 		}
@@ -212,6 +296,10 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 			 RETURNING id, created_at`,
 			conversationID, senderID, nextSeq, clientID, sealed.Ciphertext, sealed.KeyID,
 		).Scan(&message.ID, &message.CreatedAt); err != nil {
+			var conflict *pgconn.PgError
+			if errors.As(err, &conflict) && conflict.Code == "23505" {
+				return httpapi.Conflict("idempotency_conflict", "Этот ключ уже использован в другом диалоге")
+			}
 			return err
 		}
 		if _, err := tx.Exec(ctx,
@@ -225,6 +313,9 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 		message.SenderID = senderID
 		message.Seq = nextSeq
 		message.Text = text
+		if err := tx.QueryRow(ctx, `SELECT public_name FROM users WHERE id = $1`, senderID).Scan(&message.SenderName); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -235,9 +326,18 @@ func (s *Service) Send(ctx context.Context, senderID, conversationID int64, clie
 
 // MarkRead advances last_read_seq, never backwards.
 func (s *Service) MarkRead(ctx context.Context, viewerID, conversationID, seq int64) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE chat_members SET last_read_seq = GREATEST(last_read_seq, $3)
-		  WHERE conversation_id = $1 AND user_id = $2`, conversationID, viewerID, seq)
+	if seq < 0 {
+		return httpapi.BadRequest("invalid_seq", "Некорректный номер сообщения")
+	}
+	result, err := s.pool.Exec(ctx,
+		`UPDATE chat_members m
+		    SET last_read_seq = GREATEST(m.last_read_seq, LEAST($3, c.last_message_seq))
+		   FROM chat_conversations c
+		  WHERE m.conversation_id = c.id AND m.conversation_id = $1
+		    AND m.user_id = $2 AND m.request_state = 'accepted'`, conversationID, viewerID, seq)
+	if err == nil && result.RowsAffected() == 0 {
+		return httpapi.NotFound("Диалог не найден")
+	}
 	return err
 }
 

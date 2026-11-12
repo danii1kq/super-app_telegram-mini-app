@@ -25,7 +25,7 @@ func (h *Handler) openDirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	otherID, err := strconv.ParseInt(body.UserID, 10, 64)
-	if err != nil {
+	if err != nil || otherID <= 0 {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_user", "Некорректный пользователь"))
 		return
 	}
@@ -35,13 +35,5 @@ func (h *Handler) openDirect(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, err)
 		return
 	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
-		"id":         formatID(conversation.ID),
-		"kind":       conversation.Kind,
-		"title":      conversation.Title,
-		"last_seq":   formatID(conversation.LastSeq),
-		"last_read":  "0",
-		"unread":     0,
-		"updated_at": conversation.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
-	})
+	httpapi.WriteJSON(w, http.StatusOK, conversationJSON(conversation))
 }

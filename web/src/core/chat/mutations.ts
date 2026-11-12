@@ -20,7 +20,7 @@ export function useSendMessage(conversationId: string) {
 export function useMarkRead(conversationId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (seq: number) =>
+    mutationFn: (seq: string) =>
       api<{ ok: boolean }>(`/conversations/${conversationId}/read`, {
         method: 'POST',
         body: { seq },

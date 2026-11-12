@@ -58,10 +58,20 @@ func (h *Hub) subscribe(conversationID int64) (chan string, func()) {
 	}
 }
 
-// stream keeps an SSE connection open for the viewer's conversations.
+// stream keeps an SSE connection open for one accepted conversation.
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
-	if _, ok := auth.UserFrom(r.Context()); !ok {
+	user, ok := auth.UserFrom(r.Context())
+	if !ok {
 		httpapi.WriteError(w, httpapi.Unauthorized("Требуется вход"))
+		return
+	}
+	conversationID, err := strconv.ParseInt(r.URL.Query().Get("conversation"), 10, 64)
+	if err != nil || conversationID <= 0 {
+		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID диалога"))
+		return
+	}
+	if err := h.service.requireMember(r.Context(), h.service.pool, user.ID, conversationID); err != nil {
+		httpapi.WriteError(w, err)
 		return
 	}
 
@@ -76,9 +86,6 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// The client passes the conversations it currently displays; the stream is
-	// a hint channel, not an authorisation boundary.
-	conversationID, _ := strconv.ParseInt(r.URL.Query().Get("conversation"), 10, 64)
 	channel, unsubscribe := h.events.subscribe(conversationID)
 	defer unsubscribe()
 
@@ -93,9 +100,15 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case event := <-channel:
+			if err := h.service.requireMember(r.Context(), h.service.pool, user.ID, conversationID); err != nil {
+				return
+			}
 			fmt.Fprintf(w, "event: %s\ndata: {}\n\n", event)
 			flusher.Flush()
 		case <-heartbeat.C:
+			if err := h.service.requireMember(r.Context(), h.service.pool, user.ID, conversationID); err != nil {
+				return
+			}
 			fmt.Fprint(w, ": ping\n\n")
 			flusher.Flush()
 		}
