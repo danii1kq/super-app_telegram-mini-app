@@ -97,5 +97,43 @@ export function GrowingPlant({ seed, progress = 0, variant = 0 }: { seed: string
       {stage > 0 && <path d="M58 98c-13-9-23-9-31-3 6 10 20 12 31 3Z" fill="#b0c6b2"/>}
       {stage === 2 && <><path d="M61 52c-15-2-21-13-16-24l16 10 16-10c5 11-1 22-16 24Z" fill="#e1d5ef"/><circle cx="61" cy="42" r="5" fill="#f3e2ab"/></>}
     </>}
+    {seed === 'pepper' && <>
+      <path d="M59 104V50m0 30L39 64m20 5 22-21" stroke="#648e4b" strokeWidth="4" strokeLinecap="round"/>
+      <path d="M57 69C35 66 29 53 34 43c18 1 26 12 23 26Zm6-9c-1-23 12-36 26-32 0 18-10 32-26 32ZM56 91C35 91 24 80 29 71c16-1 27 8 27 20Z" fill="#85ad60"/>
+      {stage > 0 && <><path d="M63 88c2-20 16-28 28-20-4 16-15 21-28 20Z" fill="#a2bf78"/><path d="m39 49 2-8 5 5 7-1-3 7 3 6-8-1-5 4-1-8-6-4 6-1Z" fill="#fff2d8"/><circle cx="43" cy="51" r="3" fill="#d9c879"/></>}
+      {stage === 2 && <><path d="M74 73c-10-5-14 6-9 17 3 8 14 10 18 0 5-11 0-22-9-17Z" fill="#c7b76c"/><path d="m73 73 2-7" stroke="#688e4c" strokeWidth="3"/></>}
+    </>}
+    {seed === 'pear' && <>
+      <path d="M60 104V36m0 43L39 59m21 7 21-23" stroke="#9b835d" strokeWidth="4" strokeLinecap="round"/>
+      <g fill="#86a864"><ellipse cx="38" cy="55" rx="9" ry="16" transform="rotate(-43 38 55)"/><ellipse cx="78" cy="43" rx="10" ry="16" transform="rotate(35 78 43)"/><ellipse cx="59" cy="34" rx="9" ry="17"/></g>
+      <path d="M58 91C35 89 29 74 36 68c15 1 24 11 22 23Z" fill="#a3bd7d"/>
+      {stage > 0 && <><ellipse cx="86" cy="77" rx="9" ry="15" transform="rotate(42 86 77)" fill="#94b16e"/><path d="m39 42 2-7 5 5 7-1-3 6 3 5-7-1-4 5-2-7-6-2 5-3Z" fill="#faf0db"/></>}
+      {stage === 2 && <><path d="M73 79c-6 0-3 8-8 13-8 9-1 14 7 14 11 0 13-8 7-15-3-5 0-12-6-12Z" fill="#c1c47d"/><path d="m73 80 1-6" stroke="#8c8056" strokeWidth="2"/></>}
+    </>}
+    {seed === 'lavender' && <>
+      <path d="M57 104 44 53m14 51 5-68m-3 69 23-45" stroke="#8ca47b" strokeWidth="3" strokeLinecap="round"/>
+      <path d="M54 91C33 87 30 75 34 69c13 3 21 11 20 22Zm8 4c2-16 14-24 26-23-2 14-11 23-26 23ZM56 76C42 72 39 61 44 56c11 4 14 12 12 20Z" fill="#a7bd90"/>
+      {stage > 0 && <><path d="M62 74c4-15 11-24 22-23-1 13-10 23-22 23Z" fill="#b1c6a2"/><ellipse cx="63" cy="33" rx="4" ry="9" fill="#aba7bd"/><ellipse cx="43" cy="51" rx="4" ry="8" fill="#aba7bd"/></>}
+      {stage === 2 && <g fill="#b3a1cc">{[[62,29],[63,39],[63,48],[42,48],[44,57],[84,55],[81,64]].map(([x,y],i)=><ellipse key={i} cx={x} cy={y} rx="5" ry="7"/>)}</g>}
+    </>}
+    {seed === 'lotus' && <>
+      <ellipse cx="59" cy="99" rx="31" ry="10" fill="#8eafa0"/>
+      <path d="m59 99 18-6-6 9" fill="#c7d3b3"/><path d="M59 99c-2-12 5-22 2-38" stroke="#83a790" strokeWidth="3" strokeLinecap="round"/>
+      <path d="M60 74C43 65 49 49 60 40c14 10 18 25 0 34Z" fill="#a8c1b1"/>
+      {stage > 0 && <><ellipse cx="33" cy="86" rx="20" ry="7" fill="#aac4ae"/><path d="M61 68C45 60 53 41 62 33c12 12 14 27-1 35Z" fill="#d0bfc8"/></>}
+      {stage === 2 && <><path d="M61 70C41 67 37 54 44 42l18 13 15-16c10 15 3 28-16 31Z" fill="#e7cbd7"/><path d="M61 66c-8-10-4-21 1-29 6 9 11 19-1 29Z" fill="#f2dfe4"/></>}
+    </>}
+    {seed === 'mango' && <>
+      <path d="M60 104V36m0 39L38 54m22 3 22-18" stroke="#8c8961" strokeWidth="4" strokeLinecap="round"/>
+      <path d="M58 67C33 65 25 48 29 37c18 5 29 15 29 30Zm6-11c1-24 12-37 28-34-4 20-15 32-28 34Z" fill="#7caa75"/><path d="M59 47C47 39 49 21 59 13c10 11 12 22 0 34Z" fill="#bdad83"/>
+      {stage > 0 && <><path d="M62 88c9-19 24-24 35-18-7 13-21 21-35 18Z" fill="#a0bf8b"/><path d="m43 54-8-15m0 0-8-2m8 2 3-9" stroke="#9b9f6c" strokeWidth="2"/>{[[27,36],[35,33],[39,29]].map(([x,y],i)=><circle key={i} cx={x} cy={y} r="3" fill="#e1cba2"/>)}</>}
+      {stage === 2 && <><path d="M79 74c-12-6-23 12-18 24 5 10 16 9 23-3 6-11 7-17-5-21Z" fill="#a4b47b"/><path d="m79 74 2-8" stroke="#8c8961" strokeWidth="2"/></>}
+    </>}
+    {seed === 'starfruit' && <>
+      <path d="M59 104V38m0 24L33 51m26 31 30-17" stroke="#839666" strokeWidth="3.5" strokeLinecap="round"/>
+      <g fill="#8fad74">{[[59,34,0],[46,54,-50],[31,44,-50],[73,74,45],[88,61,45]].map(([x,y,angle],i)=><ellipse key={i} cx={x} cy={y} rx="7" ry="13" transform={`rotate(${angle} ${x} ${y})`}/>)}</g>
+      {stage > 0 && <><path d="M57 93 32 83m27-40 18-9" stroke="#8a9e70" strokeWidth="2"/><ellipse cx="28" cy="79" rx="7" ry="13" transform="rotate(-55 28 79)" fill="#adc392"/><path d="m81 32 2-5 3 5 6 1-4 4 1 6-6-3-5 3 1-6-4-4 6-1Z" fill="#dac2d0"/></>}
+      {stage === 2 && <path d="m47 77 4 9 10 1-7 7 1 11-9-5-9 4 2-10-7-8 11-1 4-8Z" fill="#c7c58a"/>}
+    </>}
   </g>;
 }
