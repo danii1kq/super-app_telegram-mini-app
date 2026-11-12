@@ -22,12 +22,12 @@ type Config struct {
 	DatabaseURL string
 
 	// Telegram
-	BotToken          string
-	WebhookSecret     string
-	AllowedBotID      int64
-	InitDataMaxAge    time.Duration
-	SessionTTL        time.Duration
-	MiniAppShortName  string
+	BotToken         string
+	WebhookSecret    string
+	AllowedBotID     int64
+	InitDataMaxAge   time.Duration
+	SessionTTL       time.Duration
+	MiniAppShortName string
 
 	// Existing services SruNal adapts to.
 	DocAPIURL   string
@@ -37,16 +37,20 @@ type Config struct {
 
 	// Receipt recognition. Empty key means the feature reports "unavailable"
 	// and the UI offers manual entry; it never falls back to fake results.
-	OCRBaseURL string
-	OCRAPIKey  string
-	OCRModel   string
+	OCRBaseURL      string
+	OCRAPIKey       string
+	OCRModel        string
+	DeepSeekBaseURL string
+	DeepSeekAPIKey  string
+	DeepSeekModel   string
+	WeatherAPIKey   string
 
 	// Cryptography: base64-encoded 32-byte keys. Empty in development means
 	// the process refuses to start unless DevInsecureKeys is set.
-	ContentKey     string
-	IdentityKey    string
-	DeliveryKey    string
-	HMACIndexKey   string
+	ContentKey      string
+	IdentityKey     string
+	DeliveryKey     string
+	HMACIndexKey    string
 	DevInsecureKeys bool
 }
 
@@ -67,6 +71,10 @@ func Load() (Config, error) {
 		OCRBaseURL:       env("SRUNAL_OCR_BASE_URL", ""),
 		OCRAPIKey:        env("SRUNAL_OCR_API_KEY", ""),
 		OCRModel:         env("SRUNAL_OCR_MODEL", ""),
+		DeepSeekBaseURL:  env("SRUNAL_DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+		DeepSeekAPIKey:   env("SRUNAL_DEEPSEEK_API_KEY", ""),
+		DeepSeekModel:    env("SRUNAL_DEEPSEEK_MODEL", "deepseek-flash"),
+		WeatherAPIKey:    env("SRUNAL_WEATHER_API_KEY", ""),
 		ContentKey:       env("SRUNAL_CONTENT_KEY", ""),
 		IdentityKey:      env("SRUNAL_IDENTITY_KEY", ""),
 		DeliveryKey:      env("SRUNAL_DELIVERY_KEY", ""),

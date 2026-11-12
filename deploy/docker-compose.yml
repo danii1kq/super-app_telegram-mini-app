@@ -40,6 +40,11 @@ services:
       SRUNAL_DELIVERY_KEY: ${SRUNAL_DELIVERY_KEY}
       SRUNAL_HMAC_INDEX_KEY: ${SRUNAL_HMAC_INDEX_KEY}
       SRUNAL_MINIAPP_NAME: ${SRUNAL_MINIAPP_NAME}
+      SRUNAL_DEEPSEEK_API_KEY: ${SRUNAL_DEEPSEEK_API_KEY:-}
+      SRUNAL_DEEPSEEK_BASE_URL: ${SRUNAL_DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      SRUNAL_DEEPSEEK_MODEL: ${SRUNAL_DEEPSEEK_MODEL:-deepseek-flash}
+      SRUNAL_WEATHER_API_KEY: ${SRUNAL_WEATHER_API_KEY:-}
+      SRUNAL_DAY_API_URL: ${SRUNAL_DAY_API_URL:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
