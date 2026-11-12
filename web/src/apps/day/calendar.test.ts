@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, eventsOnDay, localInput, parseLocalInput, sortEvents, startOfWeek } from './calendar.ts';
+import { addDays, eventsOnDay, localDayKey, localInput, parseLocalInput, sortEvents, startOfWeek } from './calendar.ts';
 
 test('calendar uses local week boundaries across DST and exclusive event endings', () => {
   const previousZone = process.env.TZ;
@@ -18,6 +18,7 @@ test('calendar uses local week boundaries across DST and exclusive event endings
     assert.equal(parseLocalInput('2026-02-30T10:00'), undefined);
     assert.equal(parseLocalInput('not a date'), undefined);
     assert.equal(parseLocalInput('2026-03-08T10:30')?.toISOString(), '2026-03-08T14:30:00.000Z');
+    assert.equal(localDayKey(new Date('2026-03-08T02:00:00Z')), '2026-03-07');
     assert.deepEqual(sortEvents([spanning, earlier]), [earlier, spanning]);
     assert.deepEqual([spanning, earlier].map((event) => event.id), ['1', '2']);
   } finally {

@@ -40,3 +40,7 @@ export function parseLocalInput(value: string): Date | undefined {
   // Reject missing DST wall times and invalid dates instead of silently moving the meeting.
   return !Number.isNaN(date.getTime()) && localInput(date) === value ? date : undefined;
 }
+
+export function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}

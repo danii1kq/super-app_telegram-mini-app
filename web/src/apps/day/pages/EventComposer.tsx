@@ -16,7 +16,7 @@ export function EventComposer({ onCreated, onCancel }: { onCreated: (start: Date
   const [endValue, setEndValue] = useState(() => localInput(new Date(Date.now() + 3_600_000)));
   const start = parseLocalInput(startValue);
   const end = parseLocalInput(endValue);
-  const validTimes = start && end && end > start && end.getTime() - start.getTime() <= 30 * 86_400_000;
+  const validTimes = start && end && end.getTime() - start.getTime() >= 60_000 && end.getTime() - start.getTime() <= 30 * 86_400_000;
   const inputClass = 'h-12 min-w-0 w-full rounded-xl bg-neutral-soft/60 px-3 text-body-lg text-ink outline-none focus:ring-2 focus:ring-accent';
 
   const submit = () => {

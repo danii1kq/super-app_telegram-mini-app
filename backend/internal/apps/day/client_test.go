@@ -106,6 +106,14 @@ func TestAuthenticationDoesNotFollowRedirects(t *testing.T) {
 }
 
 func TestEventValidationAndAllDayDeadlineDST(t *testing.T) {
+	oneMinute := CreateEventInput{Title: "Minute", StartsAt: "2026-11-10T09:00:00Z", EndsAt: "2026-11-10T09:01:00Z"}
+	if err := validateEvent(&oneMinute); err != nil {
+		t.Fatal("one-minute event rejected")
+	}
+	oneMinute.EndsAt = "2026-11-10T09:00:59Z"
+	if err := validateEvent(&oneMinute); err == nil {
+		t.Fatal("sub-minute event accepted")
+	}
 	valid := CreateEventInput{Title: " Meeting ", StartsAt: "2026-11-10T09:00:00Z", EndsAt: "2026-11-10T10:00:00Z"}
 	if err := validateEvent(&valid); err != nil || valid.Title != "Meeting" {
 		t.Fatal("valid event rejected")

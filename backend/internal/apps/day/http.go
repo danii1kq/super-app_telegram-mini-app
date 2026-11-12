@@ -11,13 +11,15 @@ import (
 type Handler struct {
 	service *Service
 	auth    *auth.Service
+	weather *WeatherClient
 }
 
 func NewHandler(service *Service, authService *auth.Service) *Handler {
-	return &Handler{service: service, auth: authService}
+	return &Handler{service: service, auth: authService, weather: NewWeatherClient("")}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
+	h.registerWeather(mux)
 	mux.Handle("GET /api/v1/apps/day/status", h.auth.Middleware(http.HandlerFunc(h.status)))
 	mux.Handle("GET /api/v1/apps/day/events", h.auth.Middleware(http.HandlerFunc(h.events)))
 	mux.Handle("POST /api/v1/apps/day/connect", h.auth.Middleware(http.HandlerFunc(h.connect)))

@@ -97,8 +97,8 @@ func validateEvent(input *CreateEventInput) error {
 	input.Location = strings.TrimSpace(input.Location)
 	start, startErr := time.Parse(time.RFC3339, input.StartsAt)
 	end, endErr := time.Parse(time.RFC3339, input.EndsAt)
-	if input.Title == "" || len([]rune(input.Title)) > 200 || len([]rune(input.Location)) > 200 || startErr != nil || endErr != nil || !end.After(start) || end.Sub(start) > 30*24*time.Hour {
-		return httpapi.Validation(map[string]string{"event": "Название до 200 символов, окончание позже начала, длительность до 30 дней"}, "Проверьте событие")
+	if input.Title == "" || len([]rune(input.Title)) > 200 || len([]rune(input.Location)) > 200 || startErr != nil || endErr != nil || end.Sub(start) < time.Minute || end.Sub(start) > 30*24*time.Hour {
+		return httpapi.Validation(map[string]string{"event": "Название до 200 символов, длительность от 1 минуты до 30 дней"}, "Проверьте событие")
 	}
 	return nil
 }

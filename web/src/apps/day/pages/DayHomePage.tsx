@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDayEvents, useDayStatus, type DayEvent } from '../api';
+import { useDayEvents, useDayStatus, useWeather, type DayEvent } from '../api';
 import { addDays, eventsOnDay, sortEvents, startOfWeek } from '../calendar';
 import { useConnectDay, useDisconnectDay } from '../mutations';
 import { EventComposer } from './EventComposer';
+import { DayWeather, loadWeatherCity, WeatherPicker } from './WeatherPicker';
 import { AppHeader, Banner, Card, EmptyState, Icon, PrimaryButton, Screen, SectionLabel, Segmented, Skeleton } from '@/shared/ui';
 import { useT, useI18n } from '@/shared/i18n';
 import { formatDayMonth, formatDateTime, formatWeekday } from '@/shared/i18n/date';
@@ -26,7 +26,6 @@ function EventDetails({ event }: { event: DayEvent }) {
 export function DayHomePage() {
   const t = useT();
   const { lang } = useI18n();
-  const navigate = useNavigate();
   const feedback = useFeedback();
   const { status: session } = useSession();
   const ready = session === 'ready';
@@ -36,9 +35,11 @@ export function DayHomePage() {
   const [view, setView] = useState<'week' | 'agenda'>('week');
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [composing, setComposing] = useState(false);
+  const [weatherCity, setWeatherCity] = useState(loadWeatherCity);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const linked = status.data?.linked === true;
   const events = useDayEvents(anchor.toISOString(), addDays(anchor, 7).toISOString(), ready && linked);
+  const weather = useWeather(weatherCity, Intl.DateTimeFormat().resolvedOptions().timeZone, ready);
   const agenda = useMemo(() => sortEvents(events.data ?? []), [events.data]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => {
     const date = addDays(anchor, index);
@@ -46,7 +47,7 @@ export function DayHomePage() {
   }), [anchor, agenda]);
   const busy = status.isFetching || events.isFetching || connect.isPending || disconnect.isPending;
 
-  const refresh = () => { void status.refetch(); if (linked) void events.refetch(); };
+  const refresh = () => { void status.refetch(); if (linked) void events.refetch(); if (weatherCity) void weather.refetch(); };
   const unlink = async () => {
     if (confirmingDisconnect || disconnect.isPending) return;
     setConfirmingDisconnect(true);
@@ -59,11 +60,13 @@ export function DayHomePage() {
   };
 
   return (
-    <Screen header={<AppHeader title="SruDay" onBack={() => navigate('/apps')} leadingIcon="calendar_month" trailing={
+    <Screen header={<AppHeader title="SruDay" leadingIcon="calendar_month" trailing={
       <button type="button" onClick={refresh} disabled={!ready || busy} aria-label={t('refresh')} className="flex size-11 items-center justify-center text-accent disabled:opacity-50"><Icon name="refresh" size={22} /></button>
-    } />}>
+    } />} bottomSpace>
       <div className="flex flex-col gap-3 pt-2">
         <p className="break-words text-caption text-ink-2">{t('dayDeviceTimezone')}: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
+        {ready ? <WeatherPicker city={weatherCity} onChange={setWeatherCity} /> : null}
+        {weather.isError ? <Banner tone="warning" icon="cloud_off" title={t('dayWeatherUnavailable')} action={<button type="button" onClick={() => void weather.refetch()} className="min-h-11">{t('retry')}</button>} /> : null}
         {session === 'outside' ? <Banner tone="warning" icon="info" title={t('openInTelegram')} /> : null}
         {ready && status.isPending ? <Skeleton className="h-28 w-full" /> : null}
         {status.isError ? <Banner tone="danger" icon="error" title={t('dayUnavailable')} action={<button type="button" onClick={refresh} className="min-h-11 font-semibold">{t('retry')}</button>} /> : null}
@@ -75,24 +78,25 @@ export function DayHomePage() {
           })}>{t('dayConnect')}</PrimaryButton>
         </> : null}
         {connect.isError ? <Banner tone="danger" icon="error" title={t('dayConnectFailed')} /> : null}
-        {linked ? <>
+        <>
           <div className="flex items-center justify-between gap-2">
             <button type="button" onClick={() => setAnchor((current) => addDays(current, -7))} aria-label={t('prevWeek')} className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-neutral-soft text-ink"><Icon name="chevron_left" size={22} /></button>
             <span className="text-center text-body-strong text-ink">{formatDayMonth(anchor, lang)} - {formatDayMonth(addDays(anchor, 6), lang)}</span>
             <button type="button" onClick={() => setAnchor((current) => addDays(current, 7))} aria-label={t('nextWeek')} className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-neutral-soft text-ink"><Icon name="chevron_right" size={22} /></button>
           </div>
           <button type="button" onClick={() => setAnchor(startOfWeek(new Date()))} className="min-h-11 self-center px-4 text-body-secondary text-accent">{t('dayToday')}</button>
-          <Segmented options={[{ value: 'week', label: t('dayWeek') }, { value: 'agenda', label: t('dayAgenda') }]} value={view} onChange={setView} />
-          {composing ? <EventComposer onCancel={() => setComposing(false)} onCreated={(date) => { setComposing(false); setAnchor(startOfWeek(date)); }} /> : <PrimaryButton full onClick={() => setComposing(true)}>{t('dayCreate')}</PrimaryButton>}
+          {linked ? <Segmented options={[{ value: 'week', label: t('dayWeek') }, { value: 'agenda', label: t('dayAgenda') }]} value={view} onChange={setView} /> : null}
+          {linked ? composing ? <EventComposer onCancel={() => setComposing(false)} onCreated={(date) => { setComposing(false); setAnchor(startOfWeek(date)); }} /> : <PrimaryButton full onClick={() => setComposing(true)}>{t('dayCreate')}</PrimaryButton> : null}
           {events.isLoading ? <Skeleton className="h-28 w-full" /> : null}
           {events.isError ? <Banner tone="danger" icon="error" title={t('dayUnavailable')} action={<button type="button" onClick={() => void events.refetch()} className="min-h-11 font-semibold">{t('retry')}</button>} /> : null}
           {events.data?.length === 0 ? <EmptyState icon="event_available" title={t('dayNoEvents')} text={t('dayNoEventsText')} /> : null}
-          {events.data ? view === 'week' ? days.map((day) => <div key={day.date.toISOString()}>
+          {view === 'week' || !linked ? days.map((day) => <div key={day.date.toISOString()}>
             <SectionLabel>{formatWeekday(day.date, lang)}</SectionLabel>
-            <div className="flex flex-col gap-2">{day.events.length ? day.events.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} />) : <Card className="p-4 text-caption text-ink-2">{t('dayFree')}</Card>}</div>
-          </div>) : agenda.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} />) : null}
-          <button type="button" disabled={confirmingDisconnect || disconnect.isPending} onClick={() => void unlink()} className="min-h-11 px-4 text-body-secondary text-ink-2 disabled:opacity-50">{t('dayDisconnect')}</button>
-        </> : null}
+            {weatherCity ? <DayWeather date={day.date} days={weather.data} loading={weather.isLoading} /> : null}
+            <div className="flex flex-col gap-2">{linked && day.events.length ? day.events.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} />) : <Card className="p-4 text-caption text-ink-2">{t(!linked ? 'dayConnectToSee' : events.isLoading ? 'loading' : events.isError ? 'dayUnavailable' : 'dayFree')}</Card>}</div>
+          </div>) : agenda.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} />)}
+          {linked ? <button type="button" disabled={confirmingDisconnect || disconnect.isPending} onClick={() => void unlink()} className="min-h-11 px-4 text-body-secondary text-ink-2 disabled:opacity-50">{t('dayDisconnect')}</button> : null}
+        </>
       </div>
     </Screen>
   );
