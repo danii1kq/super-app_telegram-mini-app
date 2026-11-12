@@ -22,6 +22,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/pulse", h.auth.Middleware(http.HandlerFunc(h.feed)))
 	mux.Handle("POST /api/v1/pulse", h.auth.Middleware(http.HandlerFunc(h.create)))
 	mux.Handle("POST /api/v1/pulse/{id}/responses", h.auth.Middleware(http.HandlerFunc(h.respond)))
+	mux.Handle("GET /api/v1/pulse/{id}/responses", h.auth.Middleware(http.HandlerFunc(h.responders)))
+	mux.Handle("DELETE /api/v1/pulse/{id}/responses", h.auth.Middleware(http.HandlerFunc(h.cancelResponse)))
 	mux.Handle("POST /api/v1/pulse/{id}/close", h.auth.Middleware(http.HandlerFunc(h.close)))
 }
 
@@ -90,7 +92,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	audience := Audience{}
 	for _, raw := range body.Audience {
 		id, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil {
+		if err != nil || id <= 0 {
 			httpapi.WriteError(w, httpapi.Validation(map[string]string{"audience": "Некорректный получатель"}, "Проверьте поля"))
 			return
 		}
@@ -98,7 +100,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.CommunityID != "" {
 		id, err := strconv.ParseInt(body.CommunityID, 10, 64)
-		if err != nil {
+		if err != nil || id <= 0 {
 			httpapi.WriteError(w, httpapi.Validation(map[string]string{"community_id": "Некорректное сообщество"}, "Проверьте поля"))
 			return
 		}
@@ -120,7 +122,7 @@ func (h *Handler) respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statusID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || statusID <= 0 {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
 		return
 	}
@@ -138,7 +140,7 @@ func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statusID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || statusID <= 0 {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
 		return
 	}
