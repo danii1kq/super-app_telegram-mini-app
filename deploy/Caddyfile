@@ -1,0 +1,22 @@
+{$SRUNAL_DOMAIN} {
+	encode zstd gzip
+
+	# API and the bot webhook go to Go; everything else is the SPA bundle.
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+	handle /bot/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: srunal
+      POSTGRES_USER: srunal
+      POSTGRES_PASSWORD: local-preview-only
+    volumes:
+      - local_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U srunal -d srunal"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  api:
+    image: golang:1.26-alpine
+    working_dir: /workspace/backend
+    command: ["sh", "-c", "go run ./cmd/migrate -dir ../db/migrations && go run ./cmd/api"]
+    environment:
+      SRUNAL_DATABASE_URL: postgres://srunal:local-preview-only@db:5432/srunal?sslmode=disable
+      SRUNAL_DEV_INSECURE_KEYS: "1"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./backend:/workspace/backend:ro
+      - ./db:/workspace/db:ro
+      - local_gomod:/go/pkg/mod
+      - local_gobuild:/root/.cache/go-build
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  local_pgdata:
+  local_gomod:
+  local_gobuild:

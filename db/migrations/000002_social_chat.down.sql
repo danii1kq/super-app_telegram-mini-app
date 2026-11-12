@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS social_moderation_actions;
+DROP TABLE IF EXISTS social_reports;
+DROP TABLE IF EXISTS social_blocks;
+ALTER TABLE social_posts DROP CONSTRAINT IF EXISTS social_posts_community_fk;
+DROP TABLE IF EXISTS social_members;
+DROP TABLE IF EXISTS social_communities;
+DROP TABLE IF EXISTS social_follows;
+DROP TABLE IF EXISTS social_reactions;
+DROP TABLE IF EXISTS social_comments;
+DROP TABLE IF EXISTS social_posts;

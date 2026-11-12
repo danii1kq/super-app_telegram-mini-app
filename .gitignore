@@ -1,0 +1,25 @@
+# Perch workspace state
+.perch/
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Go
+backend/bin/
+*.exe
+
+# Local secrets and environment
+.env
+.env.local
+*.local.md
+deploy/SSH.local.md
+
+# Local dev server output
+web/dev.log
+backend/bin/
