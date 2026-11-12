@@ -20,17 +20,18 @@ import (
 )
 
 type Service struct {
-	pool     *postgres.Pool
-	content  *secure.Cipher
-	reader   ocr.Reader
-	delivery *secure.Cipher
+	pool         *postgres.Pool
+	content      *secure.Cipher
+	reader       ocr.Reader
+	delivery     *secure.Cipher
+	receiptSlots chan struct{}
 }
 
 func NewService(pool *postgres.Pool, content *secure.Cipher, reader ocr.Reader, delivery *secure.Cipher) *Service {
 	if reader == nil {
 		reader = ocr.Disabled{}
 	}
-	return &Service{pool: pool, content: content, reader: reader, delivery: delivery}
+	return &Service{pool: pool, content: content, reader: reader, delivery: delivery, receiptSlots: make(chan struct{}, 2)}
 }
 
 type Group struct {

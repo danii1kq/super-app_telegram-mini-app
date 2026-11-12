@@ -1,0 +1,1 @@
+DROP INDEX split_receipts_recognition_budget_idx;

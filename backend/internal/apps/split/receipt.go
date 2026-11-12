@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,17 +18,17 @@ import (
 
 // Receipt is a photographed check, from draft to saved expense.
 type Receipt struct {
-	ID          int64
-	GroupID     int64
-	AuthorID    int64
-	Status      string
-	OCRError    string
-	TotalMinor  int64
-	Discount    int64
-	Service     int64
-	Items       []ReceiptItem
+	ID             int64
+	GroupID        int64
+	AuthorID       int64
+	Status         string
+	OCRError       string
+	TotalMinor     int64
+	Discount       int64
+	Service        int64
+	Items          []ReceiptItem
 	SavedExpenseID *int64
-	CreatedAt   time.Time
+	CreatedAt      time.Time
 	// ImageState is none, stored, purged or processing.
 	ImageState string
 	// ImageExpiresAt is when the photo becomes eligible for deletion.
@@ -39,32 +40,32 @@ type Receipt struct {
 
 // ReceiptItem is one line, with how many units each person takes.
 type ReceiptItem struct {
-	ID         int64
-	Position   int
-	Name       string
-	Quantity   int
+	ID          int64
+	Position    int
+	Name        string
+	Quantity    int
 	AmountMinor int64
-	Unclear    bool
+	Unclear     bool
 	// Units maps a user to how many units of this line they take.
 	Units map[int64]int
 }
 
 // Debt is an obligation between two people.
 type Debt struct {
-	ID         int64
-	GroupID    int64
-	AuthorID   int64
-	CreditorID int64
-	DebtorID   int64
+	ID          int64
+	GroupID     int64
+	AuthorID    int64
+	CreditorID  int64
+	DebtorID    int64
 	AmountMinor int64
-	Note       string
+	Note        string
 	// SourceExpenseID set: the expense already carries this money, so the row
 	// must not be added to the balance again.
 	SourceExpenseID *int64
-	PaidMinor  int64
-	Outstanding int64
-	CreatedAt  time.Time
-	Payments   []DebtPayment
+	PaidMinor       int64
+	Outstanding     int64
+	CreatedAt       time.Time
+	Payments        []DebtPayment
 }
 
 // DebtPayment is one repayment against a debt.
@@ -161,6 +162,18 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 
 	var receipt Receipt
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		// Serialize the per-person recognition budget before making a paid request.
+		if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, authorID); err != nil {
+			return err
+		}
+		var attempts int
+		var latest *time.Time
+		if err := tx.QueryRow(ctx, `SELECT count(*), max(created_at) FROM split_receipts WHERE author_id=$1 AND image_bytes>0 AND created_at>now()-interval '24 hours'`, authorID).Scan(&attempts, &latest); err != nil {
+			return err
+		}
+		if attempts >= 50 || (latest != nil && time.Since(*latest) < 30*time.Second) {
+			return &httpapi.Error{Status: 429, Code: "receipt_rate_limited", Message: "Между фото нужно 30 секунд, доступно до 50 распознаваний за 24 часа"}
+		}
 		// The photo is scheduled for deletion from the start: a draft that never
 		// becomes an expense must not keep its image for long.
 		if err := tx.QueryRow(ctx,
@@ -455,19 +468,28 @@ func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, 
 	if err := s.requireMember(ctx, authorID, groupID); err != nil {
 		return Receipt{}, err
 	}
-	if total < 0 || discount < 0 || service < 0 {
-		return Receipt{}, httpapi.Validation(map[string]string{"total_minor": "Суммы не могут быть отрицательными"}, "Проверьте поля")
+	if total < 0 || discount < 0 || service < 0 || total > ocr.MaxMoneyMinor || discount > ocr.MaxMoneyMinor || service > ocr.MaxMoneyMinor {
+		return Receipt{}, httpapi.Validation(map[string]string{"total_minor": "Суммы должны быть от 0 до 10 миллиардов тенге"}, "Проверьте поля")
 	}
-	if len(items) == 0 {
-		return Receipt{}, httpapi.Validation(map[string]string{"items": "Добавьте хотя бы одну позицию"}, "Проверьте поля")
+	if len(items) == 0 || len(items) > ocr.MaxItems {
+		return Receipt{}, httpapi.Validation(map[string]string{"items": "Добавьте от 1 до 200 позиций"}, "Проверьте поля")
 	}
 
+	var itemsTotal int64
 	for index, item := range items {
-		if item.Quantity <= 0 {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Количество должно быть больше нуля"}, "Проверьте поля")
+		items[index].Name = strings.TrimSpace(item.Name)
+		if len([]rune(items[index].Name)) > 200 {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Название до 200 символов"}, "Проверьте позиции")
 		}
-		if item.AmountMinor < 0 {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Сумма не может быть отрицательной"}, "Проверьте поля")
+		if item.Quantity <= 0 || item.Quantity > ocr.MaxQuantity {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Количество должно быть от 1 до 999"}, "Проверьте поля")
+		}
+		if item.AmountMinor < 0 || item.AmountMinor > ocr.MaxMoneyMinor || itemsTotal > ocr.MaxMoneyMinor-item.AmountMinor {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Сумма позиций должна быть от 0 до 10 миллиардов тенге"}, "Проверьте поля")
+		}
+		itemsTotal += item.AmountMinor
+		if len(item.Units) > 100 {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Не больше 100 участников в позиции"}, "Проверьте позиции")
 		}
 		// A line is shared by people, not by units: one pizza split between two
 		// people has quantity 1 and two participants. Quantity bounds the units
@@ -479,8 +501,8 @@ func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, 
 		}
 		units := 0
 		for userID, count := range item.Units {
-			if count <= 0 {
-				return Receipt{}, httpapi.Validation(map[string]string{"items": "Единицы должны быть больше нуля"}, "Проверьте поля")
+			if count <= 0 || count > ocr.MaxQuantity {
+				return Receipt{}, httpapi.Validation(map[string]string{"items": "Единицы должны быть от 1 до 999"}, "Проверьте поля")
 			}
 			units += count
 			if err := s.requireMember(ctx, userID, groupID); err != nil {

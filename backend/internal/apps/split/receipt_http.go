@@ -34,10 +34,26 @@ func (h *Handler) createReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	groupID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || groupID <= 0 {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
 		return
 	}
+	if err := h.service.requireMember(r.Context(), user.ID, groupID); err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	if r.Header.Get("X-AI-Consent") != "deepseek" {
+		httpapi.WriteError(w, httpapi.BadRequest("consent_required", "Подтвердите передачу фото в DeepSeek для распознавания"))
+		return
+	}
+	select {
+	case h.service.receiptSlots <- struct{}{}:
+		defer func() { <-h.service.receiptSlots }()
+	default:
+		httpapi.WriteError(w, &httpapi.Error{Status: http.StatusTooManyRequests, Code: "receipt_busy", Message: "Распознавание занято, попробуйте ещё раз"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxImageBytes+1)
 
 	// One byte over the limit is enough to reject: the service checks the size
 	// again, but reading a huge body first would waste memory.
@@ -75,18 +91,18 @@ func (h *Handler) getReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateReceiptRequest struct {
-	TotalMinor    string                `json:"total_minor"`
-	DiscountMinor string                `json:"discount_minor"`
-	ServiceMinor  string                `json:"service_minor"`
-	Items         []updateReceiptItem   `json:"items"`
+	TotalMinor    string              `json:"total_minor"`
+	DiscountMinor string              `json:"discount_minor"`
+	ServiceMinor  string              `json:"service_minor"`
+	Items         []updateReceiptItem `json:"items"`
 }
 
 type updateReceiptItem struct {
-	Name        string            `json:"name"`
-	Quantity    int               `json:"quantity"`
-	AmountMinor string            `json:"amount_minor"`
-	Unclear     bool              `json:"unclear"`
-	Units       map[string]int    `json:"units"`
+	Name        string         `json:"name"`
+	Quantity    int            `json:"quantity"`
+	AmountMinor string         `json:"amount_minor"`
+	Unclear     bool           `json:"unclear"`
+	Units       map[string]int `json:"units"`
 }
 
 func (h *Handler) updateReceipt(w http.ResponseWriter, r *http.Request) {
@@ -173,7 +189,8 @@ func (h *Handler) receiptImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", mime)
-	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(image)
 }
 
@@ -203,10 +220,10 @@ func (h *Handler) receiptAllocation(w http.ResponseWriter, r *http.Request) {
 }
 
 type saveReceiptRequest struct {
-	PayerID         string   `json:"payer_id"`
-	ClientRequestID string   `json:"client_request_id"`
-	Description     string   `json:"description"`
-	Category        string   `json:"category"`
+	PayerID         string `json:"payer_id"`
+	ClientRequestID string `json:"client_request_id"`
+	Description     string `json:"description"`
+	Category        string `json:"category"`
 }
 
 // saveReceipt turns the checked draft into one expense with item-level shares.
@@ -418,15 +435,15 @@ func receiptJSON(receipt Receipt) map[string]any {
 	}
 
 	out := map[string]any{
-		"id":           strconv.FormatInt(receipt.ID, 10),
-		"group_id":     strconv.FormatInt(receipt.GroupID, 10),
-		"author_id":    strconv.FormatInt(receipt.AuthorID, 10),
-		"status":       receipt.Status,
-		"total_minor":  strconv.FormatInt(receipt.TotalMinor, 10),
+		"id":             strconv.FormatInt(receipt.ID, 10),
+		"group_id":       strconv.FormatInt(receipt.GroupID, 10),
+		"author_id":      strconv.FormatInt(receipt.AuthorID, 10),
+		"status":         receipt.Status,
+		"total_minor":    strconv.FormatInt(receipt.TotalMinor, 10),
 		"discount_minor": strconv.FormatInt(receipt.Discount, 10),
 		"service_minor":  strconv.FormatInt(receipt.Service, 10),
-		"items":        items,
-		"created_at":   receipt.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		"items":          items,
+		"created_at":     receipt.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 	if receipt.OCRError != "" {
 		out["ocr_error"] = receipt.OCRError
@@ -474,17 +491,17 @@ func debtJSON(debt Debt) map[string]any {
 	}
 
 	out := map[string]any{
-		"id":            strconv.FormatInt(debt.ID, 10),
-		"group_id":      strconv.FormatInt(debt.GroupID, 10),
-		"author_id":     strconv.FormatInt(debt.AuthorID, 10),
-		"creditor_id":   strconv.FormatInt(debt.CreditorID, 10),
-		"debtor_id":     strconv.FormatInt(debt.DebtorID, 10),
-		"amount_minor":  strconv.FormatInt(debt.AmountMinor, 10),
-		"paid_minor":    strconv.FormatInt(debt.PaidMinor, 10),
+		"id":                strconv.FormatInt(debt.ID, 10),
+		"group_id":          strconv.FormatInt(debt.GroupID, 10),
+		"author_id":         strconv.FormatInt(debt.AuthorID, 10),
+		"creditor_id":       strconv.FormatInt(debt.CreditorID, 10),
+		"debtor_id":         strconv.FormatInt(debt.DebtorID, 10),
+		"amount_minor":      strconv.FormatInt(debt.AmountMinor, 10),
+		"paid_minor":        strconv.FormatInt(debt.PaidMinor, 10),
 		"outstanding_minor": strconv.FormatInt(debt.Outstanding, 10),
-		"note":          debt.Note,
-		"payments":      payments,
-		"created_at":    debt.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		"note":              debt.Note,
+		"payments":          payments,
+		"created_at":        debt.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 	if debt.SourceExpenseID != nil {
 		out["source_expense_id"] = strconv.FormatInt(*debt.SourceExpenseID, 10)
@@ -496,12 +513,12 @@ func debtJSON(debt Debt) map[string]any {
 func (h *Handler) createManualReceipt(w http.ResponseWriter, r *http.Request) {
 	user, ok := auth.UserFrom(r.Context())
 	if !ok {
-		httpapi.WriteError(w, httpapi.Unauthorized("????????? ????"))
+		httpapi.WriteError(w, httpapi.Unauthorized("Требуется вход"))
 		return
 	}
 	groupID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "???????????? ID"))
+		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
 		return
 	}
 	receipt, err := h.service.CreateManualReceipt(r.Context(), user.ID, groupID)

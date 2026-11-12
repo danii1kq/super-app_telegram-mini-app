@@ -19,10 +19,11 @@ import (
 	"github.com/danii1kq/srunal/internal/core/user"
 	"github.com/danii1kq/srunal/internal/integration"
 	"github.com/danii1kq/srunal/internal/platform/config"
-	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
+	"github.com/danii1kq/srunal/internal/platform/vision"
 )
 
 // Deps carries what every module needs.
@@ -110,8 +111,8 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 // offers manual entry. There is deliberately no mock that returns invented
 // lines, because a fake receipt would look like a successful reading.
 func receiptReader(cfg config.Config) ocr.Reader {
-	if cfg.OCRAPIKey == "" {
+	if cfg.DeepSeekAPIKey == "" {
 		return ocr.Disabled{}
 	}
-	return ocr.NewOpenAI(cfg.OCRBaseURL, cfg.OCRAPIKey, cfg.OCRModel)
+	return ocr.NewDeepSeek(vision.NewClient(cfg.DeepSeekBaseURL, cfg.DeepSeekAPIKey, cfg.DeepSeekModel))
 }
