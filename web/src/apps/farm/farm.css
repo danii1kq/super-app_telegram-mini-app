@@ -394,3 +394,18 @@
 .farm-order-pay { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--world-coin); }
 .farm-order-side > button { font-size: 11px; padding: 7px 11px; white-space: nowrap; }
 @media (max-width: 700px) { .farm-order { gap: 9px; padding: 10px; } .farm-order > .farm-crop-art { width: 38px; height: 38px; } .farm-order-copy > strong { font-size: 12px; } .farm-order-side > button { font-size: 10px; padding: 6px 9px; } }
+
+/* Daily login streak. The whole seven day cycle is visible so the seventh day
+   is a target from the first session, not a surprise. */
+.farm-daily { background: var(--farm-surface); border: 1px solid var(--farm-line); border-radius: 16px; padding: 20px; }
+.farm-daily > .farm-section-heading { padding: 0 0 14px; }
+.farm-daily-track { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; margin-bottom: 14px; }
+.farm-daily-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 2px; border: 1px solid var(--farm-line); border-radius: 9px; background: var(--world-soft); color: var(--farm-muted); }
+.farm-daily-day small { font-size: 10px; line-height: 1; }
+.farm-daily-day b { font-size: 10px; font-weight: 600; line-height: 1; }
+.farm-daily-day svg { color: var(--world-coin); opacity: .75; }
+.farm-daily-day.past { opacity: .5; }
+.farm-daily-day.today { border-color: var(--world-accent); background: var(--farm-surface); color: var(--world-accent); box-shadow: 0 0 0 1px var(--world-accent); }
+.farm-daily-day.today svg { opacity: 1; }
+.farm-daily-pay { margin-left: auto; opacity: .8; }
+@media (max-width: 700px) { .farm-daily { padding: 16px; } .farm-daily-track { gap: 3px; } .farm-daily-day { padding: 6px 1px; border-radius: 7px; } .farm-daily-day small, .farm-daily-day b { font-size: 9px; } .farm-daily-day svg { width: 10px; height: 10px; } }

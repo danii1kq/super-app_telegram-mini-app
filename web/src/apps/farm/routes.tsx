@@ -16,6 +16,7 @@ import { Atmosphere } from './Atmosphere';
 import { MutationGuide } from './MutationGuide';
 import { LevelPanel } from './LevelPanel';
 import { OrderBoardPanel } from './OrderBoard';
+import { DailyPanel } from './DailyPanel';
 import { mutationNames, plantCharacter, plantWeight } from './character';
 import './farm.css';
 import './collection.css';
@@ -75,7 +76,7 @@ export default function FarmRoutes() {
           const collected = data.state.barn.slice(farm.data?.state.barn.length ?? 0);
           const special = collected.find(item => item.mutation === 'rainbow') ?? collected.find(item => item.mutation === 'ancient' || item.mutation === 'crystal') ?? collected.find(item => item.mutation !== 'none') ?? collected[0];
           sound.play(special ? plantCharacter(special.seed,special.mutation).sound : 'harvest');
-        } else sound.play(action.kind === 'theme' ? 'tap' : action.kind === 'redeem' || action.kind === 'breed' ? 'upgrade' : action.kind === 'keep' || action.kind === 'claim_breed' || action.kind === 'claim_level' || action.kind === 'fulfill_order' ? 'rare' : action.kind === 'return_trophy' ? 'plant' : action.kind);
+        } else sound.play(action.kind === 'theme' ? 'tap' : action.kind === 'redeem' || action.kind === 'breed' ? 'upgrade' : action.kind === 'keep' || action.kind === 'claim_breed' || action.kind === 'claim_level' || action.kind === 'fulfill_order' || action.kind === 'claim_daily' ? 'rare' : action.kind === 'return_trophy' ? 'plant' : action.kind);
       }
       if (action.kind === 'sell') void cache.invalidateQueries({ queryKey: boardKey });
       if (action.kind === 'plant') setModal(null);
@@ -96,7 +97,7 @@ export default function FarmRoutes() {
     </div>;
   }
 
-  const { state, crops, recipes = [], mutations = [], packs, upgrades = [], themes = [], stars_available = false, server_time, level } = farm.data;
+  const { state, crops, recipes = [], mutations = [], packs, upgrades = [], themes = [], stars_available = false, server_time, level, daily } = farm.data;
   const allCrops = [...crops, ...recipes.map(recipe => recipe.crop)];
   const collectionSize = allCrops.length * Object.keys(mutationNames).length;
   const showcaseCapacity = 6 + (state.upgrades.gallery ?? 0) * 2;
@@ -170,6 +171,7 @@ export default function FarmRoutes() {
           </section>
           <button className="farm-pack-teaser" onClick={() => setModal({ kind: 'pack', id: 'garden' })}><div><span className="farm-eyebrow">НЕМНОГО МАГИИ</span><h3>А что внутри?</h3><p>Три семени.<br/>Шанс на редкую находку.</p><span className="farm-teaser-cta">Открыть набор <Glyph name="arrow" size={14}/></span></div><SeedPacket/></button>
           <OrderBoardPanel board={state.orders} barn={state.barn} crops={allCrops} busy={mutation.isPending} onAction={(order) => act({ kind: 'fulfill_order', item: order })}/>
+          <DailyPanel daily={daily} crops={allCrops} busy={mutation.isPending} onClaim={() => act({ kind: 'claim_daily' })}/>
           <LevelPanel level={level} busy={mutation.isPending} onClaim={(value) => act({ kind: 'claim_level', level: value })}/>
         </aside></div>}
 

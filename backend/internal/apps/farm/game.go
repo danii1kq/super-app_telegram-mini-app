@@ -81,6 +81,7 @@ type State struct {
 	Sold        int                  `json:"sold"`
 	ClaimedLevels []int              `json:"claimed_levels"`
 	Orders      OrderBoard           `json:"orders"`
+	Daily       DailyStreak          `json:"daily"`
 }
 
 type Action struct {
@@ -278,6 +279,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 	switch action.Kind {
 	case "claim_level":
 		message, err := claimLevel(state, action.Level)
+		return message, nil, 0, err
+	case "claim_daily":
+		message, err := claimDaily(state, now)
 		return message, nil, 0, err
 	case "fulfill_order":
 		message, err := fulfillOrder(state, action.Item)

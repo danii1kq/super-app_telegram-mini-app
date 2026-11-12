@@ -21,10 +21,12 @@ export interface FarmTheme { id: string; name: string; description: string; star
 export interface Mutation { id: string; name: string; multiplier: number; min_genetics: number; unlocked: boolean }
 export interface Order { id: string; seed: string; quality: string; mutation: string; quantity: number; coins: number; xp: number }
 export interface OrderBoard { day: string; orders: Order[]; fulfilled: string[] }
+export interface DailyReward { day: number; coins: number; seeds: Record<string, number>; xp: number }
+export interface DailyInfo { day: number; streak: number; best: number; claimable: boolean; rewards: DailyReward[] }
 export interface LevelReward { level: number; title: string; coins: number; seeds: Record<string, number>; plots: number }
 export interface LevelInfo { level: number; title: string; into: number; need: number; max: number; pending: number[]; rewards: LevelReward[] }
-export interface FarmResponse { state: FarmState; crops: Crop[]; recipes: Recipe[]; mutations: Mutation[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null; level: LevelInfo }
-export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem' | 'breed' | 'claim_breed' | 'keep' | 'return_trophy' | 'claim_level' | 'fulfill_order'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string; item?: string; level?: number }
+export interface FarmResponse { state: FarmState; crops: Crop[]; recipes: Recipe[]; mutations: Mutation[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null; level: LevelInfo; daily: DailyInfo }
+export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem' | 'breed' | 'claim_breed' | 'keep' | 'return_trophy' | 'claim_level' | 'fulfill_order' | 'claim_daily'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string; item?: string; level?: number }
 export interface Leaderboard { entries: { id: string; name: string; revenue: number; rank: number; mine: boolean }[]; ends_at: string }
 
 export const getFarm = () => api<FarmResponse>('/farm');
