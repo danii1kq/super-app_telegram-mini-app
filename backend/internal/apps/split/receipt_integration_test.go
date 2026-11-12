@@ -242,3 +242,145 @@ func TestReceiptDraftLimits(t *testing.T) {
 		requireReceiptStatus(t, err, 422)
 	}
 }
+func makeAllocatedReceipt(t *testing.T, s *Service, groupID int64) Receipt {
+	t.Helper()
+	ctx := context.Background()
+	receipt, err := s.CreateManualReceipt(ctx, 1, groupID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err = s.UpdateReceipt(ctx, 1, receipt.ID, 600000, 0, 0, []ReceiptItem{{Name: "Пицца", Quantity: 1, AmountMinor: 400000, Units: map[int64]int{1: 1, 2: 1}}, {Name: "Бургер", Quantity: 1, AmountMinor: 200000, Units: map[int64]int{2: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return receipt
+}
+
+func TestReceiptSaveReplayAndConflicts(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	g, err := s.CreateGroup(ctx, 1, "Dinner", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := makeAllocatedReceipt(t, s, g.ID)
+	first, err := s.SaveReceipt(ctx, 1, receipt.ID, 1, "save-once", "Dinner", "cafe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := s.SaveReceipt(ctx, 1, receipt.ID, 1, "save-once", "Dinner", "cafe")
+	if err != nil || replay.ID != first.ID || replay.AmountMinor != 600000 || replay.Shares[1] != 200000 || replay.Shares[2] != 400000 || replay.SpentAt.IsZero() || replay.Version != 1 {
+		t.Fatalf("replay %#v %v", replay, err)
+	}
+	for _, input := range []struct {
+		payer                 int64
+		description, category string
+	}{{2, "Dinner", "cafe"}, {1, "Changed", "cafe"}, {1, "Dinner", "other"}} {
+		_, err = s.SaveReceipt(ctx, 1, receipt.ID, input.payer, "save-once", input.description, input.category)
+		requireReceiptStatus(t, err, 409)
+	}
+	other := makeAllocatedReceipt(t, s, g.ID)
+	_, err = s.SaveReceipt(ctx, 1, other.ID, 1, "save-once", "Dinner", "cafe")
+	requireReceiptStatus(t, err, 409)
+	_, err = s.SaveReceipt(ctx, 1, receipt.ID, 1, "another-key", "Dinner", "cafe")
+	requireReceiptStatus(t, err, 409)
+	_, err = s.SaveReceipt(ctx, 3, receipt.ID, 1, "stranger", "Dinner", "cafe")
+	requireReceiptStatus(t, err, 404)
+	_, err = s.UpdateReceipt(ctx, 1, receipt.ID, 100, 0, 0, []ReceiptItem{{Name: "Late edit", Quantity: 1, AmountMinor: 100, Units: map[int64]int{1: 1}}})
+	requireReceiptStatus(t, err, 409)
+	var count int
+	if err = s.pool.QueryRow(ctx, `SELECT count(*) FROM split_expenses`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("expenses %d %v", count, err)
+	}
+}
+
+func TestReceiptConcurrentSave(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	g, err := s.CreateGroup(ctx, 1, "Dinner", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := makeAllocatedReceipt(t, s, g.ID)
+	var wg sync.WaitGroup
+	var id atomic.Int64
+	for n := 0; n < 8; n++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			expense, err := s.SaveReceipt(ctx, 1, receipt.ID, 1, "concurrent-save", "Dinner", "cafe")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			old := id.Load()
+			if old == 0 {
+				id.CompareAndSwap(0, expense.ID)
+			} else if old != expense.ID {
+				t.Error("created a duplicate expense")
+			}
+		}()
+	}
+	wg.Wait()
+	var count int
+	if err = s.pool.QueryRow(ctx, `SELECT count(*) FROM split_expenses`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("expenses %d %v", count, err)
+	}
+}
+
+func TestReceiptSaveDoesNotRaceLateEdit(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	g, err := s.CreateGroup(ctx, 1, "Dinner", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n := 0; n < 12; n++ {
+		receipt := makeAllocatedReceipt(t, s, g.ID)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, err := s.UpdateReceipt(ctx, 1, receipt.ID, 700000, 0, 0, []ReceiptItem{{Name: "Updated pizza", Quantity: 1, AmountMinor: 500000, Units: map[int64]int{1: 1, 2: 1}}, {Name: "Burger", Quantity: 1, AmountMinor: 200000, Units: map[int64]int{2: 1}}})
+			if err != nil {
+				var e *httpapi.Error
+				if !errors.As(err, &e) || e.Status != 409 {
+					t.Error(err)
+				}
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if _, err := s.SaveReceipt(ctx, 1, receipt.ID, 1, fmt.Sprintf("race-%d", receipt.ID), "Dinner", "cafe"); err != nil {
+				t.Error(err)
+			}
+		}()
+		wg.Wait()
+		stored, err := s.Receipt(ctx, 1, receipt.ID)
+		if err != nil || stored.SavedExpenseID == nil {
+			t.Fatalf("receipt save %v", err)
+		}
+		expense, err := s.Expense(ctx, 1, g.ID, *stored.SavedExpenseID)
+		if err != nil || expense.AmountMinor != stored.TotalMinor {
+			t.Fatal("late edit changed a saved receipt")
+		}
+	}
+}
+
+func TestReceiptUnclearRequiresReview(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	g, err := s.CreateGroup(ctx, 1, "Dinner", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := s.CreateManualReceipt(ctx, 1, g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateReceipt(ctx, 1, receipt.ID, 100, 0, 0, []ReceiptItem{{Name: "Maybe", Quantity: 1, AmountMinor: 100, Unclear: true, Units: map[int64]int{1: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.SaveReceipt(ctx, 1, receipt.ID, 1, "unreviewed", "Dinner", "cafe")
+	requireReceiptStatus(t, err, 422)
+}

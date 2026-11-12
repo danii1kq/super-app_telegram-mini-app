@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
@@ -444,6 +445,10 @@ func receiptJSON(receipt Receipt) map[string]any {
 		"service_minor":  strconv.FormatInt(receipt.Service, 10),
 		"items":          items,
 		"created_at":     receipt.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+	}
+	out["image_state"], out["image_width"], out["image_height"], out["image_bytes"] = receipt.ImageState, receipt.ImageWidth, receipt.ImageHeight, receipt.ImageBytes
+	if receipt.ImageExpiresAt != nil {
+		out["image_expires_at"] = receipt.ImageExpiresAt.UTC().Format(time.RFC3339)
 	}
 	if receipt.OCRError != "" {
 		out["ocr_error"] = receipt.OCRError
