@@ -11,7 +11,8 @@ import {
   Hairline,
   Icon,
   PrimaryButton,
-  Row,
+	Row,
+	SecondaryButton,
   Screen,
   Skeleton,
 } from '@/shared/ui';
@@ -111,6 +112,13 @@ export function SplitHomePage() {
           {t('splitNew')}
         </button>
       )}
+
+      <div className="pt-2">
+        <SecondaryButton onClick={() => navigate('/apps/split/report')} full>
+          <Icon name="insights" size={18} />
+          {t('reportTitle')}
+        </SecondaryButton>
+      </div>
 
       <div className="pt-3">
         {groups.isLoading ? <Skeleton className="h-16 w-full" /> : null}

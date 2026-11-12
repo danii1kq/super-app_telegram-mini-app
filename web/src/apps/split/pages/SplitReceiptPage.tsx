@@ -29,7 +29,7 @@ import {
 import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
 import { usePeople } from '@/core/social/api';
-import { useT } from '@/shared/i18n';
+import { useT, type DictKey } from '@/shared/i18n';
 
 /** One editable line of the draft. */
 interface DraftItem {
@@ -40,6 +40,18 @@ interface DraftItem {
   unclear: boolean;
   units: Record<string, number>;
 }
+
+/** The categories the receipt screen offers. */
+const CATEGORIES = ['groceries', 'cafe', 'transport', 'home', 'fun', 'other'] as const;
+
+const CATEGORY_KEY: Record<string, DictKey> = {
+  groceries: 'catGroceries',
+  cafe: 'catCafe',
+  transport: 'catTransport',
+  home: 'catHome',
+  fun: 'catFun',
+  other: 'catOther',
+};
 
 let draftKey = 0;
 function nextKey(): string {
@@ -68,6 +80,7 @@ export function SplitReceiptPage() {
   const [receiptId, setReceiptId] = useState('');
   const [items, setItems] = useState<DraftItem[]>([]);
   const [total, setTotal] = useState('');
+  const [category, setCategory] = useState('cafe');
   const [discount, setDiscount] = useState('');
   const [service, setService] = useState('');
   const [payerId, setPayerId] = useState('');
@@ -324,7 +337,7 @@ export function SplitReceiptPage() {
       {
         onSuccess: () => {
           saveReceipt.mutate(
-            { payerId, clientRequestId: saveKey, description: group?.title ?? t('receiptTitle') },
+            { payerId, clientRequestId: saveKey, description: group?.title ?? t('receiptTitle'), category },
             {
               onSuccess: () => {
                 setSaveKey(newRequestId());
@@ -504,7 +517,27 @@ export function SplitReceiptPage() {
 
           <SectionLabel>{t('receiptTotals')}</SectionLabel>
           <Card className="p-3">
-            <label className="text-caption text-ink-2" htmlFor="receipt-total">
+            <label className="text-caption text-ink-2" htmlFor="receipt-category">
+              {t('category')}
+            </label>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {CATEGORIES.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setCategory(name)}
+                  className={
+                    category === name
+                      ? 'h-8 rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent'
+                      : 'h-8 rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
+                  }
+                >
+                  {t(CATEGORY_KEY[name] ?? 'catOther')}
+                </button>
+              ))}
+            </div>
+
+            <label className="pt-3 text-caption text-ink-2" htmlFor="receipt-total">
               {t('receiptTotal')}
             </label>
             <input

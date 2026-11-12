@@ -173,13 +173,14 @@ export function useUpdateReceipt(id: string) {
 export function useSaveReceipt(id: string, groupId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { payerId: string; clientRequestId: string; description: string }) =>
+    mutationFn: (input: { payerId: string; clientRequestId: string; description: string; category?: string }) =>
       api<{ id: string }>(`/split/receipts/${id}/save`, {
         method: 'POST',
         body: {
           payer_id: input.payerId,
           client_request_id: input.clientRequestId,
           description: input.description,
+          category: input.category,
         },
       }),
     onSuccess: () => {
