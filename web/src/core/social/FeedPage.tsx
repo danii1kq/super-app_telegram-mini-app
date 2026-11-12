@@ -35,7 +35,7 @@ export function FeedPage() {
         aria-label={t('refresh')} className="flex size-11 items-center justify-center text-accent disabled:opacity-40">
         <Icon name="refresh" size={22} />
       </button>
-    } />}>
+    } />} bottomSpace>
       {status === 'outside' ? <div className="pt-2"><Banner tone="warning" icon="info" title={t('openInTelegram')}>{t('feedOutside')}</Banner></div> : null}
       <div className="pt-2">
         {composerOpen ? (
