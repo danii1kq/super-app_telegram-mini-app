@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './AppShell';
 import { FeedPage } from '@/core/social/FeedPage';
+import { PostPage } from '@/core/social/PostPage';
+import { UserProfilePage } from '@/core/profile/UserProfilePage';
 import { ChatsPage } from '@/core/chat/ChatsPage';
 import { ChatPage } from '@/core/chat/ChatPage';
 import { CreateGroupPage } from '@/core/chat/CreateGroupPage';
@@ -33,6 +35,8 @@ export function App() {
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="/feed" replace />} />
           <Route path="/feed" element={<FeedPage />} />
+          <Route path="/posts/:id" element={<PostPage />} />
+          <Route path="/people/:id" element={<UserProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/chats/new-group" element={<CreateGroupPage />} />
           <Route path="/chats/:id" element={<ChatPage />} />
