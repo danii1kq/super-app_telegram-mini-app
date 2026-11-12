@@ -49,6 +49,7 @@ export function CropArt({ seed = 'carrot', mutation = 'none', growing = false, c
   </svg>;
 }
 
-export function SeedPacket({ exotic = false }: { exotic?: boolean }) {
-  return <div className={`farm-packet ${exotic ? 'exotic' : ''}`}><div className="farm-packet-stitch"/><span className="farm-packet-label">SRU SEEDS</span><CropArt seed={exotic ? 'dragonfruit' : 'carrot'}/><span className="farm-packet-bottom">{exotic ? 'EXOTIC BLEND' : 'GARDEN MIX'}<small>3 SEEDS · GROW SOMETHING GOOD</small></span></div>;
+export function SeedPacket({ exotic = false, variant }: { exotic?: boolean; variant?: string }) {
+  const tone = variant ?? (exotic ? 'exotic' : 'garden');
+  return <div className={`farm-packet ${tone}`}><div className="farm-packet-stitch"/><span className="farm-packet-label">SRU SEEDS</span><CropArt seed={tone === 'lunar' ? 'moonflower' : tone === 'exotic' ? 'dragonfruit' : 'carrot'}/><span className="farm-packet-bottom">{tone === 'lunar' ? 'LUNAR BLOOM' : tone === 'exotic' ? 'EXOTIC BLEND' : 'GARDEN MIX'}<small>3 SEEDS · GROW SOMETHING GOOD</small></span></div>;
 }

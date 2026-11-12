@@ -5,6 +5,7 @@ import { playFarmSound, type FarmSound } from './sounds';
 export function useFarmSound() {
   const [enabled, setEnabled] = useState(() => deviceStorage.get('srunal.farm.sound') !== 'off');
   const context = useRef<AudioContext | null>(null);
+  const active = useRef(new Set<() => void>());
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
@@ -18,9 +19,15 @@ export function useFarmSound() {
   }, []);
 
   const play = useCallback((sound: FarmSound) => {
-    if (!enabledRef.current || !context.current || document.hidden) return;
-    try { playFarmSound(context.current, sound); } catch { /* Never block a game action on audio. */ }
+    if (!enabledRef.current || !context.current || context.current.state !== 'running' || document.hidden) return;
+    try {
+      let cancel = () => {};
+      cancel = playFarmSound(context.current, sound, () => active.current.delete(cancel));
+      active.current.add(cancel);
+    } catch { /* Never block a game action on audio. */ }
   }, []);
+
+  const stop = useCallback(() => { active.current.forEach(cancel => cancel()); active.current.clear(); }, []);
 
   const toggle = () => {
     const next = !enabled;
@@ -28,9 +35,9 @@ export function useFarmSound() {
     setEnabled(next);
     deviceStorage.set('srunal.farm.sound', next ? 'on' : 'off');
     if (next) { prime(); if (context.current) void context.current.resume().then(() => play('tap')).catch(() => {}); }
-    else if (context.current) { void context.current.close().catch(() => {}); context.current = null; }
+    else if (context.current) { stop(); void context.current.close().catch(() => {}); context.current = null; }
   };
 
-  useEffect(() => () => { if (context.current) void context.current.close().catch(() => {}); }, []);
-  return { enabled, prime, play, toggle };
+  useEffect(() => () => { stop(); if (context.current) void context.current.close().catch(() => {}); }, [stop]);
+  return { enabled, prime, play, stop, toggle };
 }

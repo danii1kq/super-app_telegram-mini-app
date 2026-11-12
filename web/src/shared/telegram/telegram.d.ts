@@ -68,6 +68,7 @@ interface TelegramWebApp {
   showConfirm(message: string, callback: (confirmed: boolean) => void): void;
   openLink(url: string): void;
   openTelegramLink(url: string): void;
+  openInvoice?(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
   enableClosingConfirmation(): void;
   disableClosingConfirmation(): void;
   ready(): void;

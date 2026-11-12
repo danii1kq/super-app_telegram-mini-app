@@ -267,4 +267,99 @@
   .farm-topbar-inner { padding: 0 16px; gap: 10px; height: 64px; }.farm-back { padding-right: 10px; width: 25px; }.farm-brand-mark { width: 32px; height: 32px; border-radius: 10px; margin-right: 7px; }.farm-brand { font-size: 20px; }.farm-avatar { width: 31px; height: 31px; }.farm-topbar-right { gap: 9px; }.farm-layout { padding: 0 16px; }.farm-tabs { gap: 23px; height: 55px; }.farm-tabs > button { font-size: 10px; gap: 5px; }.farm-tabs > button > svg { width: 16px; }.farm-intro { padding: 27px 0 25px; }.farm-intro h1 { font-size: 31px; letter-spacing: -1.5px; margin-top: 11px; margin-bottom: 10px; }.farm-intro p { font-size: 10px; max-width: 230px; }.farm-intro-art { width: 98px; height: 118px; position: absolute; right: -8px; top: 40px; opacity: .9; }.farm-intro-art > .farm-crop-art { width: 95px; height: 95px; left: 0; }.farm-intro-orbit { width: 84px; height: 84px; left: 5px; }.farm-art-spark { right: -2px; }.farm-art-spark svg { width: 17px; }.farm-eyebrow { font-size: 7px; letter-spacing: 1.1px; }.farm-intro > div:first-child { position: relative; z-index: 1; }.farm-garden-panel > .farm-section-heading { padding: 18px 16px; }.farm-section-heading h2 { font-size: 15px; }.farm-section-heading p { font-size: 10px; }.farm-weather { font-size: 9px; gap: 4px; }.farm-weather svg { width: 16px; }.farm-garden { padding: 58px 19px 29px; min-height: 390px; }.farm-plots { gap: 18px 15px; }.farm-plot { height: 143px; }.farm-garden-footer { padding: 14px 13px; }.farm-garden-footer > span { font-size: 8px; gap: 4px; }.farm-garden-footer > span svg { width: 14px; }.farm-primary { padding: 10px 12px; font-size: 10px !important; }.farm-garden-footer .farm-primary { gap: 5px; }.farm-gentle-note { gap: 6px; padding: 15px 0; }.farm-gentle-note p { font-size: 9px; }.farm-gentle-note > button { display: none; }.farm-inventory { padding: 18px 15px; }.farm-sidebar { grid-template-columns: 1fr; gap: 16px; }.farm-barn { min-height: auto; padding: 20px; }.farm-barn-empty { padding: 22px 0; }.farm-barn-empty > svg { width: 30px; height: 30px; }.farm-barn-items { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px; }.farm-barn-item { gap: 3px; flex-wrap: wrap; }.farm-barn-item .farm-crop-art { width: 40px; height: 40px; }.farm-barn-item > .farm-coins { margin-left: 43px; margin-top: -5px; font-size: 10px; }.farm-pack-teaser { min-height: 175px; padding: 20px; }.farm-pack-teaser > .farm-packet { width: 107px; height: 149px; top: 22px; right: 22px; }.farm-pack-teaser h3 { font-size: 24px; }.farm-pack-teaser p { font-size: 11px; }.farm-level { max-width: 100%; padding: 8px 5px; }.farm-page-footer { font-size: 8px; padding-top: 27px; }.farm-page-footer button { font-size: 8px; }.farm-packs-grid { gap: 16px; }.farm-pack-card { padding: 22px 16px; gap: 20px; }.farm-pack-visual { padding: 3px; }.farm-pack-visual .farm-packet { width: 95px; height: 148px; }.farm-pack-visual .farm-packet .farm-crop-art { height: 78px; width: 78px; }.farm-pack-copy h2 { font-size: 19px; }.farm-pack-copy p { font-size: 10px; margin-bottom: 12px; }.farm-pack-copy .farm-primary { font-size: 9px !important; gap: 7px; padding: 9px; }.farm-seed-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }.farm-seed-card { padding: 13px; }.farm-seed-buy { font-size: 9px; }.farm-seed-buy .farm-coins { font-size: 10px; }.farm-collection-summary { gap: 13px; padding: 20px 18px 27px; }.farm-collection-summary p { font-size: 9px; }.farm-collection-summary strong { font-size: 23px; }.farm-collection-grid { grid-template-columns: 1fr 1fr; gap: 10px; }.farm-discovery { padding: 15px 8px; }.farm-discovery > .farm-crop-art { width: 100px; height: 100px; }.farm-discovery h3 { font-size: 12px; }.farm-discovery p { font-size: 8px; }.farm-discovered-mark { font-size: 8px; gap: 3px; }.farm-upgrade-card { padding: 22px 20px 22px 106px; }.farm-upgrade-art { width: 62px; height: 62px; left: 21px; top: 31px; }.farm-upgrade-art svg { width: 34px; height: 34px; }.farm-upgrade-card h2 { font-size: 17px; }.farm-upgrade-note { font-size: 10px; padding: 12px; }.farm-current-chances { padding: 20px; gap: 16px; }.farm-current-chances > span { width: 100%; display: flex; justify-content: space-between; }.farm-ranking > header { padding: 20px; }.farm-ranking-labels { padding: 12px 18px; font-size: 7px; }.farm-ranking-row { padding: 17px 18px; gap: 10px; }.farm-ranking-row > strong { font-size: 11px; }.farm-ranking-row > .farm-coins { font-size: 11px; }.farm-ranking-empty { padding: 25px 15px; }.farm-ranking-empty h3 { font-size: 15px; }
   .farm-dialog-inner { padding: 20px 16px; }.farm-dialog-inner h2 { font-size: 19px; }.farm-dialog .farm-seed-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }.farm-dialog .farm-seed-card .farm-crop-art { height: 60px; width: 60px; }.farm-dialog .farm-seed-card > strong { font-size: 9px; letter-spacing: -.3px; }.farm-dialog .farm-seed-card > small { font-size: 7px; }.farm-care-options button { padding: 10px; }.farm-care-options strong { font-size: 10px; }.farm-care-options span { font-size: 7px; }.farm-pack-odds { padding: 13px 10px; gap: 10px; }.farm-pack-odds > span { font-size: 9px; gap: 4px; }.farm-drops { gap: 7px; }.farm-drop > strong { font-size: 9px; }.farm-drop .farm-rarity-label { font-size: 7px; padding: 3px 5px; }
 }
+
+/* Summoning: timed chimes, escalating energy, a quiet beat, then the reveal. */
+.farm-opening-dialog { width: min(620px,calc(100vw - 20px)); background: #111d34; border: 1px solid #405269; }
+.farm-opening-dialog::backdrop { background: #060f20df; backdrop-filter: blur(15px); }
+.farm-summon { --drop: #b4dba9; --drop-rgb: 180,219,169; background: radial-gradient(ellipse at 50% 34%,#1c3354 0,#111d34 72%); padding-top: 16px; }
+.farm-summon.tier-1 { --drop: #71d4ff; --drop-rgb: 113,212,255; }
+.farm-summon.tier-2 { --drop: #bc97ff; --drop-rgb: 188,151,255; }
+.farm-summon.tier-3 { --drop: #ffd26c; --drop-rgb: 255,210,108; }
+.farm-summon::before { transition: background .5s; }
+.farm-summon .farm-opening-top { align-items: center; }
+.farm-summon .farm-opening-top > span { color: #899db6; font-size: 10px; letter-spacing: .4px; text-transform: uppercase; }
+.farm-summon .farm-opening-top > div { display: flex; align-items: center; gap: 16px; }
+.farm-summon .farm-opening-top button { color: #aab7cb; border: 0; background: transparent; display: flex; align-items: center; gap: 5px; padding: 5px 0; font-size: 10px; }
+.farm-summon .farm-opening-top button > svg:last-child { transform: rotate(180deg); }
+.farm-summon .farm-opening-top button:first-child > svg { transform: none; }
+.farm-summon .farm-opening-progress { padding: 20px 0 0; gap: 14px; }
+.farm-summon .farm-opening-progress > span { font-size: 10px; color: #7f94ae; border-color: #41516a; }
+.farm-summon .farm-opening-progress > .current { color: #d8e5ed; border-color: #9db1c8; background: #ffffff0c; box-shadow: none; }
+.farm-summon .farm-opening-progress > .complete { color: #c8ddba; }
+.farm-summon .farm-opening-stage { height: 350px; margin-top: 8px; }
+.farm-summon .farm-opening-glow { width: 320px; height: 320px; opacity: .7; transition: background .5s,opacity .35s; }
+.farm-summon:not(.revealed) .farm-opening-glow { background: radial-gradient(circle,rgb(var(--drop-rgb),.22),rgb(var(--drop-rgb),.02) 50%,transparent 70%); }
+.farm-summon .farm-opening-rays { opacity: 0; }
+.farm-summon .farm-opening-ring { width: 230px; height: 230px; border-color: rgb(var(--drop-rgb),.17); transition: border-color .5s,opacity .3s; }
+.farm-summon .farm-opening-ring.ring-b { width: 295px; height: 295px; border-style: dashed; opacity: .45; animation: farm-rays-turn 40s linear infinite reverse; }
+.farm-summon-stars { position: absolute; inset: 0; pointer-events: none; }
+.farm-summon-stars > i { position: absolute; height: 2px; width: 2px; background: #b8cbe6; border-radius: 50%; box-shadow: 0 0 6px #b8cbe6; opacity: .2; animation: farm-star-breathe 3s ease-in-out infinite; }
+.farm-summon-core-button { display: grid; place-items: center; position: relative; width: 240px; height: 260px; border: 0; padding: 0; color: var(--drop); background: transparent; z-index: 3; transition: transform .35s,filter .5s; }
+.farm-summon .farm-summon-core-button:disabled { opacity: 1; cursor: default; }
+.farm-summon-core { height: 240px; width: 240px; filter: drop-shadow(0 0 20px rgb(var(--drop-rgb),.3)); transform-origin: 50% 60%; }
+.farm-seed-core { width: 100%; height: 100%; overflow: visible; }
+.farm-summon.sealed .farm-summon-core { animation: farm-core-float 3s ease-in-out infinite; }
+.farm-summon.sealed .farm-summon-core-button:hover { filter: brightness(1.2); }
+.farm-summon-core.energized { animation: farm-core-hit .6s cubic-bezier(.2,.8,.3,1) both; }
+.farm-summon-touch { position: absolute; display: flex; align-items: center; gap: 6px; bottom: 13px; font-size: 10px; letter-spacing: .5px; color: #9fb4c4; }
+.farm-summon-pulse { position: absolute; top: 50%; left: 50%; width: 0; height: 0; z-index: 1; pointer-events: none; }
+.farm-summon-pulse > span { opacity: 0; transform: translate(-50%,-50%); position: absolute; width: 150px; height: 150px; border: 2px solid var(--drop); border-radius: 50%; animation: farm-pulse-ring .55s ease-out both; box-shadow: 0 0 16px rgb(var(--drop-rgb),.12); }
+.farm-summon-pulse > span:nth-child(2) { animation-delay: .09s; border-width: 1px; }
+.farm-summon-pulse > i { opacity: 0; position: absolute; top: -2px; left: -180px; width: 360px; height: 2px; background: linear-gradient(90deg,transparent,var(--drop),transparent); filter: blur(2px); animation: farm-lens-pulse .5s ease-out both; }
+.farm-summon.opening .farm-opening-glow { opacity: 1; }
+.farm-summon.suspense .farm-opening-stage > :not(.farm-summon-core-button) { opacity: .03 !important; transition: opacity .2s; }
+.farm-summon.suspense .farm-summon-core-button { transform: scale(.18); filter: brightness(3) drop-shadow(0 0 30px var(--drop)); }
+.farm-summon.suspense .farm-summon-core { animation: none; }
+.farm-summon .farm-opening-bottom { min-height: 126px; }
+.farm-summon-caption { display: block; font-size: 8px; color: #7c94af; letter-spacing: 2.2px; margin-bottom: 10px; }
+.farm-summon .farm-opening-bottom h3 { font-size: 22px; color: #edf1f5; letter-spacing: -.7px; }
+.farm-summon.sealed .farm-opening-primary { margin-top: 22px; }
+.farm-summon .farm-opening-primary { background: #e8edf3; border-color: #f4f6f9; box-shadow: 0 4px 0 #6b84a14a; color: #223754; }
+.farm-summon .farm-opening-primary:hover { background: white; box-shadow: 0 4px 20px #96b5d52b; }
+.farm-summon .farm-opening-bottom > p { color: #a2b2c8; }
+.farm-summon-energy { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 25px; }
+.farm-summon-energy > i { height: 4px; width: 29px; border-radius: 4px; background: #2e415b; transition: background .2s,box-shadow .2s; }
+.farm-summon-energy > i.lit { background: var(--drop); box-shadow: 0 0 13px rgb(var(--drop-rgb),.4); }
+.farm-summon.revealed .farm-opening-rays { opacity: .7; }
+.farm-summon.revealed .farm-opening-glow { width: 420px; height: 420px; }
+.farm-summon.revealed .farm-opening-ring { border-color: rgb(var(--drop-rgb),.25); }
+.farm-summon-impact { opacity: 0; position: absolute; width: 470px; height: 470px; border-radius: 50%; background: radial-gradient(circle,rgb(var(--drop-rgb),.65),rgb(var(--drop-rgb),.08) 45%,transparent 68%); animation: farm-summon-impact .8s ease-out both; pointer-events: none; z-index: 4; }
+.farm-summon-backword { font-size: clamp(33px,7vw,64px); letter-spacing: 3px; font-weight: 800; color: var(--drop); opacity: .065; position: absolute; top: 44%; pointer-events: none; }
+.farm-summon .farm-opening-revealed { animation: farm-summon-arrive .8s cubic-bezier(.15,.9,.25,1.1) both; }
+.farm-summon .farm-opening-revealed > .farm-crop-art { height: 205px; width: 205px; filter: drop-shadow(0 5px 30px rgb(var(--drop-rgb),.3)); }
+.farm-summon .farm-opening-revealed h3 { color: #f3f5f8; font-size: 29px; margin-top: 4px; }
+.farm-summon .farm-opening-rarity { font-size: 12px; font-weight: 750; letter-spacing: 3.5px; }
+.farm-summon.tier-3 .farm-opening-rarity { color: #ffda80; text-shadow: 0 0 30px #ffd36d99; }
+.farm-summon.tier-3 .farm-opening-revealed h3 { color: #fff0bf; }
+.farm-summon .farm-opening-saved { color: #6e839f; margin-top: 21px; }
+.farm-summon .farm-opening-summary > h3 { color: #f3f5f8; }
+.farm-summon .farm-opening-summary > p { color: #91a7bd; }
+.farm-summon .farm-opening-result > span { font-size: 7px; letter-spacing: .7px; }
+.farm-summon .farm-opening-again { color: #a6bad0; }
+.farm-packet.lunar { background: #e5def4; border-color: #a28dc3; box-shadow: 5px 7px 0 #63537d30,inset -5px 0 #cbbde2; color: #7c619f; }
+.farm-packet.lunar .farm-packet-stitch { background: #c3b0db; border-color: #9c85bb; }
+.farm-pack-card.lunar { background: #edeaf6; border-color: #d9d0eb; }
+.farm-pack-card.lunar .farm-pack-orbit { background: #ded4ed; }
+.farm-pack-card.lunar .farm-eyebrow { color: #9a87af; }
+.farm-pack-card.lunar .farm-primary { background: #69518a; border-color: #69518a; }
+.farm-packs-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.farm-pack-card { flex-direction: column; align-items: stretch; gap: 20px; padding: 26px; }
+.farm-pack-visual { display: grid; place-items: center; }
+.farm-pack-orbit { left: 50%; transform: translateX(-50%); }
+.farm-pack-copy .farm-primary { width: 100%; justify-content: space-between; }
+.farm-pack-chance { display: inline-block; margin-top: 9px; background: #ffffff88; border: 1px solid #83956722; border-radius: 30px; padding: 4px 8px; color: #7c8b62; font-size: 9px; }
+.lunar .farm-pack-chance { color: #8265a4; border-color: #bba5d844; background: #ffffff66; }
+.farm-upgrade-card.selection .farm-upgrade-art { color: #9d82c0; background: #f1ecf7; }
+.farm-upgrade-card.market .farm-upgrade-art { color: #b69e58; background: #faf4dd; }
+.farm-upgrade-card.land .farm-upgrade-art { color: #7d9e6c; background: #eef3e7; }
+@keyframes farm-core-float { 0%,100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-9px) rotate(4deg); } }
+@keyframes farm-core-hit { 0% { transform: scale(.82) rotate(-9deg); filter: brightness(1.9); } 30% { transform: scale(1.09) rotate(5deg); } 100% { transform: scale(1) rotate(0); filter: brightness(1); } }
+@keyframes farm-pulse-ring { 0% { transform: translate(-50%,-50%) scale(.55); opacity: .8; } 100% { transform: translate(-50%,-50%) scale(2.5); opacity: 0; } }
+@keyframes farm-lens-pulse { 0% { transform: scaleX(.3); opacity: 0; } 20% { opacity: .8; } 100% { transform: scaleX(1.2); opacity: 0; } }
+@keyframes farm-star-breathe { 0%,100% { opacity: .15; } 50% { opacity: .6; } }
+@keyframes farm-summon-impact { 0% { transform: scale(.15); opacity: .65; } 40% { opacity: .3; } 100% { transform: scale(1.4); opacity: 0; } }
+@keyframes farm-summon-arrive { 0% { opacity: 0; transform: translateY(30px) scale(.5) rotate(-8deg); } 55% { opacity: 1; transform: translateY(-7px) scale(1.04) rotate(2deg); } 100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); } }
+@media(max-width:760px) { .farm-packs-grid { grid-template-columns: 1fr; }.farm-pack-card { flex-direction: row; align-items: center; }.farm-pack-visual { flex-shrink: 0; }.farm-pack-copy .farm-primary { width: auto; } }
+@media(max-width:400px),(max-height:740px) { .farm-summon { padding: 15px 20px 18px; }.farm-summon .farm-opening-stage { height: 295px; }.farm-summon-core-button { width: 205px; height: 225px; }.farm-summon-core { height: 205px; width: 205px; }.farm-summon .farm-opening-revealed > .farm-crop-art { height: 169px; width: 169px; }.farm-summon .farm-opening-revealed h3 { font-size: 25px; }.farm-summon .farm-opening-bottom h3 { font-size: 20px; }.farm-summon .farm-opening-progress { padding-top: 12px; }.farm-summon .farm-opening-bottom { min-height: 113px; }.farm-summon .farm-opening-saved { font-size: 7px; margin-top: 17px; }.farm-summon .farm-opening-result > span { font-size: 6px; } }
+
 @media (prefers-reduced-motion: reduce) { .farm-app *, .farm-dialog * { animation: none !important; transition: none !important; } }

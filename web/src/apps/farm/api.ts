@@ -5,18 +5,22 @@ export interface Plot { seed: string; planted_at: string; ready_at: string; care
 export interface Harvest { seed: string; quality: string; mutation: string; quantity: number; value: number }
 export interface Discovery { seed: string; quality: string; mutation: string }
 export interface FarmState {
+	 theme: string; owned_themes: string[];
   coins: number; xp: number; seeds: Record<string, number>; plots: (Plot | null)[];
   barn: Harvest[]; collection: Record<string, Discovery>; upgrades: Record<string, number>;
   pity: Record<string, number>; opened: number; sold: number;
 }
-export interface Pack { id: string; name: string; price: number; weights: number[] }
-export interface FarmResponse { state: FarmState; crops: Crop[]; packs: Pack[]; server_time: string; message: string; drops: string[] | null }
-export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string }
+export interface Pack { id: string; name: string; price: number; weights: number[]; pity_after: number; guarantee: string }
+export interface Upgrade { id: string; name: string; icon: string; description: string; benefit: string; level: number; max_level: number; cost: number }
+export interface FarmTheme { id: string; name: string; description: string; stars: number }
+export interface FarmResponse { state: FarmState; crops: Crop[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null }
+export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string }
 export interface Leaderboard { entries: { id: string; name: string; revenue: number; rank: number; mine: boolean }[]; ends_at: string }
 
 export const getFarm = () => api<FarmResponse>('/farm');
 export const actOnFarm = (action: FarmAction) => api<FarmResponse>('/farm/actions', { method: 'POST', body: action });
 export const getLeaderboard = () => api<Leaderboard>('/farm/leaderboard');
+export const getThemeInvoice = (theme: string) => api<{url:string}>('/farm/themes/invoice',{method:'POST',body:{theme}});
 
 export function countdown(milliseconds: number): string {
   const minutes = Math.max(0, Math.ceil(milliseconds / 60_000));
