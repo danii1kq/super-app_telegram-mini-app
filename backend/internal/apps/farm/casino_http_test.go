@@ -46,7 +46,7 @@ func exerciseCasinoHTTP(t *testing.T, pool *pgxpool.Pool, request func(string, s
 		t.Fatal("host stake missing")
 	}
 	flips := lobby()
-	if len(flips) != 1 || flips[0].HostID != "1" || flips[0].Status != "open" || flips[0].FeePercent != 8 {
+	if len(flips) != 1 || flips[0].HostID != "1" || flips[0].Status != "open" || flips[0].FeePercent != 25 {
 		t.Fatal("real open match missing")
 	}
 	id := flips[0].ID

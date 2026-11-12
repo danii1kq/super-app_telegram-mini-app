@@ -291,11 +291,11 @@ A won plant follows the normal market rules when subsequently sold.
 
 One round per account, with stake debited at start. A crypto-random uniform
 integer `r` in `[0,1000000)` selects a private threshold
-`floor(94000000/(r+1))` in hundredths. The displayed multiplier is
+`floor(55000000/(r+1))` in hundredths. The displayed multiplier is
 `floor(exp(elapsed_seconds*0.08)*100)`, capped at 1000 (x10). A round busts when
 the multiplier exceeds its threshold; survivors automatically cash out at x10.
-There is a 6% immediate loss rate, 47% survival to x2, approximately 31.33% to x3, 18.8% to x5 and 9.4% to x10.
-The theoretical gross return is at most 94%, with integer coin payouts rounded
+There is a 45% immediate loss rate, 27.5% survival to x2, approximately18.33% to x3, 11% to x5 and 5.5% to x10.
+The theoretical gross return is at most 55%, with integer coin payouts rounded
 down. Numerical probability tests enumerate all one million roll values.
 
 Only the server clock and saved threshold decide payouts. Active responses omit
@@ -324,7 +324,7 @@ creates an offer. The host's open offer stays visible ahead of the40-row limit.
 
 A player selects one barn specimen, a target species, target mutation and coin
 stake. Targets have perfect quality. The server quote uses market-upgraded
-prices and returns `min(8000,floor((source_unit_market+stake)*9200/target_market))`
+prices and returns `min(4500,floor((source_unit_market+stake)*6000/target_market))`
 as basis points. The target must cost more than the plant and coins combined.
 The action recalculates the quote while locked, consumes exactly one source
 specimen and the stake, then rolls once. Success adds the target to the barn
@@ -348,7 +348,7 @@ No live player balances or clocks are changed by those fixtures.
 Balance changes affect new stakes. Existing crash rounds retain their saved
 threshold and declared return; old rounds without a return field report96%.
 Migration000015 preserves a10% fee for existing coinflip offers, while new offers
-snapshot8%. Both offer previews and payout settlement use the saved fee.
+snapshot25%. Both offer previews and payout settlement use the saved fee.
 
 Upgrade reveals now use five accelerating charge strikes and a2.35s finale.
 Seed reveals use faster accelerating strikes, a hexagonal energy sigil, a focused
