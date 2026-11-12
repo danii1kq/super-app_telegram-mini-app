@@ -11,6 +11,7 @@ const paths: Record<string, string> = {
   upgrade: 'm14 3 7 7-7 7m7-7H9a6 6 0 0 0-6 6v5',
   coin: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-7-4h-3a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-3m2-10v2m0 8v2',
   arrow: 'm14 6-6 6 6 6',
+  forward: 'm10 6 6 6-6 6',
   plus: 'M12 5v14M5 12h14',
   close: 'm6 6 12 12M6 18 18 6',
   water: 'M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Zm-3 13c0 2 1 3 3 3',

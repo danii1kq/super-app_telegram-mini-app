@@ -200,3 +200,22 @@ Live Stars payments have not been exercised; local tests use a fake Bot API.
 Remaining limits: no Telegram crop-ready notifications, automated season prizes,
 or live multi-user load test. The economy uses an initial balance suitable for
 playtesting and will need tuning from actual player behavior.
+
+## First run and visual polish
+
+A brand new player lands in the garden with no idea what to do, so the
+walkthrough opens automatically on first visit and never again: the fact is a
+local flag, not server state, because it is a UI preference rather than
+progress. Five steps, one idea each, skippable from any step. The same component
+backs the "Правила игры" button, replacing the old wall of text.
+
+Free beds previously read as broken tiles: their label was a fixed olive that
+vanished on the dark worlds (1.34:1 contrast). The label now uses the theme ink,
+the furrow lines are faded behind it, and the caption says "Свободная грядка"
+instead of a poetic line. Disabled primary buttons dim their fill and keep white
+ink; relying on opacity alone left the green fill looking actionable, and the
+theme palettes overrode the disabled colour until it was pinned per world.
+
+Forward-pointing actions (sell, open pack, activate code, tutorial next) use a
+right chevron. The existing arrow glyph is a left chevron and means back, so
+reusing it made primary actions read as navigation.
