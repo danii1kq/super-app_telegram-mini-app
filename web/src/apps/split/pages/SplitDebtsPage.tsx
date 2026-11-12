@@ -17,7 +17,8 @@ import {
 import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
 import { usePeople } from '@/core/social/api';
-import { useT } from '@/shared/i18n';
+import { useT, useI18n } from '@/shared/i18n';
+import { formatDayMonth } from '@/shared/i18n/date';
 
 /**
  * Debts of one group: who owes whom, with repayments.
@@ -28,6 +29,7 @@ import { useT } from '@/shared/i18n';
 export function SplitDebtsPage() {
   const { groupId = '' } = useParams();
   const t = useT();
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const feedback = useFeedback();
   const { me } = useSession();
@@ -235,10 +237,7 @@ export function SplitDebtsPage() {
                     {debt.payments.map((payment) => (
                       <div key={payment.id} className="flex items-center justify-between pt-0.5">
                         <span className="text-caption text-ink-2">
-                          {new Date(payment.paid_at).toLocaleDateString('ru-RU', {
-                            day: 'numeric',
-                            month: 'short',
-                          })}
+                          {formatDayMonth(payment.paid_at, lang)}
                         </span>
                         <span className="text-caption text-success">
                           +{formatMinor(payment.amount_minor)} ₸

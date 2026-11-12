@@ -60,12 +60,3 @@ export function shiftMonth(key: string, delta: number): string {
   const date = new Date(year, month - 1 + delta, 1);
   return monthKey(date);
 }
-
-/** A human month name for the header. */
-export function monthLabel(key: string, locale: string): string {
-  const [year = 2026, month = 1] = key.split('-').map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString(locale, {
-    month: 'long',
-    year: 'numeric',
-  });
-}

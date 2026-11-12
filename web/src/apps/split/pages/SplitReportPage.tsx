@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatMinor } from '../api';
-import { monthKey, monthLabel, shiftMonth, useReport } from '../report';
+import { monthKey, shiftMonth, useReport } from '../report';
 import {
   AppHeader,
   Banner,
@@ -17,7 +17,7 @@ import {
 } from '@/shared/ui';
 import { useI18n, useT, type DictKey } from '@/shared/i18n';
 import { formatDayMonth } from '@/shared/i18n/date';
-import { localeOf } from '@/shared/i18n/date';
+import { formatMonthYear } from '@/shared/i18n/date';
 
 /** Category labels, in the order the report shows them. */
 const CATEGORY_ORDER = ['groceries', 'cafe', 'transport', 'home', 'fun', 'other'] as const;
@@ -60,7 +60,7 @@ export function SplitReportPage() {
         >
           <Icon name="chevron_left" size={22} />
         </button>
-        <span className="text-body-strong text-ink">{monthLabel(month, localeOf(lang))}</span>
+        <span className="text-body-strong text-ink">{formatMonthYear(month, lang)}</span>
         <button
           type="button"
           onClick={() => setMonth((current) => shiftMonth(current, 1))}

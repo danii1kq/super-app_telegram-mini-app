@@ -189,7 +189,9 @@ export function Row({
         <span className={`truncate text-body-strong ${destructive ? 'text-danger' : 'text-ink'}`}>
           {title}
         </span>
-        {subtitle ? <span className="truncate text-caption text-ink-2">{subtitle}</span> : null}
+        {subtitle ? (
+          <span className="line-clamp-2 text-caption text-ink-2">{subtitle}</span>
+        ) : null}
       </div>
       {value !== undefined ? (
         <span className="shrink-0 pl-2 text-body-secondary text-ink-2">{value}</span>
@@ -398,7 +400,7 @@ export function SecondaryButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-11 items-center justify-center rounded-xl bg-accent-soft px-4 text-body-secondary-strong text-accent transition active:scale-[0.98] disabled:opacity-50 ${full ? 'flex w-full' : 'inline-flex'}`}
+      className={`h-11 items-center justify-center gap-2 rounded-xl bg-accent-soft px-4 text-body-secondary-strong text-accent transition active:scale-[0.98] disabled:opacity-50 ${full ? 'flex w-full' : 'inline-flex'}`}
     >
       {children}
     </button>

@@ -275,7 +275,7 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
-  feed: 'Лента',
+  feed: 'Ағым',
   chats: 'Чаттар',
   apps: 'Қолданбалар',
   profile: 'Профиль',
