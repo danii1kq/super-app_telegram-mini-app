@@ -14,13 +14,21 @@ import (
 type Client struct {
 	token string
 	http  *http.Client
+	// baseURL is overridable so tests can point the client at a local server.
+	baseURL string
 }
 
 func NewClient(token string) *Client {
 	return &Client{
-		token: token,
-		http:  &http.Client{Timeout: 15 * time.Second},
+		token:   token,
+		http:    &http.Client{Timeout: 15 * time.Second},
+		baseURL: "https://api.telegram.org",
 	}
+}
+
+// SetBaseURL points the client at another Bot API endpoint, for tests.
+func (c *Client) SetBaseURL(url string) {
+	c.baseURL = url
 }
 
 type SendMessageRequest struct {
@@ -47,7 +55,7 @@ func (c *Client) SendMessage(ctx context.Context, req SendMessageRequest) (int64
 		return 0, fmt.Errorf("telegram: marshal: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", c.token)
+	url := fmt.Sprintf("%s/bot%s/sendMessage", c.baseURL, c.token)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("telegram: request: %w", err)
