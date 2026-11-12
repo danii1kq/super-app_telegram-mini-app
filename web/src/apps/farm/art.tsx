@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { GrowingPlant } from './GrowingPlant';
 
 const paths: Record<string, string> = {
   sprout: 'M12 21v-9M12 16C4 16 3 11 3 7c6 0 9 3 9 9Zm0-4c0-6 3-9 9-9 0 6-3 9-9 9Z',
@@ -27,11 +28,11 @@ export function Glyph({ name, size = 20, className = '' }: { name: string; size?
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] ?? paths.sprout} /></svg>;
 }
 
-export function CropArt({ seed = 'carrot', mutation = 'none', growing = false, className = '' }: { seed?: string; mutation?: string; growing?: boolean; className?: string }) {
+export function CropArt({ seed = 'carrot', mutation = 'none', growing = false, progress = 0, variant = 0, className = '' }: { seed?: string; mutation?: string; growing?: boolean; progress?: number; variant?: number; className?: string }) {
   const style: CSSProperties = { filter: mutation === 'gold' ? 'sepia(.8) saturate(2)' : mutation === 'crystal' ? 'hue-rotate(155deg) saturate(.8)' : undefined };
   return <svg className={`farm-crop-art ${className}`} style={style} viewBox="0 0 120 120" fill="none" aria-hidden="true">
     <ellipse cx="60" cy="104" rx="32" ry="7" fill="#213b21" opacity=".12" />
-    {growing ? <><path d="M61 101V65" stroke="#457b32" strokeWidth="5" strokeLinecap="round"/><path d="M61 82C37 85 30 70 31 59c20-2 31 8 30 23Z" fill="#7eb54d"/><path d="M61 71c-1-20 12-30 30-27-1 17-10 28-30 27Z" fill="#4a8e44"/><path d="M65 65 81 53M57 77 40 66" stroke="#c7e68e" strokeWidth="2" strokeLinecap="round"/></> : <>
+    {growing ? <GrowingPlant seed={seed} progress={progress} variant={variant}/> : <>
     {seed === 'carrot' && <><path d="M56 44C36 20 41 9 47 10c7 1 12 20 14 32-1-28 7-40 14-36s0 24-9 38c15-22 27-23 30-16s-14 15-30 22" fill="#538d40"/><path d="M40 48c4-13 35-13 39 0s-12 47-23 56c-5 3-24-41-16-56Z" fill="#ee9247"/><path d="M47 48c3-6 13-7 15-5" stroke="#ffbd70" strokeWidth="7" strokeLinecap="round"/><path d="m42 62 13 3m19 7-11 3m-15 9 10 2" stroke="#cf6e35" strokeWidth="3" strokeLinecap="round"/></>}
     {seed === 'tomato' && <><path d="M61 37c-5-13 3-20 12-22" stroke="#497b38" strokeWidth="5" strokeLinecap="round"/><path d="M61 43C24 23 15 65 28 88c11 23 54 21 65-2 11-25-2-58-32-43Z" fill="#e76b52"/><path d="M38 54c-10 7-11 20-7 27" stroke="#ffae89" strokeWidth="8" strokeLinecap="round"/><path d="m61 41-18-7 6 11-13 9 21-5 8 13 4-14 16 3-10-10 6-8-20 8Z" fill="#54894a"/></>}
     {seed === 'strawberry' && <><path d="M60 40C25 25 17 53 30 76s25 32 30 32 24-15 34-38-2-44-34-30Z" fill="#dc5d61"/><path d="M40 51c-8 3-10 10-7 16" stroke="#f69b97" strokeWidth="7" strokeLinecap="round"/><path d="m60 41-21-14 6 17-14 4 24 5 8 12 7-17 19-7-16-3 5-13-18 16Z" fill="#538748"/>{[[43,65],[65,65],[80,59],[54,81],[73,81],[62,96],[37,77]].map(([x,y],i)=><ellipse key={i} cx={x} cy={y} rx="2" ry="3" fill="#f7d799"/>)}</>}

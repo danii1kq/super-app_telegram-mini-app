@@ -9,6 +9,7 @@ import { CropArt, Glyph, SeedPacket } from './art';
 import { useFarmSound } from './useFarmSound';
 import { PackOpening } from './PackOpening';
 import { Themes } from './Themes';
+import { growthLabel } from './GrowingPlant';
 import './farm.css';
 
 const tabs = [
@@ -126,10 +127,11 @@ export default function FarmRoutes() {
               <div className="farm-plots">{state.plots.map((plot, slot) => {
                 const mature = plot && Date.parse(plot.ready_at) <= now;
                 const remaining = plot ? Date.parse(plot.ready_at) - now : 0;
-                const progress = plot ? Math.min(100, Math.max(0, (1 - remaining / (3 * 3600_000)) * 100)) : 0;
-                return <button key={slot} className={`farm-plot ${plot ? mature ? 'ready' : 'growing' : 'empty'} ${effect?.kind === 'plant' && effect.slot === slot ? 'fresh' : ''}`} disabled={mutation.isPending} onClick={() => plot ? mature ? act({ kind: 'harvest' }) : feedback(`Растёт ${cropByID(plot.seed).name.toLowerCase()}. До сбора ${countdown(remaining)}`) : openPlant(slot)} aria-label={plot ? `${cropByID(plot.seed).name}, ${mature ? 'собрать урожай' : `до сбора ${countdown(remaining)}`}` : `Посадить на грядке ${slot + 1}`}>
+                const duration = plot ? Math.max(1, Date.parse(plot.ready_at) - Date.parse(plot.planted_at)) : 1;
+                const progress = plot ? Math.min(100, Math.max(0, (1 - remaining / duration) * 100)) : 0;
+                return <button key={slot} className={`farm-plot ${plot ? mature ? 'ready' : 'growing' : 'empty'} ${effect?.kind === 'plant' && effect.slot === slot ? 'fresh' : ''}`} disabled={mutation.isPending} onClick={() => plot ? mature ? act({ kind: 'harvest' }) : feedback(`Растёт ${cropByID(plot.seed).name.toLowerCase()}. ${growthLabel(progress / 100)}. До сбора ${countdown(remaining)}`) : openPlant(slot)} aria-label={plot ? `${cropByID(plot.seed).name}, ${mature ? 'собрать урожай' : `${growthLabel(progress / 100)}, до сбора ${countdown(remaining)}`}` : `Посадить на грядке ${slot + 1}`}>
                   <span className="farm-plot-soil"/>
-                  {plot ? <><CropArt seed={plot.seed} growing={!mature}/><span className="farm-plot-name">{cropByID(plot.seed).name}</span><span className={`farm-plot-status ${mature ? 'mature' : ''}`}><Glyph name={mature ? 'check' : 'clock'} size={13}/>{mature ? 'Собрать' : countdown(remaining)}</span>{!mature && <span className="farm-growth-track"><span style={{ width: `${progress}%` }}/></span>}<span className="farm-plot-care"><Glyph name={plot.care} size={15}/></span></> : <><span className="farm-plot-plus"><Glyph name="plus" size={25}/></span><span className="farm-plot-name">Посадить семя</span><span className="farm-empty-caption">Здесь всё начинается</span></>}
+                  {plot ? <><CropArt seed={plot.seed} growing={!mature} progress={progress / 100} variant={slot}/><span className="farm-plot-name">{cropByID(plot.seed).name}</span><span className={`farm-plot-status ${mature ? 'mature' : ''}`}><Glyph name={mature ? 'check' : 'clock'} size={13}/>{mature ? 'Собрать' : countdown(remaining)}</span>{!mature && <span className="farm-growth-track"><span style={{ width: `${progress}%` }}/></span>}<span className="farm-plot-care"><Glyph name={plot.care} size={15}/></span></> : <><span className="farm-plot-plus"><Glyph name="plus" size={25}/></span><span className="farm-plot-name">Посадить семя</span><span className="farm-empty-caption">Здесь всё начинается</span></>}
                 </button>;
               })}</div>
             </div>

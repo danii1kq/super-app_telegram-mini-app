@@ -70,6 +70,17 @@ visual effects. New species: radish, cucumber, corn, sunflower, watermelon and
 legendary moonflower. Pack weights and the guarantee use species rarity, so adding
 a new common seed cannot accidentally reset the rare-seed guarantee.
 
+## Growing plants
+
+Every species has its own growing silhouette, rather than a shared sprout. Roots
+have distinct foliage, vines spread close to the ground, corn grows upright,
+strawberries form a rosette, and dragonfruit develops cactus stems. Three visual
+stages are derived from the saved planting and maturity times: shoots before 35%,
+fuller foliage at 35%, buds or unripe fruit at 70%. Harvest-ready art stays separate.
+Plot index adds a small stable lean, so neighboring plants are not exact clones.
+No random rewards or mutations are disclosed by growth illustrations.
+Production build and manual comparison covered all 36 species/stage combinations.
+
 ## Farm themes and payments
 
 Garden is included. Tropical and lunar themes change the scenery and UI palette,
