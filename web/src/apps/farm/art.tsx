@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { GrowingPlant } from './GrowingPlant';
+import { hybridArt, plantCharacter } from './character';
 
 const paths: Record<string, string> = {
   sprout: 'M12 21v-9M12 16C4 16 3 11 3 7c6 0 9 3 9 9Zm0-4c0-6 3-9 9-9 0 6-3 9-9 9Z',
@@ -29,9 +30,15 @@ export function Glyph({ name, size = 20, className = '' }: { name: string; size?
 }
 
 export function CropArt({ seed = 'carrot', mutation = 'none', growing = false, progress = 0, variant = 0, className = '' }: { seed?: string; mutation?: string; growing?: boolean; progress?: number; variant?: number; className?: string }) {
-  const style: CSSProperties = { filter: mutation === 'gold' ? 'sepia(.8) saturate(2)' : mutation === 'crystal' ? 'hue-rotate(155deg) saturate(.8)' : undefined };
-  return <svg className={`farm-crop-art ${className}`} style={style} viewBox="0 0 120 120" fill="none" aria-hidden="true">
+  const hybridID = seed;
+  const hybrid = hybridArt[seed];
+  const character = plantCharacter(seed,mutation);
+  if(hybrid)seed=hybrid.base;
+  const filters=[hybrid ? `hue-rotate(${hybrid.hue}deg)` : '',mutation === 'gold' ? 'sepia(.8) saturate(2)' : mutation === 'crystal' ? 'hue-rotate(155deg) saturate(.8)' : ''].filter(Boolean).join(' ');
+  const style: CSSProperties = { filter: filters || undefined };
+  return <svg className={`farm-crop-art ${!growing ? `farm-character-${character.kind}` : ''} ${hybrid ? 'farm-hybrid-art' : ''} ${className}`} style={style} viewBox="0 0 120 120" fill="none" aria-hidden="true">
     <ellipse cx="60" cy="104" rx="32" ry="7" fill="#213b21" opacity=".12" />
+    <g className="farm-crop-body">
     {growing ? <GrowingPlant seed={seed} progress={progress} variant={variant}/> : <>
     {seed === 'carrot' && <><path d="M56 44C36 20 41 9 47 10c7 1 12 20 14 32-1-28 7-40 14-36s0 24-9 38c15-22 27-23 30-16s-14 15-30 22" fill="#538d40"/><path d="M40 48c4-13 35-13 39 0s-12 47-23 56c-5 3-24-41-16-56Z" fill="#ee9247"/><path d="M47 48c3-6 13-7 15-5" stroke="#ffbd70" strokeWidth="7" strokeLinecap="round"/><path d="m42 62 13 3m19 7-11 3m-15 9 10 2" stroke="#cf6e35" strokeWidth="3" strokeLinecap="round"/></>}
     {seed === 'tomato' && <><path d="M61 37c-5-13 3-20 12-22" stroke="#497b38" strokeWidth="5" strokeLinecap="round"/><path d="M61 43C24 23 15 65 28 88c11 23 54 21 65-2 11-25-2-58-32-43Z" fill="#e76b52"/><path d="M38 54c-10 7-11 20-7 27" stroke="#ffae89" strokeWidth="8" strokeLinecap="round"/><path d="m61 41-18-7 6 11-13 9 21-5 8 13 4-14 16 3-10-10 6-8-20 8Z" fill="#54894a"/></>}
@@ -46,6 +53,16 @@ export function CropArt({ seed = 'carrot', mutation = 'none', growing = false, p
     {seed === 'watermelon' && <><path d="M59 29c-9-11 2-19 8-14s-6 11-4 3" stroke="#547e44" strokeWidth="4" strokeLinecap="round"/><ellipse cx="60" cy="68" rx="44" ry="37" fill="#7da957"/><path d="M37 37C19 62 28 89 40 101m14-69c-9 28-7 53 2 72m15-71c13 26 11 50 0 70m13-62c18 19 18 38 6 52" stroke="#4c843e" strokeWidth="8" strokeLinecap="round"/><path d="M30 63c0-7 3-12 7-16" stroke="#b6cc81" strokeWidth="5" strokeLinecap="round"/></>}
     {seed === 'moonflower' && <><path d="M60 104V58" stroke="#77969a" strokeWidth="4"/><path d="M58 88C36 89 29 78 33 65c15 0 25 10 25 23Zm5-9c-1-19 13-25 27-20-3 14-13 20-27 20Z" fill="#8caeb0"/>{[0,72,144,216,288].map(angle=><path key={angle} d="M60 56C36 43 45 15 60 8c14 11 22 35 0 48Z" transform={`rotate(${angle} 60 49)`} fill={angle%144?'#c6b4e4':'#e2d5f4'} stroke="#ad96ca" strokeWidth="1.5"/>)}<circle cx="60" cy="49" r="12" fill="#f3df9c"/><path d="m60 40 2 6 6 3-6 2-2 7-2-7-6-2 6-3 2-6Z" fill="#fff5d4"/><path d="m99 19 2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z" fill="#e5c779"/></>}
     </>}
+    {hybrid && !growing && <g className="farm-hybrid-markings">
+      {hybridID==='aurora_root' && <path d="m42 57 28 4m-23 15 17 3m-12 12 8 1" stroke="#fff1cc" strokeWidth="4" strokeLinecap="round" opacity=".6"/>}
+      {hybridID==='jade_tomato' && <path d="m60 58 15 15-15 19-15-19 15-15Zm0 0v34m-15-19h30" stroke="#e1f2c0" strokeWidth="2" opacity=".7"/>}
+      {hybridID==='moonberry' && <path d="M58 63c-12 10-2 29 12 22-16 3-18-17-12-22Z" fill="#f0e5ff"/>}
+      {hybridID==='ghost_pumpkin' && <><ellipse cx="47" cy="69" rx="4" ry="7" fill="#665e51"/><ellipse cx="73" cy="69" rx="4" ry="7" fill="#665e51"/><path d="M50 84q10 9 20 0" stroke="#665e51" strokeWidth="3" strokeLinecap="round"/></>}
+      {hybridID==='solar_corn' && <path d="m62 44 3 8 9 3-9 3-3 9-3-9-9-3 9-3 3-8Z" fill="#fff5cb"/>}
+      {hybridID==='crystal_bloom' && <path d="m60 32 12 17-12 16-12-16 12-17Zm0 0v33m-12-16h24" fill="#edf6ff" fillOpacity=".5" stroke="#f6f7ff" strokeWidth="1.5"/>}
+    </g>}
+    </g>
+    {!growing && (character.kind==='moon' || character.kind==='ember' || mutation==='crystal' || mutation==='gold' || hybrid) && <g className="farm-character-motes" fill={character.kind==='moon'?'#d5c3ff':character.kind==='crystal'?'#b8e8f7':'#f4d17b'}><path d="m19 28 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z"/><path d="m101 63 2 4 4 2-4 2-2 4-2-4-4-2 4-2Z"/><circle cx="88" cy="17" r="2"/></g>}
     {mutation !== 'none' && <g fill={mutation === 'crystal' ? '#c3a4f0' : '#ecc55c'}><path d="m100 24 3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z"/><path d="m19 40 2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4Z"/></g>}
   </svg>;
 }

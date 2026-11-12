@@ -72,6 +72,31 @@ a new common seed cannot accidentally reset the rare-seed guarantee.
 
 ## Growing plants
 
+## Breeding, trophies and worlds
+
+The laboratory consumes two copies of a base seed and creates one hybrid seed
+after three server-timed hours. Six deterministic recipes cover all twelve base
+species. Hybrids are craft-only, not sold for zero coins or added to pack odds.
+Each has its own hue and markings; progress survives restart and can be claimed
+only once. There is one laboratory job at a time.
+
+New harvest batches carry unique IDs and specimen weight. Keeping a trophy moves
+exactly one plant and its unit value out of the barn. Six display slots are
+available initially. Selling harvest never sells trophies; returning a trophy
+moves the same specimen back to the barn. Legacy harvest receives stable local
+IDs and displays an unknown weight instead of inventing a record. Collection
+quality retains the best observed grade.
+
+Plants have mutation- and species-specific character effects: large specimens
+take more room, golden and crystal plants sparkle, moon plants glow, and ember
+plants shed tiny sparks. Harvest sound follows the specimen's mutation.
+
+Six world palettes cover navigation, panels, shop, dialogs, laboratory, showcase,
+buttons, scenery and CSS atmosphere. New worlds are enchanted forest, autumn
+and frost, unlocked locally by `FOREST`, `AUTUMN`, `FROST`. Existing Stars and
+promo-code transactions support them through migration 000013. The mobile menu
+uses two visible rows rather than hiding the new sections offscreen.
+
 Every species has its own growing silhouette, rather than a shared sprout. Roots
 have distinct foliage, vines spread close to the ground, corn grows upright,
 strawberries form a rosette, and dragonfruit develops cactus stems. Three visual

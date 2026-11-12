@@ -2,19 +2,23 @@ import { api } from '@/shared/api/client';
 
 export interface Crop { id: string; name: string; rarity: string; price: number; seed_price: number }
 export interface Plot { seed: string; planted_at: string; ready_at: string; care: string; water: number; soil: number; lamp: number }
-export interface Harvest { seed: string; quality: string; mutation: string; quantity: number; value: number }
+export interface Harvest { id: string; weight: number; seed: string; quality: string; mutation: string; quantity: number; value: number }
+export interface Recipe { sources: string[]; crop: Crop; base: string }
+export interface Breeding { source: string; result: string; started_at: string; ready_at: string }
+export interface Trophy { plant: Harvest; saved_at: string }
 export interface Discovery { seed: string; quality: string; mutation: string }
 export interface FarmState {
 	 theme: string; owned_themes: string[];
   coins: number; xp: number; seeds: Record<string, number>; plots: (Plot | null)[];
+	breeding: Breeding | null; hybrids: string[]; showcase: Trophy[];
   barn: Harvest[]; collection: Record<string, Discovery>; upgrades: Record<string, number>;
   pity: Record<string, number>; opened: number; sold: number;
 }
 export interface Pack { id: string; name: string; price: number; weights: number[]; pity_after: number; guarantee: string }
 export interface Upgrade { id: string; name: string; icon: string; description: string; benefit: string; level: number; max_level: number; cost: number }
 export interface FarmTheme { id: string; name: string; description: string; stars: number }
-export interface FarmResponse { state: FarmState; crops: Crop[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null }
-export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string }
+export interface FarmResponse { state: FarmState; crops: Crop[]; recipes: Recipe[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null }
+export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem' | 'breed' | 'claim_breed' | 'keep' | 'return_trophy'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string; item?: string }
 export interface Leaderboard { entries: { id: string; name: string; revenue: number; rank: number; mine: boolean }[]; ends_at: string }
 
 export const getFarm = () => api<FarmResponse>('/farm');

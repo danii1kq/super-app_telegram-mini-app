@@ -1,0 +1,110 @@
+/* World palettes cover every game surface, not only the garden scenery. */
+.farm-app{--world-header:#fffefa;--world-soft:#f0f4e7;--world-accent:#476b42;--world-accent-ink:#fff;--world-dim:#9aa58d;--world-coin:#997336;--world-coin-bg:#fff8e7;--world-coin-line:#eee1c4;--world-summon:#142a2b;position:relative;isolation:isolate}
+.farm-app.theme-tropical{--farm-bg:#edf7f0;--farm-surface:#fcfff6;--farm-ink:#244d45;--farm-muted:#76958b;--farm-line:#d7e7d9;--world-header:#f6fff4;--world-soft:#e3f2e6;--world-accent:#247c6b;--world-accent-ink:#f4ffed;--world-dim:#96b4a3;--world-coin:#9f7b3d;--world-coin-bg:#fff4d7;--world-coin-line:#e6d5a9;--world-summon:#123d3c}
+.farm-app.theme-lunar{--farm-bg:#0e172a;--farm-surface:#18243d;--farm-ink:#e1e7f2;--farm-muted:#9caac5;--farm-line:#2f3d58;--world-header:#101b30;--world-soft:#1e2d48;--world-accent:#beb1e8;--world-accent-ink:#211c37;--world-dim:#71819f;--world-coin:#dfc58c;--world-coin-bg:#292a3c;--world-coin-line:#454158;--world-summon:#10162e}
+.farm-app.theme-enchanted{--farm-bg:#191a29;--farm-surface:#26283e;--farm-ink:#e4e2f4;--farm-muted:#aba9c3;--farm-line:#3c3b55;--world-header:#1e2032;--world-soft:#2f304a;--world-accent:#8edbbb;--world-accent-ink:#18362e;--world-dim:#777790;--world-coin:#e5ca8c;--world-coin-bg:#34303e;--world-coin-line:#51475b;--world-summon:#142a2e}
+.farm-app.theme-autumn{--farm-bg:#f7eddd;--farm-surface:#fff9ef;--farm-ink:#674832;--farm-muted:#a38a70;--farm-line:#e6d4b9;--world-header:#fff5e6;--world-soft:#f2e3cc;--world-accent:#a9673f;--world-accent-ink:#fff8ed;--world-dim:#b5a083;--world-coin:#96712f;--world-coin-bg:#f7e9c2;--world-coin-line:#dec99c;--world-summon:#3a2928}
+.farm-app.theme-frost{--farm-bg:#eaf3f7;--farm-surface:#f9fdff;--farm-ink:#314f61;--farm-muted:#7896a6;--farm-line:#cbdde6;--world-header:#f4fbff;--world-soft:#e3eff5;--world-accent:#527f98;--world-accent-ink:#fff;--world-dim:#9db4c0;--world-coin:#8c804d;--world-coin-bg:#edf3ef;--world-coin-line:#d1dfdd;--world-summon:#153345}
+.farm-app .farm-topbar{position:relative;z-index:1;background:var(--world-header);border-color:var(--farm-line)}
+.farm-app .farm-layout{position:relative;z-index:1}
+.farm-app .farm-brand>span:not(.farm-brand-mark):not(.farm-beta){color:var(--world-accent)}
+.farm-app .farm-brand-mark,.farm-app .farm-beta{background:var(--world-soft);color:var(--world-accent);border-color:var(--farm-line)}
+.farm-app .farm-wallet{background:var(--world-coin-bg);border-color:var(--world-coin-line)}
+.farm-app .farm-coins,.farm-app .farm-coins>svg{color:var(--world-coin)}
+.farm-app .farm-avatar{background:var(--world-soft);border-color:var(--farm-line);color:var(--world-accent)}
+.farm-app .farm-tabs{gap:21px}
+.farm-app .farm-tabs>button{font-size:11px;gap:6px;color:var(--farm-muted)}
+.farm-app .farm-tabs>button.active{color:var(--world-accent)}
+.farm-app .farm-tabs>button.active:after{background:var(--world-accent)}
+.farm-app .farm-tabs small{background:var(--world-soft);color:var(--farm-muted)}
+.farm-app .farm-eyebrow{color:var(--farm-muted)}
+.farm-app .farm-eyebrow>span{background:var(--world-accent)}
+.farm-app .farm-intro h1 em{color:var(--world-accent)}
+.farm-app .farm-intro p,.farm-app .farm-section-heading p{color:var(--farm-muted)}
+.farm-app .farm-intro-orbit{border-color:var(--farm-line)}
+.farm-app .farm-art-spark,.farm-app .farm-weather,.farm-app .farm-weather svg{color:var(--world-accent)}
+.farm-app :is(.farm-garden-panel,.farm-barn,.farm-inventory,.farm-seed-card,.farm-discovery,.farm-upgrade-card,.farm-ranking,.farm-theme-card,.farm-recipe,.farm-trophy){background:var(--farm-surface);border-color:var(--farm-line);color:var(--farm-ink)}
+.farm-app :is(.farm-barn-empty strong,.farm-barn-empty p,.farm-garden-footer>span,.farm-text-button,.farm-gentle-note,.farm-gentle-note button,.farm-level>div>span:not(.farm-level-track),.farm-seed-card>small,.farm-owned,.farm-seed-buy,.farm-discovery p,.farm-discovered-mark,.farm-upgrade-card>p,.farm-upgrade-benefit,.farm-current-chances>span,.farm-current-chances p,.farm-ranking header p,.farm-ranking-empty p,.farm-ranking-row>strong small,.farm-ranking-about>p,.farm-ranking-about>small,.farm-ranking-about>div>span:first-child,.farm-theme-info>p,.farm-theme-info>small,.farm-theme-note){color:var(--farm-muted)}
+.farm-app :is(.farm-barn h2 svg,.farm-barn-empty>svg,.farm-ranking header>svg,.farm-ranking-empty>svg,.farm-ranking-big,.farm-level-badge,.farm-sound-toggle){color:var(--world-accent)}
+.farm-app .farm-sound-toggle:hover{background:var(--world-soft)}
+.farm-app :is(.farm-count,.farm-collection-summary,.farm-level-badge,.farm-seed-strip button,.farm-pack-teaser,.farm-upgrade-note,.farm-upgrade-art,.farm-ranking-about,.farm-ranking-avatar,.farm-ranking-labels,.farm-ranking-row.mine,.farm-promo,.farm-secondary,.farm-theme-card.active,.farm-recipe-sources>button,.farm-trophy-empty){background:var(--world-soft);border-color:var(--farm-line);color:var(--farm-muted)}
+.farm-app .farm-seed-card.selected,.farm-app .farm-seed-card:not(:disabled):hover{background:var(--world-soft);border-color:var(--world-accent)}
+.farm-app .farm-seed-strip span,.farm-app .farm-level strong,.farm-app .farm-pack-teaser h3,.farm-app .farm-current-chances strong,.farm-app .farm-ranking-about h2{color:var(--farm-ink)}
+.farm-app .farm-seed-strip small,.farm-app .farm-pack-teaser p,.farm-app .farm-promo p{color:var(--farm-muted)}
+.farm-app .farm-primary{background:var(--world-accent);border-color:var(--world-accent);color:var(--world-accent-ink)}
+.farm-app .farm-primary:not(:disabled):hover{background:var(--world-accent);filter:brightness(1.09);box-shadow:0 4px 15px #00000018}
+.farm-app .farm-primary .farm-coins,.farm-app .farm-primary .farm-coins svg{color:var(--world-accent-ink)}
+.farm-app .farm-level-track,.farm-app .farm-upgrade-levels>span,.farm-app .farm-collection-progress{background:var(--farm-line)}
+.farm-app .farm-level-track>span,.farm-app .farm-upgrade-levels>.filled,.farm-app .farm-collection-progress>span{background:var(--world-accent)}
+.farm-app .farm-teaser-cta{color:var(--world-accent)}
+.farm-app .farm-barn-total,.farm-app .farm-seed-buy,.farm-app .farm-current-chances,.farm-app .farm-ranking-row,.farm-app .farm-ranking-about>div{border-color:var(--farm-line)}
+.farm-app .farm-barn-total{color:var(--farm-muted)}
+.farm-app .farm-pack-card{background:var(--farm-surface);border-color:var(--farm-line)}
+.farm-app .farm-pack-copy p{color:var(--farm-muted)}
+.farm-app .farm-pack-card .farm-pack-orbit{background:var(--world-soft)}
+.farm-app .farm-pack-chance{color:var(--world-accent);background:var(--world-soft);border-color:var(--farm-line)}
+.farm-app .farm-rarity-label:not(.rare):not(.legendary):not(.hybrid){background:var(--world-soft);color:var(--farm-muted)}
+.farm-app .farm-rarity-label.rare{background:#9e7ed525;color:#a88bcb}
+.farm-app .farm-rarity-label.legendary{background:#d0a45322;color:#bf9c51}
+.farm-app .farm-rarity-label.hybrid{background:#af86cd22;color:#b18fd3}
+.farm-app .farm-filters button{background:var(--farm-surface);border-color:var(--farm-line);color:var(--farm-muted)}
+.farm-app .farm-filters button.active{background:var(--world-accent);color:var(--world-accent-ink);border-color:var(--world-accent)}
+.farm-app .farm-collection-summary strong{color:var(--farm-ink)}
+.farm-app .farm-collection-summary strong>span,.farm-app .farm-collection-summary p{color:var(--farm-muted)}
+.farm-app .farm-page-footer,.farm-app .farm-page-footer button{color:var(--world-dim)}
+.farm-app .farm-theme-info h2{color:var(--farm-ink)}
+.farm-app .farm-theme-card.active{box-shadow:0 0 0 2px var(--farm-line);border-color:var(--world-accent)}
+.farm-app .farm-promo input{background:var(--farm-surface);border-color:var(--farm-line);color:var(--farm-ink)}
+.farm-app .farm-dialog:not(.farm-opening-dialog){background:var(--farm-surface);color:var(--farm-ink);border-color:var(--farm-line)}
+.farm-app .farm-dialog .farm-icon-button{background:var(--world-soft);border-color:var(--farm-line);color:var(--farm-muted)}
+.farm-app .farm-dialog-subtitle,.farm-app .farm-dialog-footnote,.farm-app .farm-pity,.farm-app .farm-pity small,.farm-app .farm-help{color:var(--farm-muted)}
+.farm-app .farm-care-options>button,.farm-app .farm-pack-odds,.farm-app .farm-help-note{background:var(--world-soft);color:var(--farm-muted);border-color:var(--farm-line)}
+.farm-app .farm-care-options>button.selected{border-color:var(--world-accent);box-shadow:0 0 0 1px var(--world-accent)}
+.farm-app .farm-care-options strong,.farm-app .farm-pack-odds strong,.farm-app .farm-help h3{color:var(--world-accent)}
+.farm-app .farm-opening-dialog,.farm-app .farm-summon{background:var(--world-summon);border-color:var(--farm-line)}
+.farm-app .farm-opening-dialog .farm-opening-primary{background:var(--world-accent);border-color:var(--world-accent);color:var(--world-accent-ink)}
+.farm-app .farm-opening-dialog .farm-dialog-inner>header h2{color:#bac5d6}
+.farm-atmosphere{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;opacity:.45}
+.farm-atmosphere>i{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--world-accent);animation:farm-world-drift 24s linear infinite;opacity:.35}
+.theme-garden .farm-atmosphere{display:none}
+.theme-tropical .farm-atmosphere>i{width:8px;height:13px;clip-path:ellipse(35% 50%);opacity:.18}
+.theme-lunar .farm-atmosphere>i{width:3px;height:3px;box-shadow:0 0 9px #c9c1ff;animation-name:farm-world-twinkle}
+.theme-enchanted .farm-atmosphere>i{width:3px;height:3px;box-shadow:0 0 10px #8edbbb;animation-name:farm-world-firefly}
+.theme-autumn .farm-atmosphere>i{width:12px;height:15px;background:#b97647;clip-path:polygon(50% 0,63% 25%,100% 20%,82% 55%,95% 80%,57% 77%,50% 100%,44% 77%,5% 80%,18% 55%,0 20%,37% 25%);animation-name:farm-world-leaf}
+.theme-frost .farm-atmosphere>i{width:4px;height:4px;background:#fff;box-shadow:0 0 3px #b2d4e2;opacity:.7;animation-name:farm-world-snow}
+.theme-enchanted .farm-garden{background:#343b4e}
+.theme-enchanted .farm-tree{background:#526f69;box-shadow:inset -10px -5px #445d5d}
+.theme-enchanted .farm-tree:after{background:#73837b}
+.theme-enchanted .farm-garden:before{background-image:radial-gradient(#b2e6be 1px,transparent 1px);opacity:.28;background-size:33px 35px}
+.theme-enchanted .farm-plot-soil{background:#706883;border-color:#73827c;box-shadow:inset 0 4px #635c75,0 4px #273641}
+.theme-enchanted .farm-plot.empty .farm-plot-soil{background:#565d6d;border-color:#71817b;box-shadow:inset 0 3px #4a5161,0 4px #273641}
+.theme-enchanted .farm-fence{border-color:#7e9690;background:repeating-linear-gradient(90deg,transparent 0 19px,#7e9690 19px 26px,transparent 26px 47px)}
+.theme-enchanted .farm-garden-sign{background:#566762;color:#c0deca;border-color:#455951}
+.theme-autumn .farm-garden{background:#e4d4ab}
+.theme-autumn .farm-tree{background:#bb884f;box-shadow:inset -10px -5px #ab7447}
+.theme-autumn .tree-two{background:#d3a158;box-shadow:inset -10px -5px #bc8b4d}
+.theme-autumn .farm-plot-soil{background:#c1a17a;border-color:#c4b389;box-shadow:inset 0 4px #ad8d68,0 4px #d7c69b}
+.theme-autumn .farm-plot.empty .farm-plot-soil{background:#d0b998;border-color:#c7b78c}
+.theme-autumn .farm-fence{border-color:#b69b71;background:repeating-linear-gradient(90deg,transparent 0 19px,#b69b71 19px 26px,transparent 26px 47px)}
+.theme-autumn .farm-garden-sign{background:#fff0c9;border-color:#b9a074;color:#a27a4b}
+.theme-frost .farm-garden{background:#d6e8ed}
+.theme-frost .farm-garden:before{background-image:radial-gradient(#fff 1.5px,transparent 1.5px);opacity:.6;background-size:23px 29px}
+.theme-frost .farm-tree{background:#88acac;box-shadow:none;border-radius:0;clip-path:polygon(50% 0,85% 30%,70% 30%,98% 60%,80% 60%,100% 91%,0 91%,20% 60%,2% 60%,30% 30%,15% 30%)}
+.theme-frost .farm-tree:before{content:'';position:absolute;top:8px;left:14px;width:60%;height:9px;border-radius:50%;background:#e8f3f4;box-shadow:0 27px #e8f3f4,0 52px #e8f3f4;opacity:.65}
+.theme-frost .farm-plot-soil{background:#a4b9c0;border-color:#e4f0f1;box-shadow:inset 0 4px #92a8b3,0 4px #c7dce2}
+.theme-frost .farm-plot.empty .farm-plot-soil{background:#c0d3d8;border-color:#e4f0f1;box-shadow:inset 0 3px #afc6ce,0 4px #c7dce2}
+.theme-frost .farm-plot.empty .farm-plot-name{color:#6d8d9a}
+.theme-frost .farm-empty-caption{color:#8da7b0}
+.theme-frost .farm-fence{border-color:#a8c1c7;background:repeating-linear-gradient(90deg,transparent 0 19px,#a8c1c7 19px 26px,transparent 26px 47px)}
+.theme-frost .farm-garden-sign{background:#edf7f7;border-color:#b9d0d4;color:#7e9ca8}
+.farm-theme-preview.enchanted{background:#343b4e}.enchanted .farm-theme-island{background:#526d67;box-shadow:0 -3px #738c7d}.enchanted .farm-theme-sky{background:#b8e7c1;box-shadow:0 0 30px #9eddb13b}.enchanted .farm-theme-tree{background:#526f69;box-shadow:inset -10px -3px #445d5d}.enchanted .farm-theme-mini-plots .farm-crop-art{background:#766c87;border-color:#899c89}.enchanted .farm-theme-preview-label{color:#bad4c2}
+.farm-theme-preview.autumn{background:#e6d3a8}.autumn .farm-theme-island{background:#d3b984;box-shadow:0 -3px #f4dfad}.autumn .farm-theme-tree{background:#c48d4d;box-shadow:inset -10px -3px #af7746}.autumn .farm-theme-sky{background:#fff0c1;box-shadow:0 0 30px #ffda9244}.autumn .farm-theme-mini-plots .farm-crop-art{background:#b99c73;border-color:#c8b48a}.autumn .farm-theme-preview-label{color:#9b7b50}
+.farm-theme-preview.frost{background:#cde2e9}.frost .farm-theme-island{background:#e6f0f2;box-shadow:0 -3px #f8fdff}.frost .farm-theme-tree{background:#91b5b4;box-shadow:inset -10px -3px #80a5a6}.frost .farm-theme-sky{background:#f4fbfd;box-shadow:0 0 25px #ffffff66}.frost .farm-theme-mini-plots .farm-crop-art{background:#b4ccd2;border-color:#e2eef0}.frost .farm-theme-preview-label{color:#7697a4}
+@keyframes farm-world-drift{0%{transform:translate3d(-5px,20px,0);opacity:0}20%,75%{opacity:.3}100%{transform:translate3d(25px,-70px,0);opacity:0}}
+@keyframes farm-world-twinkle{0%,100%{opacity:.15}50%{opacity:.6}}
+@keyframes farm-world-firefly{0%,100%{transform:translate(0,0);opacity:.1}40%{transform:translate(20px,-18px);opacity:.65}75%{transform:translate(-15px,-33px);opacity:.3}}
+@keyframes farm-world-leaf{0%{transform:translate3d(-20px,-80px,0) rotate(0);opacity:0}20%{opacity:.3}100%{transform:translate3d(55px,160px,0) rotate(210deg);opacity:0}}
+@keyframes farm-world-snow{0%{transform:translateY(-70px);opacity:0}20%,75%{opacity:.6}100%{transform:translate(30px,130px);opacity:0}}
+@media(max-width:1000px){.farm-app .farm-tabs{gap:16px}.farm-app .farm-tabs>button{font-size:10px;gap:5px}}
+@media(max-width:760px){.farm-app .farm-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));height:auto;gap:0;overflow:visible;padding:7px 0}.farm-app .farm-tabs>button{height:43px;justify-content:center;font-size:9px;padding:0 3px;gap:5px}.farm-app .farm-tabs>button>svg{width:15px;height:15px}.farm-app .farm-tabs>button.active:after{height:2px;left:12%;right:12%}.farm-app .farm-intro{padding-top:25px}.farm-app .farm-tabs small{display:none}}
+@media(prefers-reduced-motion:reduce){.farm-app *,.farm-dialog *{animation:none!important;transition:none!important}.farm-atmosphere{opacity:.12}.farm-character-motes{opacity:.35}}

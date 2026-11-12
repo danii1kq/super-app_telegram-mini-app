@@ -1,0 +1,22 @@
+import type { FarmSound } from './sounds';
+
+export const hybridArt: Record<string,{ base: string; hue: number }> = {
+  aurora_root:{base:'carrot',hue:285}, jade_tomato:{base:'tomato',hue:75},
+  moonberry:{base:'strawberry',hue:250}, ghost_pumpkin:{base:'pumpkin',hue:35},
+  solar_corn:{base:'corn',hue:335}, crystal_bloom:{base:'moonflower',hue:35},
+};
+
+export function plantCharacter(seed: string,mutation = 'none'): { label: string; sound: FarmSound; kind: string } {
+  if(mutation==='crystal')return{label:'Звенит, как маленький колокольчик',sound:'rare',kind:'crystal'};
+  if(mutation==='gold')return{label:'Ловит каждый солнечный луч',sound:'sell',kind:'gold'};
+  if(mutation==='giant')return{label:'Еле помещается на грядке',sound:'hit1',kind:'giant'};
+  if(seed==='moonflower' || seed==='moonberry' || seed==='crystal_bloom')return{label:'Тихо светится изнутри',sound:'tap',kind:'moon'};
+  if(seed==='dragonfruit' || seed==='solar_corn')return{label:'Согревает своими искорками',sound:'harvest',kind:'ember'};
+  if(seed==='pumpkin' || seed==='ghost_pumpkin')return{label:'Любит покачиваться на боку',sound:'harvest',kind:'round'};
+  return{label:'Тянется навстречу твоей заботе',sound:'harvest',kind:'leaf'};
+}
+
+export function plantWeight(grams: number): string {
+  if(!grams)return'Размер не измерен';
+  return grams>=1000 ? `${(grams/1000).toLocaleString('ru-RU',{maximumFractionDigits:2})} кг` : `${grams} г`;
+}
