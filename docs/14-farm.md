@@ -133,6 +133,24 @@ instead of vanishing.
 Titles are cumulative milestones: Новичок at 1, Садовод at 3, Хозяин фермы at 5,
 Мастер урожая at 7, Легенда сада at 9.
 
+## Village orders
+
+The barn is not a single "sell everything" button. Each player gets three
+orders a day, one from each difficulty tier: an easy common crop, a mid order
+that may require choice quality, and a hard one that may demand a specific
+mutation. They pay above market, so holding a batch is a real decision.
+
+The board is generated deterministically from the player ID and the UTC date,
+so it is stable all day without being written until first requested, and two
+players see different boards. Fulfilment consumes exactly the requested units,
+keeping each batch's unit value consistent so a partial take does not inflate
+the rest, and an emptied batch leaves the barn. Each order pays once; the
+fulfilled list is stored in the save.
+
+Matching is server-side: species must match, a quality order accepts that grade
+or better, and a mutation order requires that exact mutation. The client mirrors
+the same rules only to show "0 из 2" in the barn, never to decide a payout.
+
 ## Growing plants
 
 Every species has its own growing silhouette, rather than a shared sprout. Roots

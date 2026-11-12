@@ -65,6 +65,7 @@ func (h *Handler) player(w http.ResponseWriter, r *http.Request, action *Action)
 			return err
 		}
 		normalizeState(&state)
+		refreshOrders(&state, user.ID, now)
 		if action == nil {
 			return nil
 		}
