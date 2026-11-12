@@ -88,8 +88,8 @@ func (s *Service) Create(ctx context.Context, authorID int64, text string, expir
 		if err := tx.QueryRow(ctx,
 			`INSERT INTO pulse_statuses (author_id, text_sealed, key_id, expires_at)
 			 VALUES ($1, ''::bytea, 'pending', $2)
-			 RETURNING id, created_at`, authorID, expiresAt,
-		).Scan(&status.ID, &status.CreatedAt); err != nil {
+			 RETURNING id, created_at, (SELECT public_name FROM users WHERE id = $1)`, authorID, expiresAt,
+		).Scan(&status.ID, &status.CreatedAt, &status.AuthorName); err != nil {
 			return err
 		}
 

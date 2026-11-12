@@ -53,7 +53,7 @@ func TestPulseAudienceResponsesAndExpiry(t *testing.T) {
 		}
 	}
 	status, err := s.Create(ctx, author, " Coffee? ", time.Now().Add(time.Hour), Audience{Users: []int64{author, recipient, recipient}})
-	if err != nil || status.Text != "Coffee?" {
+	if err != nil || status.Text != "Coffee?" || status.AuthorName != "person0" {
 		t.Fatalf("create: %#v %v", status, err)
 	}
 	var sealed []byte

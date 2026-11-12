@@ -16,6 +16,7 @@ export interface PulseStatus {
 
 export const pulseKeys = {
   feed: ['pulse', 'feed'] as const,
+  responses: (id: string) => ['pulse', 'responses', id] as const,
 };
 
 export function usePulseFeed(enabled = true) {
@@ -25,12 +26,23 @@ export function usePulseFeed(enabled = true) {
     select: (data) => data.statuses,
     // Statuses expire on their own: refresh while the screen is open.
     refetchInterval: 30_000,
+    refetchOnWindowFocus: 'always',
     enabled,
   });
 }
 
-/** Minutes left until the status expires, floored at zero. */
-export function minutesLeft(expiresAt: string): number {
-  const diff = new Date(expiresAt).getTime() - Date.now();
-  return Math.max(0, Math.floor(diff / 60_000));
+export interface PulseResponder {
+  id: string;
+  public_name: string;
+}
+
+export function usePulseResponders(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: pulseKeys.responses(id),
+    queryFn: ({ signal }) => api<{ people: PulseResponder[] }>(`/pulse/${id}/responses`, { signal }),
+    select: (data) => data.people,
+    enabled,
+    staleTime: 0,
+    refetchInterval: 10_000,
+  });
 }

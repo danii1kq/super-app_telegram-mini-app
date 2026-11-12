@@ -22,6 +22,7 @@ func (s *Service) Responders(ctx context.Context, authorID, statusID int64) ([]R
 	if !mine {
 		return nil, httpapi.NotFound("Статус не найден")
 	}
+	// shortcut: show the first 100 responders; add pagination for larger communities.
 	rows, err := s.pool.Query(ctx, `SELECT u.id, u.public_name
 	 FROM pulse_responses r JOIN users u ON u.id = r.user_id
 	 WHERE r.status_id = $2 AND u.status = 'active'
