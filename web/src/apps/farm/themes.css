@@ -7,7 +7,7 @@
 .farm-theme-tree { position:absolute;width:66px;height:90px;left:-15px;top:25px;border-radius:50%;background:#a0bf7e;box-shadow:inset -10px -3px #8caa6b; }
 .farm-theme-mini-plots { display:flex;gap:13px;position:absolute;bottom:32px;left:50%;transform:translateX(-50%); }
 .farm-theme-mini-plots .farm-crop-art { width:80px;height:80px;background:#c4ac83;border:3px solid #acbd8c;border-bottom-width:6px;border-radius:15px;padding:2px; }
-.farm-theme-preview-label { position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#74865c;font-size:7px;letter-spacing:2px;font-weight:600; }
+.farm-theme-preview-label { position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#74865c;font-size:10px;letter-spacing:2px;font-weight:600; }
 .farm-theme-preview.tropical { background:#bce4df; }
 .tropical .farm-theme-island { background:#e6d9ab;box-shadow:0 -6px #f2e8c5,0 -16px #a1d5cd; }
 .tropical .farm-theme-sky { background:#fff0b7;box-shadow:0 0 30px #fff0b799; }
@@ -21,17 +21,17 @@
 .lunar .farm-theme-preview-label { color:#bcc2de; }
 .farm-theme-info { padding:23px; }
 .farm-theme-info h2 { font-size:19px;font-weight:550;letter-spacing:-.5px;margin-top:10px; }
-.farm-theme-info > p { color:#8f9b81;font-size:11px;line-height:1.85;margin:10px 0 21px;min-height:42px; }
-.farm-theme-info > small { display:block;color:#a1aa94;font-size:9px;line-height:1.8;margin-top:12px; }
+.farm-theme-info > p { color:#8f9b81;font-size:13px;line-height:1.85;margin:10px 0 21px;min-height:42px; }
+.farm-theme-info > small { display:block;color:#a1aa94;font-size:11px;line-height:1.8;margin-top:12px; }
 .farm-promo { display:flex;align-items:center;justify-content:space-between;gap:28px;margin-top:24px;border:1px dashed #d8e0cb;border-radius:17px;padding:25px;background:#f2f5e8; }
 .farm-promo > div:first-child { position:relative;padding-left:49px; }
 .farm-promo-icon { position:absolute;left:0;top:5px;color:#9aad76; }
 .farm-promo h3 { font-size:15px;font-weight:550; }
-.farm-promo p { font-size:10px;color:#95a181;margin-top:5px; }
+.farm-promo p { font-size:12px;color:#95a181;margin-top:5px; }
 .farm-promo-field { display:flex;gap:8px; }
-.farm-promo input { min-width:0;width:180px;background:#fff;border:1px solid #dce4ce;border-radius:10px;padding:11px 13px;color:#425a3a;font-size:12px;text-transform:uppercase; }
+.farm-promo input { min-width:0;width:180px;background:#fff;border:1px solid #dce4ce;border-radius:10px;padding:11px 13px;color:#425a3a;font-size:13px;text-transform:uppercase; }
 .farm-promo .farm-primary svg { transform:rotate(180deg); }
-.farm-theme-note { display:flex;align-items:center;gap:8px;color:#a0aa91;font-size:10px;margin-top:19px !important; }
+.farm-theme-note { display:flex;align-items:center;gap:8px;color:#a0aa91;font-size:12px;margin-top:19px !important; }
 .theme-tropical { --farm-bg:#f0f8f2;--farm-ink:#294c43;--farm-muted:#7b9588;--farm-line:#dfebe0; }
 .theme-tropical .farm-topbar { background:#fafff8; }
 .theme-tropical .farm-garden { background:#cce8ce; }
@@ -67,4 +67,4 @@
 .theme-lunar .farm-growth-track > span { background:#a3a1ce; }
 .theme-lunar .farm-flower { background:#c4b6ee;box-shadow:7px 1px #c4b6ee,4px -5px #c4b6ee,4px 5px #c4b6ee;opacity:.5; }
 @media(max-width:900px) { .farm-themes-grid{gap:14px}.farm-theme-info{padding:19px}.farm-theme-info h2{font-size:17px}.farm-theme-mini-plots{gap:5px}.farm-theme-mini-plots .farm-crop-art{width:65px;height:65px}.farm-promo{flex-direction:column;align-items:stretch;gap:22px}.farm-promo-field input{flex:1;width:auto} }
-@media(max-width:650px) { .farm-themes-grid{grid-template-columns:1fr}.farm-theme-preview{height:195px}.farm-theme-mini-plots .farm-crop-art{width:95px;height:95px}.farm-theme-mini-plots{gap:20px;bottom:24px}.farm-theme-info{padding:23px}.farm-theme-info>p{min-height:0}.farm-promo{padding:22px 18px}.farm-promo>div:first-child{padding-left:38px}.farm-promo-field{gap:7px}.farm-promo input{font-size:12px;padding:11px}.farm-promo h3{font-size:14px}.farm-theme-note{font-size:9px;align-items:flex-start} }
+@media(max-width:650px) { .farm-themes-grid{grid-template-columns:1fr}.farm-theme-preview{height:195px}.farm-theme-mini-plots .farm-crop-art{width:95px;height:95px}.farm-theme-mini-plots{gap:20px;bottom:24px}.farm-theme-info{padding:23px}.farm-theme-info>p{min-height:0}.farm-promo{padding:22px 18px}.farm-promo>div:first-child{padding-left:38px}.farm-promo-field{gap:7px}.farm-promo input{font-size:13px;padding:11px}.farm-promo h3{font-size:14px}.farm-theme-note{font-size:11px;align-items:flex-start} }

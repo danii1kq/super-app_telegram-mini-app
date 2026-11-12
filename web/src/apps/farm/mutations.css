@@ -1,9 +1,9 @@
 .farm-mutation-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .farm-mutation-card{display:flex;align-items:center;gap:8px;background:var(--farm-surface);border:1px solid var(--farm-line);border-radius:16px;padding:18px 12px;min-width:0}
 .farm-mutation-card>.farm-crop-art{width:70px;height:80px;flex-shrink:0}
-.farm-mutation-card h3{font-size:12px;font-weight:550;letter-spacing:-.2px}
-.farm-mutation-card strong{display:block;font-size:11px;color:var(--world-accent);margin-top:6px}
-.farm-mutation-card small{display:flex;align-items:center;gap:4px;font-size:8px;color:var(--farm-muted);margin-top:10px;line-height:1.6}
+.farm-mutation-card h3{font-size:13px;font-weight:550;letter-spacing:-.2px}
+.farm-mutation-card strong{display:block;font-size:13px;color:var(--world-accent);margin-top:6px}
+.farm-mutation-card small{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--farm-muted);margin-top:10px;line-height:1.6}
 .farm-mutation-card.locked{border-style:dashed;background:var(--world-soft)}
 .farm-mutation-card.locked>.farm-crop-art{opacity:.55}
 .farm-character-dew .farm-crop-body{filter:drop-shadow(0 0 4px #a5f4ed66)}
@@ -23,4 +23,4 @@
 @keyframes farm-rainbow-breathe{0%,100%{opacity:.45;transform:scale(.97)}50%{opacity:1;transform:scale(1.04)}}
 @keyframes farm-rainbow-colors{0%{filter:hue-rotate(0deg) drop-shadow(0 0 5px #e3b4ed77)}100%{filter:hue-rotate(360deg) drop-shadow(0 0 5px #e3b4ed77)}}
 @media(max-width:1100px){.farm-mutation-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:650px){.farm-mutation-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.farm-mutation-card{padding:14px 8px;gap:5px}.farm-mutation-card>.farm-crop-art{width:55px;height:65px}.farm-mutation-card h3{font-size:11px}.farm-mutation-card small{font-size:7px}}
+@media(max-width:650px){.farm-mutation-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.farm-mutation-card{padding:14px 8px;gap:5px}.farm-mutation-card>.farm-crop-art{width:55px;height:65px}.farm-mutation-card h3{font-size:13px}.farm-mutation-card small{font-size:10px}}
