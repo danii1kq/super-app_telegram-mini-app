@@ -11,6 +11,7 @@ export interface FarmState {
 	 theme: string; owned_themes: string[];
   coins: number; xp: number; seeds: Record<string, number>; plots: (Plot | null)[];
 	breeding: Breeding | null; hybrids: string[]; showcase: Trophy[];
+	expedition: Expedition | null;
   barn: Harvest[]; collection: Record<string, Discovery>; upgrades: Record<string, number>;
   pity: Record<string, number>; opened: number; sold: number;
   claimed_levels: number[]; orders: OrderBoard;
@@ -25,8 +26,10 @@ export interface DailyReward { day: number; coins: number; seeds: Record<string,
 export interface DailyInfo { day: number; streak: number; best: number; claimable: boolean; rewards: DailyReward[] }
 export interface LevelReward { level: number; title: string; coins: number; seeds: Record<string, number>; plots: number }
 export interface LevelInfo { level: number; title: string; into: number; need: number; max: number; pending: number[]; rewards: LevelReward[] }
-export interface FarmResponse { state: FarmState; crops: Crop[]; recipes: Recipe[]; mutations: Mutation[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null; level: LevelInfo; daily: DailyInfo }
-export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem' | 'breed' | 'claim_breed' | 'keep' | 'return_trophy' | 'claim_level' | 'fulfill_order' | 'claim_daily'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string; item?: string; level?: number }
+export interface ExpeditionRoute { id: string; name: string; description: string; price: number; duration_seconds: number; seeds: Record<string,number>; xp: number }
+export interface Expedition { route: string; name: string; started_at: string; ready_at: string; seeds: Record<string,number>; xp: number }
+export interface FarmResponse { state: FarmState; crops: Crop[]; recipes: Recipe[]; mutations: Mutation[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null; level: LevelInfo; daily: DailyInfo; expeditions: ExpeditionRoute[] }
+export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem' | 'breed' | 'claim_breed' | 'keep' | 'return_trophy' | 'claim_level' | 'fulfill_order' | 'claim_daily' | 'start_expedition' | 'claim_expedition'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string; item?: string; level?: number }
 export interface Leaderboard { entries: { id: string; name: string; revenue: number; rank: number; mine: boolean }[]; ends_at: string }
 
 export const getFarm = () => api<FarmResponse>('/farm');

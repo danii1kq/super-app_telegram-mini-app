@@ -18,15 +18,19 @@ import { LevelPanel } from './LevelPanel';
 import { OrderBoardPanel } from './OrderBoard';
 import { DailyPanel } from './DailyPanel';
 import { Tutorial } from './Tutorial';
+import { Expeditions } from './Expeditions';
+import { GardenScenery } from './GardenScenery';
 import { mutationNames, plantCharacter, plantWeight } from './character';
 import './farm.css';
 import './collection.css';
 import './mutations.css';
 import './worlds.css';
+import './expeditions.css';
+import './garden-visuals.css';
 
 const tabs = [
   ['garden', 'garden', 'Моя ферма'], ['seeds', 'seed', 'Семена'], ['collection', 'book', 'Коллекция'],
-  ['lab', 'spark', 'Лаборатория'], ['showcase', 'trophy', 'Витрина'],
+  ['lab', 'spark', 'Лаборатория'], ['explore', 'explore', 'Экспедиции'], ['showcase', 'trophy', 'Витрина'],
   ['upgrades', 'upgrade', 'Улучшения'], ['themes', 'spark', 'Темы'], ['top', 'trophy', 'Топ фермеров'],
 ] as const;
 type Tab = typeof tabs[number][0];
@@ -62,6 +66,7 @@ export default function FarmRoutes() {
   const [seed, setSeed] = useState('carrot');
   const [care, setCare] = useState('water');
   const [filter, setFilter] = useState('none');
+  const [seedFilter, setSeedFilter] = useState('all');
   const [tick, setTick] = useState(Date.now());
   const markSeen = () => { try { window.localStorage.setItem('srufarm-tutorial', '1'); } catch { /* private mode */ } };
   const queryKey = ['farm', session.me?.id];
@@ -78,9 +83,9 @@ export default function FarmRoutes() {
           const collected = data.state.barn.slice(farm.data?.state.barn.length ?? 0);
           const special = collected.find(item => item.mutation === 'rainbow') ?? collected.find(item => item.mutation === 'ancient' || item.mutation === 'crystal') ?? collected.find(item => item.mutation !== 'none') ?? collected[0];
           sound.play(special ? plantCharacter(special.seed,special.mutation).sound : 'harvest');
-        } else sound.play(action.kind === 'theme' ? 'tap' : action.kind === 'redeem' || action.kind === 'breed' ? 'upgrade' : action.kind === 'keep' || action.kind === 'claim_breed' || action.kind === 'claim_level' || action.kind === 'fulfill_order' || action.kind === 'claim_daily' ? 'rare' : action.kind === 'return_trophy' ? 'plant' : action.kind);
+        } else sound.play(action.kind === 'theme' ? 'tap' : action.kind === 'redeem' || action.kind === 'breed' ? 'upgrade' : action.kind === 'keep' || action.kind === 'claim_breed' || action.kind === 'claim_level' || action.kind === 'fulfill_order' || action.kind === 'claim_daily' || action.kind === 'claim_expedition' ? 'rare' : action.kind === 'return_trophy' || action.kind === 'start_expedition' ? 'plant' : action.kind);
       }
-      if (action.kind === 'sell') void cache.invalidateQueries({ queryKey: boardKey });
+      if (action.kind === 'sell' || action.kind === 'fulfill_order') void cache.invalidateQueries({ queryKey: boardKey });
       if (action.kind === 'plant') setModal(null);
       if (action.kind === 'pack') setModal({ kind: 'drops', drops: data.drops ?? [], pack: action.pack ?? 'garden' });
       else feedback(data.message);
@@ -105,7 +110,7 @@ export default function FarmRoutes() {
     </div>;
   }
 
-  const { state, crops, recipes = [], mutations = [], packs, upgrades = [], themes = [], stars_available = false, server_time, level, daily } = farm.data;
+  const { state, crops, recipes = [], mutations = [], packs, upgrades = [], themes = [], stars_available = false, server_time, level, daily, expeditions = [] } = farm.data;
   const allCrops = [...crops, ...recipes.map(recipe => recipe.crop)];
   const collectionSize = allCrops.length * Object.keys(mutationNames).length;
   const showcaseCapacity = 6 + (state.upgrades.gallery ?? 0) * 2;
@@ -124,13 +129,14 @@ export default function FarmRoutes() {
     seeds: ['Всё начинается', 'с одного семечка.', 'Выбирай знакомые сорта или доверься удаче.'],
     collection: ['Твои маленькие', 'открытия.', 'Каждое новое растение остаётся здесь. Даже после продажи.'],
     upgrades: ['Немного заботы.', 'Больше чудес.', 'Улучшай ферму и повышай шансы на особенный урожай.'],
+    explore: ['За калиткой', 'целый мир.', 'Отправляйся за новыми семенами. Три часа в пути, и новые находки уже у тебя.'],
     lab: ['У повторов', 'новое будущее.', 'Скрещивай одинаковые семена и открывай необычные гибриды.'],
     showcase: ['Сохрани то,', 'что удивило.', 'Твои любимые экземпляры. Маленький музей большой удачи.'],
     themes: ['Другая атмосфера.', 'Твоя любимая ферма.', 'Шесть миров, от тропического острова до полярного сада. Меняй всю атмосферу фермы.'],
     top: ['Растём вместе.', 'Соревнуемся честно.', 'Собирай урожай, продавай и поднимайся в недельном топе.'],
   }[tab];
 
-  const seedGrid = (selectable: boolean) => <div className={`farm-seed-grid ${selectable ? 'selectable' : ''}`}>{(selectable ? allCrops.filter(crop => (state.seeds[crop.id] ?? 0) > 0) : crops).map((crop) => <button key={crop.id} disabled={selectable ? !state.seeds[crop.id] : mutation.isPending || state.coins < crop.seed_price} className={`farm-seed-card ${selectable && seed === crop.id ? 'selected' : ''}`} onClick={() => selectable ? setSeed(crop.id) : act({ kind: 'buy', seed: crop.id })}>
+  const seedGrid = (selectable: boolean) => <div className={`farm-seed-grid ${selectable ? 'selectable' : ''}`}>{(selectable ? allCrops.filter(crop => (state.seeds[crop.id] ?? 0) > 0) : crops.filter(crop => seedFilter === 'all' || crop.rarity === seedFilter)).map((crop) => <button key={crop.id} disabled={selectable ? !state.seeds[crop.id] : mutation.isPending || state.coins < crop.seed_price} className={`farm-seed-card ${selectable && seed === crop.id ? 'selected' : ''}`} onClick={() => selectable ? setSeed(crop.id) : act({ kind: 'buy', seed: crop.id })}>
     <span className={`farm-rarity-dot ${crop.rarity}`}/><span className="farm-owned">{state.seeds[crop.id] ?? 0} шт.</span><CropArt seed={crop.id}/><strong>{crop.name}</strong><small>{selectable ? `Продажа от ${crop.price}` : rarityNames[crop.rarity]}</small>
     {!selectable && <span className="farm-seed-buy"><span>Купить семя</span><Coins value={crop.seed_price}/></span>}
   </button>)}</div>;
@@ -156,7 +162,7 @@ export default function FarmRoutes() {
           <section className="farm-garden-panel">
             <header className="farm-section-heading"><div><h2>Мой участок <span className="farm-count">{occupied}/{state.plots.length}</span></h2><p>{ready ? `${ready} грядки готовы к сбору` : occupied ? 'Тихо растёт что-то прекрасное' : 'Свободные грядки ждут семена'}</p></div><span className="farm-weather"><Glyph name={activeTheme === 'lunar' ? 'spark' : 'sun'}/>{weather}</span></header>
             <div className="farm-garden">
-              <div className="farm-garden-scenery" aria-hidden="true"><span className="farm-tree tree-one"/><span className="farm-tree tree-two"/><span className="farm-tree tree-three"/><span className="farm-fence"/><span className="farm-garden-sign">мой сад</span><span className="farm-flower flower-one"/><span className="farm-flower flower-two"/></div>
+              <GardenScenery/>
               <div className="farm-plots">{state.plots.map((plot, slot) => {
                 const mature = plot && Date.parse(plot.ready_at) <= now;
                 const remaining = plot ? Date.parse(plot.ready_at) - now : 0;
@@ -184,14 +190,16 @@ export default function FarmRoutes() {
         </aside></div>}
 
         {tab === 'seeds' && <>
-          <section className="farm-packs-grid">{packs.map((pack) => <article key={pack.id} className={`farm-pack-card ${pack.id}`}><div className="farm-pack-visual"><SeedPacket variant={pack.id}/><span className="farm-pack-orbit"/></div><div className="farm-pack-copy"><span className="farm-eyebrow">3 СЕМЕНИ ВНУТРИ</span><h2>{pack.name}</h2><span className="farm-pack-chance">{pack.weights.reduce((sum,weight,i) => sum + (crops[i]?.rarity === 'legendary' ? weight : 0),0)}% легендарного семени</span><p>{pack.id === 'lunar' ? 'Только необычные и выше. Легендарное не позже шестого семени.' : pack.id === 'garden' ? 'Знакомые любимцы и маленький шанс на большое чудо.' : 'Больше необычных сортов. Для тех, кто любит открывать новое.'}</p><button className="farm-primary" onClick={() => setModal({ kind: 'pack', id: pack.id })}>Посмотреть набор<Coins value={pack.price}/></button></div></article>)}</section>
-          <header className="farm-section-heading spaced"><div><h2>Знаешь, что хочешь вырастить?</h2><p>Исходные сорта продаются здесь. Гибриды создаются в лаборатории.</p></div></header>{seedGrid(false)}
+          <div className="farm-content-banner"><Glyph name="explore" size={25}/><div><strong>За новыми сортами можно отправиться в путь</strong><p>Лаванда, манго, лотос и карамбола ждут в экспедициях. Награды известны заранее.</p></div><button className="farm-secondary" onClick={() => setTab('explore')}>Выбрать маршрут<Glyph name="forward" size={14}/></button></div>
+          <section className="farm-packs-grid">{packs.map((pack) => <article key={pack.id} className={`farm-pack-card ${pack.id}`}><div className="farm-pack-visual"><SeedPacket variant={pack.id}/><span className="farm-pack-orbit"/></div><div className="farm-pack-copy"><span className="farm-eyebrow">3 СЕМЕНИ ВНУТРИ</span><h2>{pack.name}</h2><span className="farm-pack-chance">{pack.weights.reduce((sum,weight,i) => sum + (crops[i]?.rarity === 'legendary' ? weight : 0),0)}% легендарного семени</span><p>{pack.id === 'orchard' ? 'Шесть новых сортов: от сладкого перца до карамболы. 25% легендарного семени до прокачки селекции.' : pack.id === 'lunar' ? 'Только необычные и выше. Легендарное не позже шестого семени.' : pack.id === 'garden' ? 'Знакомые любимцы и маленький шанс на большое чудо.' : 'Больше необычных сортов. Для тех, кто любит открывать новое.'}</p><button className="farm-primary" onClick={() => setModal({ kind: 'pack', id: pack.id })}>Посмотреть набор<Coins value={pack.price}/></button></div></article>)}</section>
+          <header className="farm-section-heading spaced"><div><h2>Знаешь, что хочешь вырастить?</h2><p>Исходные сорта продаются здесь. Гибриды создаются в лаборатории.</p></div></header><div className="farm-filters" aria-label="Редкость семян">{([['all','Все сорта'],['common','Обычные'],['uncommon','Необычные'],['rare','Редкие'],['legendary','Легендарные']] as const).map(([id,label])=><button key={id} aria-pressed={seedFilter===id} className={seedFilter===id?'active':''} onClick={()=>setSeedFilter(id)}>{label}</button>)}</div>{seedGrid(false)}
         </>}
 
         {tab === 'collection' && <><div className="farm-collection-summary"><Glyph name="book" size={28}/><div><strong>{Object.keys(state.collection).length}<span> / {collectionSize} открытий</span></strong><p>{allCrops.length} видов. Восемь обликов. Целая коллекция историй.</p></div><div className="farm-collection-progress"><span style={{ width: `${Object.keys(state.collection).length / (collectionSize) * 100}%` }}/></div></div><div className="farm-filters" aria-label="Мутация">{Object.entries(mutationNames).map(([id,name]) => <button key={id} aria-pressed={filter === id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{name}</button>)}</div><div className="farm-collection-grid">{allCrops.map((crop) => { const discovered = state.collection[`${crop.id}:${filter}`]; return <article key={crop.id} className={`farm-discovery ${discovered ? '' : 'locked'}`}><span className={`farm-rarity-label ${crop.rarity}`}>{rarityNames[crop.rarity]}</span><CropArt seed={crop.id} mutation={filter}/><h3>{crop.name}</h3><p>{discovered ? `${mutationNames[filter]} · ${qualityNames[discovered.quality]}` : 'Ещё не найдено'}</p><span className="farm-discovered-mark">{discovered ? <><Glyph name="check" size={14}/>В коллекции</> : <><Glyph name="seed" size={14}/>Вырасти, чтобы открыть</>}</span></article>; })}</div></>}
 
         {tab === 'upgrades' && <><div className="farm-upgrade-note"><Glyph name="spark"/><p>Улучшения остаются навсегда. Бонусы растений фиксируются при посадке. {upgrades.length} направлений развития: от новых грядок до редких мутаций и возврата семян.</p></div><div className="farm-upgrades-grid">{upgrades.map((upgrade) => { const current = upgrade.level; const cost = upgrade.cost; return <article key={upgrade.id} className={`farm-upgrade-card ${upgrade.id}`}><span className="farm-upgrade-art"><Glyph name={upgrade.icon} size={50}/></span><span className="farm-eyebrow">УРОВЕНЬ {current} / {upgrade.max_level}</span><h2>{upgrade.name}</h2><p>{upgrade.description}</p><div className="farm-upgrade-levels">{Array.from({ length: upgrade.max_level }, (_,i) => i + 1).map((n) => <span key={n} className={n <= current ? 'filled' : ''}/>)}</div><div className="farm-upgrade-benefit">{upgrade.benefit}</div><button className="farm-primary full" disabled={current >= upgrade.max_level || state.coins < cost || mutation.isPending} onClick={() => act({ kind: 'upgrade', upgrade: upgrade.id })}>{current === upgrade.max_level ? 'Максимальный уровень' : <>Улучшить<Coins value={cost}/></>}</button></article>; })}</div><div className="farm-current-chances"><h3>Твои базовые шансы сейчас</h3><span>Идеальное качество <strong>{5 + (state.upgrades.water ?? 0) * 2}%</strong></span><span>Отборное качество <strong>{20 + (state.upgrades.water ?? 0) * 3}%</strong></span><span>Любая мутация <strong>{3 + (state.upgrades.lamp ?? 0) * 2 + (state.upgrades.genetics ?? 0) * 2}%</strong></span><span>Возврат семени <strong>{(state.upgrades.nursery ?? 0) * 10}%</strong></span><p>Шансы действуют на новые посадки. Уход добавляет бонус качества или мутации. Питомник возвращает максимум одно семя с грядки.</p></div><MutationGuide mutations={mutations}/></>}
 
+        {tab === 'explore' && <Expeditions routes={expeditions} journey={state.expedition} crops={allCrops} coins={state.coins} now={now} busy={mutation.isPending} onAction={act}/>}
         {tab === 'lab' && <Laboratory state={state} recipes={recipes} crops={crops} now={now} busy={mutation.isPending} onAction={act}/> }
         {tab === 'showcase' && <Showcase capacity={showcaseCapacity} trophies={state.showcase ?? []} crops={allCrops} busy={mutation.isPending} onAction={act} onGarden={() => setTab('garden')}/> }
 
@@ -202,7 +210,7 @@ export default function FarmRoutes() {
       <footer className="farm-page-footer"><span><Glyph name="sprout" size={15}/> SruFarm · Растём в своём ритме</span><button onClick={() => setModal({ kind: 'help' })}>Правила игры <Glyph name="plus" size={14}/></button></footer>
     </div>
 
-    {modal && <Dialog immersive={modal.kind === 'drops'} title={modal.kind === 'plant' ? `Посадка · грядка ${modal.slot + 1}` : modal.kind === 'drops' ? 'Открытие набора' : modal.kind === 'pack' ? packs.find((pack) => pack.id === modal.id)!.name : 'Маленький путеводитель'} onClose={() => setModal(null)}>
+    {modal && <Dialog immersive={modal.kind === 'drops'} title={modal.kind === 'plant' ? `Посадка · грядка ${modal.slot + 1}` : modal.kind === 'drops' ? 'Открытие набора' : modal.kind === 'pack' ? packs.find((pack) => pack.id === modal.id)!.name : 'Маленький путеводитель'} onClose={() => { if (modal.kind === 'help') markSeen(); setModal(null); }}>
       {mutation.isError && <p className="farm-inline-error" role="alert">{mutation.error.message}</p>}
       {modal.kind === 'plant' && <><p className="farm-dialog-subtitle">Выбери семя. Через 3 часа здесь вырастет что-то хорошее.</p>{seedGrid(true)}{totalSeeds === 0 ? <button className="farm-primary full" onClick={() => { setModal(null); setTab('seeds'); }}>За семенами в магазин</button> : <><h3 className="farm-care-title">Немного заботы</h3><div className="farm-care-options">{careOptions.map((option) => <button key={option.id} aria-pressed={care === option.id} className={care === option.id ? 'selected' : ''} onClick={() => setCare(option.id)}><Glyph name={option.icon} size={24}/><strong>{option.name}</strong><small>{option.cost ? `${option.cost} монет` : 'Бесплатно'}</small><span>{option.description}</span></button>)}</div><button className="farm-primary full large" disabled={mutation.isPending || !state.seeds[seed] || state.coins < (careOptions.find((option) => option.id === care)?.cost ?? 0)} onClick={() => act({ kind: 'plant', slot: modal.slot, seed, care })}><Glyph name="sprout"/>{mutation.isPending ? 'Сажаем…' : 'Посадить семя'}<span>03:00</span></button><p className="farm-dialog-footnote">Уход действует весь цикл. Возвращаться для полива не нужно.</p></>}</>}
       {modal.kind === 'pack' && (() => { const pack = packs.find((item) => item.id === modal.id)!; return <><div className="farm-pack-modal-art"><SeedPacket variant={pack.id}/></div><p className="farm-dialog-subtitle center">Три случайных семени. У каждого есть шанс стать началом чего-то особенного.</p><div className="farm-pack-odds">{crops.flatMap((crop,i) => !pack.weights[i] ? [] : [<span key={crop.id}><span className={`farm-rarity-dot ${crop.rarity}`}/>{crop.name}<strong>{pack.weights[i]}%</strong></span>])}</div><div className="farm-pity"><Glyph name="spark" size={18}/><p>До {pack.guarantee === 'legendary' ? 'легендарного' : 'редкого'} семени: <strong>{pack.pity_after - (state.pity[pack.id] ?? 0)} семян</strong><small>Каждое {pack.pity_after}-е семя без {pack.guarantee === 'legendary' ? 'легендарной' : 'редкой'} находки гарантированно будет {pack.guarantee === 'legendary' ? 'легендарным' : 'редким или лучше'}. Счётчик отдельный для каждого набора.</small></p></div><button className="farm-primary full large" disabled={mutation.isPending || state.coins < pack.price} onClick={() => act({ kind: 'pack', pack: pack.id })}>{mutation.isPending ? 'Открываем…' : state.coins < pack.price ? 'Не хватает монет' : 'Открыть набор'}<Coins value={pack.price}/></button></>; })()}

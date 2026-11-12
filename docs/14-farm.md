@@ -13,7 +13,7 @@ Visual variance 5, motion 3, density 5, asset dependence 5, shell fidelity 10.
 
 - Four initial plots, expandable to eight. Each crop takes exactly three real hours. Mature crops never rot.
 - A new account receives 250 coins, seven seeds and two mature welcome plants.
-- Twelve base species and six craftable hybrids, three qualities, eight mutation states (including ordinary).
+- Eighteen base species and nine craftable hybrids, three qualities, eight mutation states (including ordinary).
 - Care is selected at planting: water (free, better quality), fertilizer (12 coins,
   one extra plant), or lamp (20 coins, five extra percentage points of mutation).
 - Water, soil and lamp upgrades have five levels. Cost: `100 * (level + 1)^2`.
@@ -27,8 +27,8 @@ Visual variance 5, motion 3, density 5, asset dependence 5, shell fidelity 10.
   Gallery adds two trophy slots per level (three levels, base 300), up to twelve.
   Upgrade cost is `base * (level + 1)^2`; server metadata supplies actual levels,
   caps and prices. Personalized weights are returned by the same logic used to roll.
-- Plants sell as a batch. Discoveries persist after sale. Collection is 18 species
-  times 8 mutation states, 144 entries. Quality affects value, not album completion.
+- Plants sell as a batch. Discoveries persist after sale. Collection is 27 species
+  times 8 mutation states, 216 entries. Quality affects value, not album completion.
 - Packs each contain three seeds. Per-seed probabilities are returned by the API.
   Garden/exotic guarantee at least rare after ten seeds without a qualifying drop.
   The lunar pack costs 900 coins, has no common seeds, a base 30% legendary chance
@@ -77,7 +77,7 @@ a new common seed cannot accidentally reset the rare-seed guarantee.
 ## Breeding, trophies and worlds
 
 The laboratory consumes two copies of a base seed and creates one hybrid seed
-after three server-timed hours. Six deterministic recipes cover all twelve base
+after three server-timed hours. Nine deterministic recipes cover all eighteen base
 species. Hybrids are craft-only, not sold for zero coins or added to pack odds.
 Each has its own hue and markings; progress survives restart and can be claimed
 only once. There is one laboratory job at a time.
@@ -117,7 +117,7 @@ the plot once and reports any recovered seeds in the success message.
 
 ## Levels and rewards
 
-XP is earned only by harvesting: ten points per plot. The curve is
+Harvest gives ten XP per plot. Orders, daily rewards and expeditions also grant XP. The curve is
 `100 + (level-1)*40` per level, capped at level 10; XP keeps accumulating past
 the cap so the bar never freezes mid-track. The server owns the curve and
 returns `level`, `title`, `into`, `need`, `max`, `pending` and the full reward
@@ -160,7 +160,7 @@ stages are derived from the saved planting and maturity times: shoots before 35%
 fuller foliage at 35%, buds or unripe fruit at 70%. Harvest-ready art stays separate.
 Plot index adds a small stable lean, so neighboring plants are not exact clones.
 No random rewards or mutations are disclosed by growth illustrations.
-Production build and manual comparison covered all 36 species/stage combinations.
+Production build and manual comparison covered all 54 base species/stage combinations.
 
 ## Farm themes and payments
 
@@ -219,3 +219,61 @@ theme palettes overrode the disabled colour until it was pinned per world.
 Forward-pointing actions (sell, open pack, activate code, tutorial next) use a
 right chevron. The existing arrow glyph is a left chevron and means back, so
 reusing it made primary actions read as navigation.
+
+## Content expansion and illustrated village
+
+Design Read: redesign-preserve of a Russian mobile farm game for short visits.
+Keep the six world palettes, server-owned saves, navigation journeys, three-hour
+rhythm and accessibility semantics. Evolve the illustrated garden with a village
+scene, richer plant volume and legible growth states. Dials: visual variance 6,
+motion 4, density 5, asset dependence 6, brand fidelity 10. All art is native SVG
+and CSS; no runtime image service, new dependency or external asset request.
+
+Six base crops extend the original catalogue without reordering its first twelve
+entries: sweet pepper, pear, lavender, lotus, mango and starfruit. Three new
+recipes create flame pepper, honey pear and astral lotus. There are eighteen
+base crops, nine hybrids and 216 possible collection entries. The store offers
+rarity filters. Each new species has a mature drawing and three growth stages.
+Every plant instance has unique SVG paint IDs so gradients cannot collide.
+
+The orchard pack (Сад чудес) costs 1100 coins, contains three seeds and has a
+25% base legendary chance. It covers all six new crops and selected older rare
+plants, with a rare-or-better guarantee after ten seeds. Existing pack weights
+retain their old probabilities with zero weights appended for new species.
+Selection only adds legendary weight to species already offered by that pack.
+
+The village illustration adds a cottage, greenhouse, pond, path, fence, shrubs
+and a wooden sign. Each world has its own scene palette, with moonlight in lunar
+and enchanted worlds. Plots have deeper soil, labels and maturity highlights.
+Ambient ripples, clouds and feedback respect reduced-motion preferences.
+
+## Expeditions
+
+One gardener can travel while every planted crop continues growing. All routes
+last exactly three hours and display a guaranteed reward before purchase:
+
+| Route | Coins | Seeds | XP |
+| --- | ---: | --- | ---: |
+| Цветущий луг | 90 | Pepper x2, lavender x1 | 10 |
+| Забытый сад | 360 | Pear x2, mango x1 | 20 |
+| Звёздные острова | 950 | Lotus x1, starfruit x2 | 35 |
+
+Route, rewards, XP and server start/return times are snapshotted in the player
+JSON save when starting. Changing a route's catalogue cannot change an existing
+promise. An overdue trip does not expire. Claiming atomically grants its seeds
+and XP, clears the job and cannot pay twice. No new SQL migration is required.
+Tests cover insufficient funds, unknown routes, early and repeated claims,
+independent snapshots and eight simultaneous HTTP claims against an isolated
+PostgreSQL schema. Exactly one claim succeeds; live player clocks are untouched.
+
+## Order and tutorial corrections
+
+Orders consume the cheapest matching specimens first. Their quote is the larger
+of the listed base reward and 125% of the selected specimens' actual market
+value, including the market upgrade. Quotes appear in the response without
+changing the saved base reward. Fulfilment recalculates under the player lock,
+credits coins, lifetime sales and weekly revenue in the same transaction.
+The leaderboard refreshes after fulfilment. Tests cover preserving gold plants,
+paying the quoted premium and recording HTTP order revenue in the shared top.
+Closing the tutorial by its close button, Escape or backdrop records the same
+local preference as its skip and finish buttons.

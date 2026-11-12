@@ -25,7 +25,7 @@ function available(barn: Harvest[], order: Order): number {
 export function OrderBoardPanel({board, barn, crops, busy, onAction}:{board:OrderBoard; barn:Harvest[]; crops:Crop[]; busy:boolean; onAction:(order:string)=>void}) {
   const done = new Set(board.fulfilled ?? []);
   return <section className="farm-orders">
-    <header className="farm-section-heading"><div><h2><Glyph name="box" size={16}/>Заказы деревни</h2><p>Особые просьбы на сегодня. Платят больше рынка.</p></div><span className="farm-count">{done.size}/{board.orders.length}</span></header>
+    <header className="farm-section-heading"><div><h2><Glyph name="box" size={16}/>Заказы деревни</h2><p>Сначала идут самые дешёвые подходящие растения. Цена не ниже рынка +25%.</p></div><span className="farm-count">{done.size}/{board.orders.length}</span></header>
     <div className="farm-order-list">{board.orders.map(order => {
       const crop = crops.find(item => item.id === order.seed);
       const have = available(barn, order);
