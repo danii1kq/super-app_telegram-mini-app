@@ -36,6 +36,8 @@ var Crops = []Species{
 }
 
 type Plot struct {
+	Genetics  int       `json:"genetics"`
+	Nursery   int       `json:"nursery"`
 	Seed      string    `json:"seed"`
 	PlantedAt time.Time `json:"planted_at"`
 	ReadyAt   time.Time `json:"ready_at"`
@@ -125,6 +127,9 @@ var Upgrades = []Upgrade{
 	{ID: "land", Name: "Новые горизонты", Icon: "garden", Description: "Больше места для твоих экспериментов.", Benefit: "+1 грядка за уровень, до 8 грядок", MaxLevel: 4, BaseCost: 300},
 	{ID: "market", Name: "Фермерская лавка", Icon: "coin", Description: "Продавай свой урожай дороже.", Benefit: "+5% к цене продажи за уровень", MaxLevel: 5, BaseCost: 200},
 	{ID: "selection", Name: "Секреты селекции", Icon: "spark", Description: "Повышает шансы легендарных семян во всех наборах.", Benefit: "+1 п.п. к легендарному шансу за уровень", MaxLevel: 5, BaseCost: 250},
+	{ID: "genetics", Name: "Генетическая станция", Icon: "spark", Description: "Открывает грозовые, древние и радужные растения.", Benefit: "+2% мутации за уровень; новые виды на уровнях 1, 2, 3", MaxLevel: 5, BaseCost: 350},
+	{ID: "nursery", Name: "Заботливый питомник", Icon: "sprout", Description: "Часть растений возвращает семя после сбора.", Benefit: "+10% возврата одного семени за уровень", MaxLevel: 5, BaseCost: 180},
+	{ID: "gallery", Name: "Трофейный павильон", Icon: "trophy", Description: "Больше места для самых необычных находок.", Benefit: "+2 места на витрине за уровень, до 12 мест", MaxLevel: 3, BaseCost: 300},
 }
 
 func upgradesFor(state State) []Upgrade {
@@ -226,7 +231,7 @@ func random(n int) (int, error) {
 	return int(value.Int64()), nil
 }
 
-func outcome(plot Plot, qualityRoll, mutationRoll int) Harvest {
+func outcome(plot Plot, qualityRoll, mutationRoll, varietyRoll int) Harvest {
 	crop, _ := species(plot.Seed)
 	quality, multiplier := "normal", 1
 	ideal := 5 + plot.Water*2
@@ -241,18 +246,8 @@ func outcome(plot Plot, qualityRoll, mutationRoll int) Harvest {
 		quality, multiplier = "choice", 2
 	}
 	mutation, bonus := "none", 1
-	chance := 3 + plot.Lamp*2
-	if plot.Care == "lamp" {
-		chance += 5
-	}
-	if mutationRoll < chance {
-		mutation, bonus = "giant", 2
-		if mutationRoll < 1+plot.Lamp {
-			mutation, bonus = "gold", 5
-		}
-		if mutationRoll == 0 {
-			mutation, bonus = "crystal", 8
-		}
+	if mutationRoll < mutationChance(plot) {
+		mutation, bonus = chooseMutation(plot.Genetics, varietyRoll)
 	}
 	quantity := 1 + plot.Soil
 	if plot.Care == "soil" {
@@ -308,10 +303,11 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 			return bad("Недостаточно монет на уход")
 		}
 		state.Seeds[action.Seed]--
-		state.Plots[action.Slot] = &Plot{action.Seed, now, now.Add(GrowTime), action.Care, state.Upgrades["water"], state.Upgrades["soil"], state.Upgrades["lamp"]}
+		state.Plots[action.Slot] = &Plot{Seed: action.Seed, PlantedAt: now, ReadyAt: now.Add(GrowTime), Care: action.Care, Water: state.Upgrades["water"], Soil: state.Upgrades["soil"], Lamp: state.Upgrades["lamp"], Genetics: state.Upgrades["genetics"], Nursery: state.Upgrades["nursery"]}
 		return "Семя посажено. Урожай через 3 часа", nil, 0, nil
 	case "harvest":
 		count := 0
+		recovered := 0
 		for i, plot := range state.Plots {
 			if plot == nil || plot.ReadyAt.After(now) {
 				continue
@@ -324,7 +320,11 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 			if err != nil {
 				return "", nil, 0, err
 			}
-			crop := outcome(*plot, q, m)
+			variety, err := roll(100)
+			if err != nil {
+				return "", nil, 0, err
+			}
+			crop := outcome(*plot, q, m, variety)
 			weight, err := roll(100)
 			if err != nil {
 				return "", nil, 0, err
@@ -338,6 +338,16 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 				return "", nil, 0, err
 			}
 			state.Barn = append(state.Barn, crop)
+			if plot.Nursery > 0 {
+				recovery, err := roll(100)
+				if err != nil {
+					return "", nil, 0, err
+				}
+				if recovery < plot.Nursery*10 {
+					state.Seeds[plot.Seed]++
+					recovered++
+				}
+			}
 			key := crop.Seed + ":" + crop.Mutation
 			previous, exists := state.Collection[key]
 			qualityRank := map[string]int{"normal": 0, "choice": 1, "perfect": 2}
@@ -351,7 +361,11 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		if count == 0 {
 			return bad("Урожай ещё не созрел")
 		}
-		return fmt.Sprintf("Собрано грядок: %d. Урожай ждёт в амбаре", count), nil, 0, nil
+		message := fmt.Sprintf("Собрано грядок: %d. Урожай ждёт в амбаре", count)
+		if recovered > 0 {
+			message += fmt.Sprintf(". Питомник вернул семян: %d", recovered)
+		}
+		return message, nil, 0, nil
 	case "sell":
 		amount := 0
 		for _, item := range state.Barn {
@@ -450,6 +464,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		}
 		if action.Upgrade == "market" {
 			return "Лавка приносит больше монет с каждой продажи", nil, 0, nil
+		}
+		if action.Upgrade == "gallery" {
+			return "На витрине стало больше места", nil, 0, nil
 		}
 		return "Улучшение действует со следующей посадки", nil, 0, nil
 	default:

@@ -86,8 +86,8 @@ func collectionAction(state *State, action Action, now time.Time) (string, error
 		crop, _ := species(id)
 		return "Получено семя: " + crop.Name, nil
 	case "keep":
-		if len(state.Showcase) >= 6 {
-			return bad("На витрине шесть мест. Верни один трофей в амбар")
+		if len(state.Showcase) >= showcaseCapacity(*state) {
+			return bad("Витрина заполнена. Расширь павильон или верни трофей в амбар")
 		}
 		for i, item := range state.Barn {
 			if item.ID != action.Item {

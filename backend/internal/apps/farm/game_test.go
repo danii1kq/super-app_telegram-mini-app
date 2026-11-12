@@ -62,22 +62,22 @@ func TestInvalidActionsDoNotSpend(t *testing.T) {
 
 func TestOutcomesAndSnapshot(t *testing.T) {
 	plot := Plot{Seed: "carrot", Care: "water"}
-	if got := outcome(plot, 9, 99); got.Quality != "perfect" || got.Value != 96 {
+	if got := outcome(plot, 9, 99, 99); got.Quality != "perfect" || got.Value != 96 {
 		t.Fatalf("wrong perfect outcome: %+v", got)
 	}
-	if got := outcome(plot, 10, 99); got.Quality != "choice" {
+	if got := outcome(plot, 10, 99, 99); got.Quality != "choice" {
 		t.Fatal("quality boundary")
 	}
-	if got := outcome(plot, 40, 99); got.Quality != "normal" {
+	if got := outcome(plot, 40, 99, 99); got.Quality != "normal" {
 		t.Fatal("normal boundary")
 	}
-	if got := outcome(plot, 99, 0); got.Mutation != "crystal" || got.Value != 256 {
+	if got := outcome(plot, 99, 0, 0); got.Mutation != "crystal" || got.Value != 256 {
 		t.Fatal("crystal roll")
 	}
-	if got := outcome(Plot{Seed: "carrot", Lamp: 1}, 99, 1); got.Mutation != "gold" {
+	if got := outcome(Plot{Seed: "carrot", Lamp: 1}, 99, 1, 15); got.Mutation != "gold" {
 		t.Fatal("gold roll")
 	}
-	if got := outcome(Plot{Seed: "carrot", Soil: 2, Care: "soil"}, 99, 99); got.Quantity != 4 {
+	if got := outcome(Plot{Seed: "carrot", Soil: 2, Care: "soil"}, 99, 99, 99); got.Quantity != 4 {
 		t.Fatal("fertilizer yield")
 	}
 	s := initialState(time.Now())

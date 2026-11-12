@@ -206,7 +206,7 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if err := json.Unmarshal(upgraded.Body.Bytes(), &metadata); err != nil {
 		t.Fatal(err)
 	}
-	if upgraded.Code != 200 || metadata.State.Upgrades["selection"] != 1 || len(metadata.Upgrades) != 6 || len(metadata.Packs) != 3 {
+	if upgraded.Code != 200 || metadata.State.Upgrades["selection"] != 1 || len(metadata.Upgrades) != 9 || len(metadata.Packs) != 3 {
 		t.Fatalf("missing upgrade metadata: %s", upgraded.Body)
 	}
 	legend := 0
