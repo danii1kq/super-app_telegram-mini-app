@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { playFarmSound, soundNotes, type FarmSound } from './sounds.ts';
-import { revealPlan } from './opening.ts';
+import { gameRevealPlan, revealPlan } from './opening.ts';
 
 const sounds: FarmSound[] = ['plant','harvest','sell','buy','pack','rare','legendary','upgrade','tap','hit1','hit2','hit3','hit4','hit5'];
 
@@ -71,4 +71,13 @@ test('reveal builds pitch and suspense before the rarity-specific finale', () =>
   assert.equal(revealPlan('legendary').sound,'legendary');
   assert.equal(revealPlan('rare').sound,'rare');
   assert.equal(revealPlan('legendary').beats.length,5);
+});
+
+test('upgrade reveal accelerates through five strikes before its finale',()=>{
+  const plan=gameRevealPlan('upgrade');
+  assert.equal(plan.beats.length,5);
+  const gaps=plan.beats.slice(1).map((at,i)=>at-plan.beats[i]!);
+  assert.ok(gaps.every((gap,i)=>i===0||gap<gaps[i-1]!));
+  assert.ok(plan.revealAt-plan.beats.at(-1)!>=700);
+  assert.ok(gameRevealPlan('flip').revealAt<plan.revealAt);
 });

@@ -29,6 +29,7 @@ import './worlds.css';
 import './expeditions.css';
 import './garden-visuals.css';
 import './games.css';
+import './reveals.css';
 
 const tabs = [
   ['garden', 'garden', 'Моя ферма'], ['games','game','Игры'], ['seeds', 'seed', 'Семена'], ['collection', 'book', 'Коллекция'],

@@ -52,11 +52,14 @@ export function PackOpening({ drops, pack, play, prime, stop, soundEnabled, onTo
 
   if (!current) return <button className="farm-primary full" onClick={onClose}>Вернуться на ферму</button>;
 
-  return <section className={`farm-opening farm-summon ${stage} tier-${tier} ${suspense ? 'suspense' : ''} rarity-${current.rarity}`} aria-label="Открытие семян">
+  return <section className={`farm-opening farm-summon ${stage} tier-${tier} ${suspense ? 'suspense' : ''} rarity-${current.rarity}`} style={{'--charge':beat} as CSSProperties} aria-label="Открытие семян">
     <div className="farm-opening-top"><span>{pack.name}</span><div><button aria-label={soundEnabled ? 'Выключить звук открытия' : 'Включить звук открытия'} onClick={onToggleSound}><Glyph name={soundEnabled ? 'sound' : 'muted'} size={15}/></button>{stage !== 'summary' && <button onClick={() => setStage('summary')}>Пропустить<Glyph name="arrow" size={12}/></button>}</div></div>
     {stage === 'summary' ? <div className="farm-opening-summary"><span className="farm-opening-kicker">ТВОЯ НОВАЯ ИСТОРИЯ</span><h3>Забирай находки.</h3><p>Все три семени уже в запасе.</p><div className="farm-opening-results">{drops.map((crop,i) => <article key={i} className={`farm-opening-result rarity-${crop.rarity}`} style={{ animationDelay: `${i * 140}ms` }}><span>{names[crop.rarity]}</span><CropArt seed={crop.id}/><strong>{crop.name}</strong><small>1 семя</small></article>)}</div><button className="farm-opening-primary" onClick={onClose}>На ферму<Glyph name="sprout"/></button><button className="farm-opening-again" onClick={onAgain}>Ещё один набор<Glyph name="box" size={16}/></button></div> : <>
       <div className="farm-opening-progress" aria-label={`Семя ${index + 1} из ${drops.length}`}>{drops.map((_,i) => <span key={i} className={i < index ? 'complete' : i === index ? 'current' : ''}>{i < index ? <Glyph name="check" size={13}/> : i + 1}</span>)}</div>
       <div className="farm-opening-stage">
+        <svg className="farm-seed-sigil" viewBox="0 0 300 300" aria-hidden="true"><path d="m150 15 116 68v134L150 285 34 217V83Z"/><circle cx="150" cy="150" r="112" strokeDasharray="3 17"/><path d="m150 36 9 24-9 10-9-10Zm114 114-24 9-10-9 10-9ZM150 264l-9-24 9-10 9 10ZM36 150l24-9 10 9-10 9Z"/></svg>
+        <div className="farm-seed-beam" aria-hidden="true"/>
+        <div className="farm-reveal-splinters" key={`${index}-${stage}`} aria-hidden="true">{Array.from({length:8},(_,i)=><i key={i} style={{'--shard':i} as CSSProperties}/>)}</div>
         <div className="farm-summon-stars" aria-hidden="true">{Array.from({length:18},(_,i)=><i key={i} style={{left:`${(i*37+11)%100}%`,top:`${(i*29+7)%100}%`,animationDelay:`${i*.19}s`}}/>)}</div>
         <div className="farm-opening-glow" aria-hidden="true"/><div className="farm-opening-rays" aria-hidden="true"/>
         <div className="farm-opening-ring ring-a" aria-hidden="true"/><div className="farm-opening-ring ring-b" aria-hidden="true"/>
