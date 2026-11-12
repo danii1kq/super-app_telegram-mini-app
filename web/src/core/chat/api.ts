@@ -34,10 +34,29 @@ export interface Message {
   attachment: Attachment | null;
 }
 
+export interface GroupMember {
+  user_id: string;
+  public_name: string;
+  role: 'owner' | 'member';
+}
+
 export const chatKeys = {
   list: ['chat', 'list'] as const,
   history: (conversationId: string) => ['chat', 'history', conversationId] as const,
+  members: (conversationId: string) => ['chat', 'members', conversationId] as const,
 };
+
+export function useGroupMembers(conversationId: string, enabled = true) {
+  return useQuery({
+    queryKey: chatKeys.members(conversationId),
+    queryFn: ({ signal }) => api<{ members: GroupMember[] }>(`/conversations/${conversationId}/members`, { signal }),
+    select: (data) => data.members,
+    enabled: Boolean(conversationId) && enabled,
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 10_000,
+  });
+}
 
 export function useConversations(enabled = true) {
   return useQuery({

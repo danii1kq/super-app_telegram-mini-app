@@ -4,6 +4,7 @@ import { AppShell } from './AppShell';
 import { FeedPage } from '@/core/social/FeedPage';
 import { ChatsPage } from '@/core/chat/ChatsPage';
 import { ChatPage } from '@/core/chat/ChatPage';
+import { CreateGroupPage } from '@/core/chat/CreateGroupPage';
 import { CataloguePage } from '@/apps/CataloguePage';
 import { ProfilePage } from '@/core/profile/ProfilePage';
 import { Skeleton } from '@/shared/ui';
@@ -33,6 +34,7 @@ export function App() {
           <Route index element={<Navigate to="/feed" replace />} />
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/chats" element={<ChatsPage />} />
+          <Route path="/chats/new-group" element={<CreateGroupPage />} />
           <Route path="/chats/:id" element={<ChatPage />} />
           <Route path="/apps" element={<CataloguePage />} />
           <Route path="/apps/doc/*" element={<DocApp />} />

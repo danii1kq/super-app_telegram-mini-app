@@ -22,6 +22,7 @@ func NewHandler(service *Service, authService *auth.Service, events *Hub) *Handl
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	h.registerAttachments(mux)
+	h.registerGroups(mux)
 	mux.Handle("GET /api/v1/conversations", h.auth.Middleware(http.HandlerFunc(h.list)))
 	mux.Handle("POST /api/v1/conversations", h.auth.Middleware(http.HandlerFunc(h.openDirect)))
 	mux.Handle("GET /api/v1/conversations/{id}/messages", h.auth.Middleware(http.HandlerFunc(h.history)))

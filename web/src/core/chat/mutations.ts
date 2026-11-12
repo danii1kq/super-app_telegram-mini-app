@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, apiMultipart } from '@/shared/api/client';
-import { chatKeys, type Message } from './api';
+import { chatKeys, type Conversation, type Message } from './api';
 
 export function useSendMessage(conversationId: string) {
   const queryClient = useQueryClient();
@@ -51,5 +51,36 @@ export function useOpenDirect() {
     mutationFn: (userId: string) =>
       api<{ id: string }>('/conversations', { method: 'POST', body: { user_id: userId } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: chatKeys.list }),
+  });
+}
+
+export function useCreateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { client_group_id: string; title: string; user_ids: string[] }) =>
+      api<Conversation>('/conversations/groups', { method: 'POST', body: input }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: chatKeys.list }); },
+  });
+}
+
+export function useAddGroupMember(conversationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api<{ ok: boolean }>(`/conversations/${conversationId}/members`, { method: 'POST', body: { user_id: userId } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.members(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.list });
+    },
+  });
+}
+
+export function useRemoveGroupMember(conversationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api<{ ok: boolean }>(`/conversations/${conversationId}/members/${userId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.members(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.list });
+    },
   });
 }

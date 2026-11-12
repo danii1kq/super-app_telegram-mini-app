@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useConversations } from './api';
 import { useOpenDirect } from './mutations';
 import { usePeople } from '@/core/social/api';
-import { AppHeader, Avatar, Banner, Card, EmptyState, Hairline, Icon, PrimaryButton, Screen, Skeleton } from '@/shared/ui';
+import { AppHeader, Avatar, Banner, Card, EmptyState, Hairline, Icon, PrimaryButton, Screen, SecondaryButton, Skeleton } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useI18n, useT } from '@/shared/i18n';
 import { formatDateTime } from '@/shared/i18n/date';
@@ -44,6 +44,9 @@ export function ChatsPage() {
           <Icon name={picking ? 'close' : 'person_add'} size={20} />
           {t(picking ? 'cancel' : 'newChat')}
         </PrimaryButton>
+        <SecondaryButton full disabled={status !== 'ready'} onClick={() => navigate('/chats/new-group')}>
+          <Icon name="group_add" size={20} />{t('chatNewGroup')}
+        </SecondaryButton>
         <label className="flex items-center gap-2 rounded-xl bg-surface px-3 text-ink-2">
           <Icon name="search" size={22} />
           <input value={search} onChange={(event) => setSearch(event.target.value)} aria-label={t(picking ? 'peopleSearch' : 'searchChats')} placeholder={t(picking ? 'peopleSearch' : 'searchChats')} className="h-12 min-w-0 flex-1 bg-transparent text-body-lg text-ink outline-none placeholder:text-hint" />

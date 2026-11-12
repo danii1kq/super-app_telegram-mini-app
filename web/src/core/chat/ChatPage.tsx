@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useConversations, useMessages } from './api';
 import { newClientMessageId, useMarkRead, useSendMessage } from './mutations';
 import { MessageAttachment } from './MessageAttachment';
+import { GroupMembers } from './GroupMembers';
 import { ApiError } from '@/shared/api/client';
 import { AppHeader, Banner, EmptyState, Icon, Screen, Skeleton } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
@@ -26,13 +27,14 @@ function ConversationView({ id }: { id: string }) {
   const feedback = useFeedback();
   const { me, status } = useSession();
   const [draft, setDraft] = useState('');
+  const [membersOpen, setMembersOpen] = useState(false);
   const [attachment, setAttachment] = useState<{ file: File; kind: 'photo' | 'file' } | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [atBottom, setAtBottom] = useState(true);
   const [visible, setVisible] = useState(!document.hidden);
   const [composerHeight, setComposerHeight] = useState(76);
   const conversations = useConversations(status === 'ready');
-  const messages = useMessages(id, status === 'ready', atBottom && visible);
+  const messages = useMessages(id, status === 'ready', atBottom && visible && !membersOpen);
   const sendMessage = useSendMessage(id);
   const markRead = useMarkRead(id);
   const conversation = conversations.data?.find((item) => item.id === id);
@@ -101,14 +103,14 @@ function ConversationView({ id }: { id: string }) {
   useLayoutEffect(() => { if (stickToBottom.current) scrollToLatest(); }, [composerHeight]);
 
   useEffect(() => {
-    if (!last || !visible || !atBottom || !nearBottom() || reading.current || BigInt(last.seq) <= BigInt(lastRead.current)) return;
+    if (!last || !visible || !atBottom || membersOpen || !nearBottom() || reading.current || BigInt(last.seq) <= BigInt(lastRead.current)) return;
     reading.current = true;
     const seq = last.seq;
     markRead.mutate(seq, {
       onSuccess: () => { lastRead.current = seq; },
       onSettled: () => { reading.current = false; },
     });
-  }, [last?.seq, visible, atBottom, messages.dataUpdatedAt]);
+  }, [last?.seq, visible, atBottom, membersOpen, messages.dataUpdatedAt]);
 
   const submit = () => {
     const text = draft.trim();
@@ -138,7 +140,10 @@ function ConversationView({ id }: { id: string }) {
   };
 
   return (
-    <Screen header={<AppHeader title={conversation?.title || t('chat')} onBack={() => navigate('/chats')} />}>
+    <Screen header={<AppHeader title={conversation?.title || t('chat')} onBack={() => navigate('/chats')} trailing={
+      conversation?.kind === 'group' ? <button type="button" onClick={() => setMembersOpen(true)} aria-label={t('chatGroupMembers')} aria-expanded={membersOpen} className="flex size-11 items-center justify-center text-accent"><Icon name="group" size={24} /></button> : null
+    } />}>
+      {membersOpen && conversation?.kind === 'group' ? <GroupMembers conversationId={id} onClose={() => setMembersOpen(false)} /> : null}
       <div style={{ paddingBottom: composerHeight }} className="flex flex-col gap-2 pt-3">
         {messages.isPending ? <><Skeleton className="h-10 w-2/3" /><Skeleton className="ml-auto h-10 w-1/2" /></> : null}
         {messages.isError ? <Banner tone="danger" icon="error" title={t('historyError')}><button type="button" onClick={() => void messages.refetch()} className="min-h-11 text-accent">{t('retry')}</button></Banner> : null}
