@@ -163,6 +163,31 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if total(packed) != total(planted)+3 {
 		t.Fatal("pack must contain three seeds")
 	}
+	upgraded := request("POST", "/api/v1/farm/actions", `{"kind":"upgrade","upgrade":"selection"}`, 1)
+	var metadata struct {
+		State    State     `json:"state"`
+		Packs    []Pack    `json:"packs"`
+		Upgrades []Upgrade `json:"upgrades"`
+	}
+	if err := json.Unmarshal(upgraded.Body.Bytes(), &metadata); err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.Code != 200 || metadata.State.Upgrades["selection"] != 1 || len(metadata.Upgrades) != 6 || len(metadata.Packs) != 3 {
+		t.Fatalf("missing upgrade metadata: %s", upgraded.Body)
+	}
+	legend := 0
+	for i, weight := range metadata.Packs[0].Weights {
+		if Crops[i].Rarity == "legendary" {
+			legend += weight
+		}
+	}
+	if legend != 3 {
+		t.Fatal("HTTP probabilities do not reflect purchased selection")
+	}
+	persisted := readState(request("GET", "/api/v1/farm", "", 1))
+	if persisted.Upgrades["selection"] != 1 || persisted.Coins != packed.Coins-250 {
+		t.Fatal("new upgrade did not persist")
+	}
 	bob := readState(request("GET", "/api/v1/farm", "", 2))
 	if bob.Coins != 250 || bob.Plots[0] == nil || len(bob.Collection) != 0 {
 		t.Fatal("player state leaked")

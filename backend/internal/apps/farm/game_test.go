@@ -163,8 +163,74 @@ func TestExpandedPackUsesRarityInsteadOfPosition(t *testing.T) {
 			}
 			hits[drops[0]] = true
 		}
-		if len(hits) != len(Crops) {
-			t.Fatalf("pack %s cannot drop every plant", pack.ID)
+		expected := 0
+		for _, weight := range pack.Weights {
+			if weight > 0 {
+				expected++
+			}
 		}
+		if len(hits) != expected {
+			t.Fatalf("pack %s does not match advertised probabilities", pack.ID)
+		}
+	}
+}
+
+func TestNewUpgradesAndExistingPlayers(t *testing.T) {
+	s := initialState(time.Now())
+	s.Coins = 100000
+	for i := 0; i < 4; i++ {
+		if _, _, _, err := apply(&s, Action{Kind: "upgrade", Upgrade: "land"}, time.Now(), fixed); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(s.Plots) != 8 || s.Upgrades["land"] != 4 {
+		t.Fatal("land did not expand to eight plots")
+	}
+	coins := s.Coins
+	if _, _, _, err := apply(&s, Action{Kind: "upgrade", Upgrade: "land"}, time.Now(), fixed); err == nil || s.Coins != coins {
+		t.Fatal("land cap ignored")
+	}
+	s.Upgrades["market"] = 3
+	s.Barn = []Harvest{{Value: 101}}
+	_, _, revenue, err := apply(&s, Action{Kind: "sell"}, time.Now(), fixed)
+	if err != nil || revenue != 116 || s.Coins != coins+116 {
+		t.Fatal("market bonus did not apply exactly once")
+	}
+	if s.Upgrades["selection"] != 0 || s.Pity["lunar"] != 0 {
+		t.Fatal("old state was not extended with defaults")
+	}
+}
+
+func TestSelectionProbabilitiesAndLunarGuarantee(t *testing.T) {
+	for level := 0; level <= 5; level++ {
+		for i, pack := range packsFor(level) {
+			total, legend, baseLegend := 0, 0, 0
+			for j, weight := range pack.Weights {
+				if weight < 0 {
+					t.Fatal("negative odds")
+				}
+				total += weight
+				if Crops[j].Rarity == "legendary" {
+					legend += weight
+					baseLegend += Packs[i].Weights[j]
+				}
+			}
+			if total != 100 || legend != baseLegend+level {
+				t.Fatalf("level %d pack %s odds incorrect", level, pack.ID)
+			}
+		}
+	}
+	if Packs[0].Weights[0] != 20 {
+		t.Fatal("personal odds changed base catalogue")
+	}
+	s := initialState(time.Now())
+	s.Coins = 10000
+	s.Pity["lunar"] = 5
+	_, drops, _, err := apply(&s, Action{Kind: "pack", Pack: "lunar"}, time.Now(), func(int) (int, error) { return 0, nil })
+	if err != nil || drops[0] != "dragonfruit" || s.Pity["lunar"] != 2 || s.Coins != 9100 {
+		t.Fatalf("lunar guarantee failed: %v %v", drops, err)
+	}
+	if s.Pity["garden"] != 0 {
+		t.Fatal("lunar guarantee changed another pack")
 	}
 }

@@ -81,15 +81,94 @@ type Action struct {
 }
 
 type Pack struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Price   int    `json:"price"`
-	Weights []int  `json:"weights"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Price     int    `json:"price"`
+	Weights   []int  `json:"weights"`
+	PityAfter int    `json:"pity_after"`
+	Guarantee string `json:"guarantee"`
 }
 
 var Packs = []Pack{
-	{"garden", "Садовый набор", 75, []int{20, 18, 12, 8, 5, 1, 12, 9, 6, 5, 3, 1}},
-	{"exotic", "Экзотический набор", 240, []int{3, 5, 10, 12, 16, 5, 4, 6, 12, 10, 12, 5}},
+	{"garden", "Садовый набор", 75, []int{20, 18, 12, 8, 5, 1, 12, 9, 6, 5, 3, 1}, 10, "rare"},
+	{"exotic", "Экзотический набор", 240, []int{3, 5, 10, 12, 16, 5, 4, 6, 12, 10, 12, 5}, 10, "rare"},
+	{"lunar", "Лунный набор", 900, []int{0, 0, 5, 5, 25, 15, 0, 0, 5, 5, 25, 15}, 6, "legendary"},
+}
+
+type Upgrade struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon"`
+	Description string `json:"description"`
+	Benefit     string `json:"benefit"`
+	MaxLevel    int    `json:"max_level"`
+	BaseCost    int    `json:"-"`
+	Level       int    `json:"level"`
+	Cost        int    `json:"cost"`
+}
+
+var Upgrades = []Upgrade{
+	{ID: "water", Name: "Бережный полив", Icon: "water", Description: "Больше отборных и идеальных растений.", Benefit: "+2% идеального и +3% отборного за уровень", MaxLevel: 5, BaseCost: 100},
+	{ID: "soil", Name: "Плодородная почва", Icon: "soil", Description: "Больше урожая с каждой грядки.", Benefit: "+1 растение с грядки за уровень", MaxLevel: 5, BaseCost: 100},
+	{ID: "lamp", Name: "Лаборатория света", Icon: "lamp", Description: "Повышает шанс необычных мутаций.", Benefit: "+2% к шансу мутации за уровень", MaxLevel: 5, BaseCost: 100},
+	{ID: "land", Name: "Новые горизонты", Icon: "garden", Description: "Больше места для твоих экспериментов.", Benefit: "+1 грядка за уровень, до 8 грядок", MaxLevel: 4, BaseCost: 300},
+	{ID: "market", Name: "Фермерская лавка", Icon: "coin", Description: "Продавай свой урожай дороже.", Benefit: "+5% к цене продажи за уровень", MaxLevel: 5, BaseCost: 200},
+	{ID: "selection", Name: "Секреты селекции", Icon: "spark", Description: "Повышает шансы легендарных семян во всех наборах.", Benefit: "+1 п.п. к легендарному шансу за уровень", MaxLevel: 5, BaseCost: 250},
+}
+
+func upgradesFor(state State) []Upgrade {
+	result := append([]Upgrade(nil), Upgrades...)
+	for i := range result {
+		result[i].Level = state.Upgrades[result[i].ID]
+		result[i].Cost = result[i].BaseCost * (result[i].Level + 1) * (result[i].Level + 1)
+	}
+	return result
+}
+
+func normalizeState(state *State) {
+	if state.Upgrades == nil {
+		state.Upgrades = map[string]int{}
+	}
+	if state.Pity == nil {
+		state.Pity = map[string]int{}
+	}
+	for _, upgrade := range Upgrades {
+		if _, ok := state.Upgrades[upgrade.ID]; !ok {
+			state.Upgrades[upgrade.ID] = 0
+		}
+	}
+	for _, pack := range Packs {
+		if _, ok := state.Pity[pack.ID]; !ok {
+			state.Pity[pack.ID] = 0
+		}
+	}
+}
+
+func packsFor(level int) []Pack {
+	result := append([]Pack(nil), Packs...)
+	for i := range result {
+		result[i].Weights = append([]int(nil), result[i].Weights...)
+		for step := 0; step < level; step++ {
+			donor := -1
+			for j, crop := range Crops {
+				if crop.Rarity != "legendary" && result[i].Weights[j] > 0 && (donor < 0 || result[i].Weights[j] > result[i].Weights[donor]) {
+					donor = j
+				}
+			}
+			if donor < 0 {
+				break
+			}
+			result[i].Weights[donor]--
+			legendary := []int{}
+			for j, crop := range Crops {
+				if crop.Rarity == "legendary" {
+					legendary = append(legendary, j)
+				}
+			}
+			result[i].Weights[legendary[step%len(legendary)]]++
+		}
+	}
+	return result
 }
 
 func initialState(now time.Time) State {
@@ -123,8 +202,6 @@ func random(n int) (int, error) {
 	}
 	return int(value.Int64()), nil
 }
-
-func upgradeCost(level int) int { return 100 * (level + 1) * (level + 1) }
 
 func outcome(plot Plot, qualityRoll, mutationRoll int) Harvest {
 	crop, _ := species(plot.Seed)
@@ -163,6 +240,7 @@ func outcome(plot Plot, qualityRoll, mutationRoll int) Harvest {
 
 // apply mutates only server-owned state while the player row is locked.
 func apply(state *State, action Action, now time.Time, roll func(int) (int, error)) (string, []string, int, error) {
+	normalizeState(state)
 	bad := func(message string) (string, []string, int, error) {
 		return "", nil, 0, httpapi.BadRequest("farm_action", message)
 	}
@@ -231,6 +309,7 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		for _, item := range state.Barn {
 			amount += item.Value
 		}
+		amount = amount * (100 + state.Upgrades["market"]*5) / 100
 		if amount == 0 {
 			return bad("Амбар пока пуст")
 		}
@@ -250,9 +329,10 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		return "Семя добавлено в запас", nil, 0, nil
 	case "pack":
 		var pack *Pack
-		for i := range Packs {
-			if Packs[i].ID == action.Pack {
-				pack = &Packs[i]
+		available := packsFor(state.Upgrades["selection"])
+		for i := range available {
+			if available[i].ID == action.Pack {
+				pack = &available[i]
 			}
 		}
 		if pack == nil {
@@ -275,12 +355,18 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 					break
 				}
 			}
-			// Every tenth seed of this pack is rare or legendary if the streak had none.
-			isRare := func(index int) bool { return Crops[index].Rarity == "rare" || Crops[index].Rarity == "legendary" }
-			if state.Pity[pack.ID] >= 9 && !isRare(index) {
-				index = 4
+			qualifies := func(index int) bool {
+				return Crops[index].Rarity == "legendary" || (pack.Guarantee == "rare" && Crops[index].Rarity == "rare")
 			}
-			if isRare(index) {
+			if state.Pity[pack.ID] >= pack.PityAfter-1 && !qualifies(index) {
+				for j := range Crops {
+					if qualifies(j) {
+						index = j
+						break
+					}
+				}
+			}
+			if qualifies(index) {
 				state.Pity[pack.ID] = 0
 			} else {
 				state.Pity[pack.ID]++
@@ -292,14 +378,31 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		state.Opened++
 		return "Три новых семени для твоей фермы", drops, 0, nil
 	case "upgrade":
-		level, ok := state.Upgrades[action.Upgrade]
-		if !ok || level >= 5 {
+		var selected *Upgrade
+		for _, upgrade := range upgradesFor(*state) {
+			if upgrade.ID == action.Upgrade {
+				value := upgrade
+				selected = &value
+				break
+			}
+		}
+		if selected == nil || selected.Level >= selected.MaxLevel {
 			return bad("Улучшение недоступно")
 		}
-		if !spend(upgradeCost(level)) {
+		if !spend(selected.Cost) {
 			return bad("Недостаточно монет")
 		}
 		state.Upgrades[action.Upgrade]++
+		if action.Upgrade == "land" {
+			state.Plots = append(state.Plots, nil)
+			return "Новая грядка готова к посадке", nil, 0, nil
+		}
+		if action.Upgrade == "selection" {
+			return "Шанс легендарных семян в наборах повышен", nil, 0, nil
+		}
+		if action.Upgrade == "market" {
+			return "Лавка приносит больше монет с каждой продажи", nil, 0, nil
+		}
 		return "Улучшение действует со следующей посадки", nil, 0, nil
 	default:
 		return bad("Неизвестное действие")
