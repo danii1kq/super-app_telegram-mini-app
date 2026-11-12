@@ -26,6 +26,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/farm", h.auth.Middleware(http.HandlerFunc(h.state)))
 	mux.Handle("POST /api/v1/farm/actions", h.auth.Middleware(http.HandlerFunc(h.action)))
 	mux.Handle("GET /api/v1/farm/leaderboard", h.auth.Middleware(http.HandlerFunc(h.leaderboard)))
+	mux.Handle("GET /api/v1/farm/coinflips", h.auth.Middleware(http.HandlerFunc(h.coinflipList)))
+	mux.Handle("POST /api/v1/farm/upgrade-quote", h.auth.Middleware(http.HandlerFunc(h.upgradeQuote)))
 	mux.Handle("POST /api/v1/farm/themes/invoice", h.auth.Middleware(http.HandlerFunc(h.invoice)))
 	if h.stars != nil {
 		mux.HandleFunc("POST /bot/webhook", h.paymentWebhook)
@@ -38,6 +40,10 @@ func (h *Handler) action(w http.ResponseWriter, r *http.Request) {
 	var action Action
 	if err := httpapi.DecodeJSON(w, r, &action, 2048); err != nil {
 		httpapi.WriteError(w, err)
+		return
+	}
+	if action.Kind == "flip_create" || action.Kind == "flip_join" || action.Kind == "flip_cancel" {
+		h.coinflipAction(w, r, action)
 		return
 	}
 	h.player(w, r, &action)
@@ -65,16 +71,23 @@ func (h *Handler) player(w http.ResponseWriter, r *http.Request, action *Action)
 			return err
 		}
 		normalizeState(&state)
+		now = time.Now().UTC()
 		refreshOrders(&state, user.ID, now)
-		if action == nil {
+		changed := false
+		if action == nil || action.Kind != "crash_cashout" {
+			changed = refreshCrash(&state, now)
+		}
+		if action == nil && !changed {
 			return nil
 		}
 		var revenue int
-		if action.Kind == "redeem" {
-			err = redeemTheme(r.Context(), tx, user.ID, &state, action.Code)
-			message = "Тема открыта и применена"
-		} else {
-			message, drops, revenue, err = apply(&state, *action, now, random)
+		if action != nil {
+			if action.Kind == "redeem" {
+				err = redeemTheme(r.Context(), tx, user.ID, &state, action.Code)
+				message = "Тема открыта и применена"
+			} else {
+				message, drops, revenue, err = apply(&state, *action, now, random)
+			}
 		}
 		if err != nil {
 			return err
@@ -96,11 +109,16 @@ func (h *Handler) player(w http.ResponseWriter, r *http.Request, action *Action)
 		httpapi.WriteError(w, err)
 		return
 	}
+	h.writePlayer(w, state, now, message, drops)
+}
+
+func (h *Handler) writePlayer(w http.ResponseWriter, state State, now time.Time, message string, drops []string) {
 	level, into, need := levelProgress(state.XP)
 	state.Orders = quotedOrders(state)
+	state = publicGameState(state, now)
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"state": state, "crops": Crops, "recipes": Recipes, "mutations": mutationCatalog(state.Upgrades["genetics"]), "packs": packsFor(state.Upgrades["selection"]), "upgrades": upgradesFor(state), "themes": Themes, "stars_available": h.stars != nil, "server_time": now, "message": message, "drops": drops,
 		"level": map[string]any{"level": level, "title": titleFor(level), "into": into, "need": need, "max": MaxLevel, "pending": claimableLevels(state), "rewards": levelCatalog(state)},
-		"daily": dailyCatalog(state, now), "expeditions": expeditionCatalog()})
+		"daily": dailyCatalog(state, now), "expeditions": expeditionCatalog(), "games": gameRules()})
 }
 
 func weekStart(now time.Time) time.Time {

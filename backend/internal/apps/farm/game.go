@@ -70,6 +70,9 @@ type Discovery struct {
 }
 
 type State struct {
+	Crash         *CrashRound          `json:"crash,omitempty"`
+	GameHistory   []GameResult         `json:"game_history"`
+	GameRequests  []string             `json:"game_requests,omitempty"`
 	Expedition    *Expedition          `json:"expedition"`
 	Breeding      *Breeding            `json:"breeding"`
 	Hybrids       []string             `json:"hybrids"`
@@ -92,16 +95,19 @@ type State struct {
 }
 
 type Action struct {
-	Item    string `json:"item"`
-	Theme   string `json:"theme"`
-	Code    string `json:"code"`
-	Kind    string `json:"kind"`
-	Slot    int    `json:"slot"`
-	Level   int    `json:"level"`
-	Seed    string `json:"seed"`
-	Care    string `json:"care"`
-	Pack    string `json:"pack"`
-	Upgrade string `json:"upgrade"`
+	Stake     int    `json:"stake"`
+	Side      string `json:"side"`
+	RequestID string `json:"request_id"`
+	Item      string `json:"item"`
+	Theme     string `json:"theme"`
+	Code      string `json:"code"`
+	Kind      string `json:"kind"`
+	Slot      int    `json:"slot"`
+	Level     int    `json:"level"`
+	Seed      string `json:"seed"`
+	Care      string `json:"care"`
+	Pack      string `json:"pack"`
+	Upgrade   string `json:"upgrade"`
 }
 
 type Pack struct {
@@ -285,6 +291,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		return true
 	}
 	switch action.Kind {
+	case "crash_start", "crash_cashout", "plant_upgrade":
+		message, err := casinoAction(state, action, now, roll)
+		return message, nil, 0, err
 	case "start_expedition", "claim_expedition":
 		message, err := expeditionAction(state, action, now)
 		return message, nil, 0, err
