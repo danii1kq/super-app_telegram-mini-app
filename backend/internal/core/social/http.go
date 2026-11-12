@@ -20,6 +20,8 @@ func NewHandler(service *Service, authService *auth.Service) *Handler {
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/feed", h.auth.Middleware(http.HandlerFunc(h.feed)))
 	mux.Handle("POST /api/v1/posts", h.auth.Middleware(http.HandlerFunc(h.createPost)))
+	mux.Handle("GET /api/v1/posts/{id}", h.auth.Middleware(http.HandlerFunc(h.post)))
+	mux.Handle("POST /api/v1/posts/{id}/view", h.auth.Middleware(http.HandlerFunc(h.view)))
 	mux.Handle("GET /api/v1/posts/{id}/comments", h.auth.Middleware(http.HandlerFunc(h.comments)))
 	mux.Handle("POST /api/v1/posts/{id}/comments", h.auth.Middleware(http.HandlerFunc(h.createComment)))
 	mux.Handle("DELETE /api/v1/posts/{id}", h.auth.Middleware(http.HandlerFunc(h.deletePost)))
@@ -28,6 +30,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/v1/authors/{id}/follow", h.auth.Middleware(http.HandlerFunc(h.unfollow)))
 	mux.Handle("GET /api/v1/people", h.auth.Middleware(http.HandlerFunc(h.people)))
 	mux.Handle("GET /api/v1/people/{id}", h.auth.Middleware(http.HandlerFunc(h.person)))
+	mux.Handle("GET /api/v1/people/{id}/posts", h.auth.Middleware(http.HandlerFunc(h.authorPosts)))
 }
 
 type postDTO struct {
@@ -41,6 +44,7 @@ type postDTO struct {
 	Likes       int    `json:"likes"`
 	Comments    int    `json:"comments"`
 	LikedByMe   bool   `json:"liked_by_me"`
+	Views       int    `json:"views"`
 }
 
 func toDTO(post Post) postDTO {
@@ -54,6 +58,7 @@ func toDTO(post Post) postDTO {
 		Likes:      post.Likes,
 		Comments:   post.Comments,
 		LikedByMe:  post.LikedByMe,
+		Views:      post.Views,
 	}
 	if post.CommunityID != nil {
 		dto.CommunityID = strconv.FormatInt(*post.CommunityID, 10)

@@ -35,12 +35,17 @@ type Post struct {
 	Likes       int
 	Comments    int
 	LikedByMe   bool
+	Views       int
 }
 
 // Feed returns posts visible to viewer: own posts, followed authors and the
 // communities the viewer belongs to. The restriction lives in the SQL, not in
 // the handler.
 func (s *Service) Feed(ctx context.Context, viewerID int64, beforeID int64, limit int) ([]Post, error) {
+	return s.posts(ctx, viewerID, 0, beforeID, limit)
+}
+
+func (s *Service) posts(ctx context.Context, viewerID, authorID, beforeID int64, limit int) ([]Post, error) {
 	if limit <= 0 || limit > 51 {
 		limit = 20
 	}
@@ -51,13 +56,15 @@ func (s *Service) Feed(ctx context.Context, viewerID int64, beforeID int64, limi
 		        p.audience, p.community_id, p.created_at,
 		        (SELECT count(*) FROM social_reactions r WHERE r.post_id = p.id) AS likes,
 		        (SELECT count(*) FROM social_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL) AS comments,
-		        EXISTS (SELECT 1 FROM social_reactions r2 WHERE r2.post_id = p.id AND r2.user_id = $1) AS liked
+		        EXISTS (SELECT 1 FROM social_reactions r2 WHERE r2.post_id = p.id AND r2.user_id = $1) AS liked,
+		        (SELECT count(*) FROM social_post_views v WHERE v.post_id = p.id) AS views
 		   FROM social_posts p
 		   JOIN users u ON u.id = p.author_id
 		  WHERE `+visiblePostSQL+`
-		    AND ($2 = 0 OR p.id < $2)
+		    AND ($2::bigint = 0 OR p.id < $2)
+		    AND ($4::bigint = 0 OR (p.author_id = $4 AND p.community_id IS NULL))
 		  ORDER BY p.id DESC
-		  LIMIT $3`, viewerID, beforeID, limit,
+		  LIMIT $3`, viewerID, beforeID, limit, authorID,
 	)
 	if err != nil {
 		return nil, err
@@ -71,7 +78,7 @@ func (s *Service) Feed(ctx context.Context, viewerID int64, beforeID int64, limi
 		var keyID *string
 		if err := rows.Scan(&post.ID, &post.AuthorID, &post.AuthorName,
 			&post.Body, &sealed, &keyID, &post.Audience, &post.CommunityID,
-			&post.CreatedAt, &post.Likes, &post.Comments, &post.LikedByMe,
+			&post.CreatedAt, &post.Likes, &post.Comments, &post.LikedByMe, &post.Views,
 		); err != nil {
 			return nil, err
 		}
@@ -162,11 +169,15 @@ func (s *Service) byID(ctx context.Context, id, viewerID int64) (Post, error) {
 	var keyID *string
 	err := s.pool.QueryRow(ctx,
 		`SELECT p.id, p.author_id, u.public_name, coalesce(p.body_public, ''),
-		        p.body_sealed, p.key_id, p.audience, p.community_id, p.created_at
+		        p.body_sealed, p.key_id, p.audience, p.community_id, p.created_at,
+		        (SELECT count(*) FROM social_reactions r WHERE r.post_id = p.id),
+		        (SELECT count(*) FROM social_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL),
+		        EXISTS (SELECT 1 FROM social_reactions r WHERE r.post_id = p.id AND r.user_id = $1),
+		        (SELECT count(*) FROM social_post_views v WHERE v.post_id = p.id)
 		   FROM social_posts p JOIN users u ON u.id = p.author_id
 		  WHERE `+visiblePostSQL+` AND p.id = $2`, viewerID, id,
 	).Scan(&post.ID, &post.AuthorID, &post.AuthorName, &post.Body, &sealed, &keyID,
-		&post.Audience, &post.CommunityID, &post.CreatedAt)
+		&post.Audience, &post.CommunityID, &post.CreatedAt, &post.Likes, &post.Comments, &post.LikedByMe, &post.Views)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Post{}, httpapi.NotFound("Публикация не найдена")
 	}
@@ -235,9 +246,16 @@ func (s *Service) Follow(ctx context.Context, followerID, authorID int64) error 
 	if followerID == authorID {
 		return httpapi.BadRequest("self_follow", "Нельзя подписаться на себя")
 	}
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO social_follows (follower_id, author_id) VALUES ($1, $2)
-		 ON CONFLICT DO NOTHING`, followerID, authorID)
+	tag, err := s.pool.Exec(ctx,
+		`INSERT INTO social_follows (follower_id, author_id)
+		 SELECT $1, u.id FROM users u WHERE u.id = $2 AND u.status = 'active'
+		 AND NOT EXISTS (SELECT 1 FROM social_blocks b
+		  WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+		     OR (b.blocker_id = u.id AND b.blocked_id = $1))
+		 ON CONFLICT (follower_id, author_id) DO UPDATE SET author_id = excluded.author_id`, followerID, authorID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return httpapi.NotFound("Пользователь не найден")
+	}
 	return err
 }
 

@@ -39,10 +39,10 @@ func (h *Handler) person(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
 		return
 	}
-	person, err := h.service.Person(r.Context(), user.ID, userID)
+	person, err := h.service.Profile(r.Context(), user.ID, userID)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return
 	}
-	httpapi.WriteJSON(w, http.StatusOK, toPersonDTO(person))
+	httpapi.WriteJSON(w, http.StatusOK, toProfileDTO(person))
 }
