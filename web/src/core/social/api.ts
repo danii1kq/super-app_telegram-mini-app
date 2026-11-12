@@ -44,6 +44,7 @@ export interface Comment {
 export function useComments(postId: string, enabled = true) {
   return useInfiniteQuery({
     queryKey: feedKeys.comments(postId),
+    staleTime: 0,
     initialPageParam: '',
     queryFn: ({ pageParam, signal }) => api<{ comments: Comment[]; next_before: string | null }>(`/posts/${postId}/comments?before=${pageParam}`, { signal }),
     getNextPageParam: (last) => last.next_before ?? undefined,
