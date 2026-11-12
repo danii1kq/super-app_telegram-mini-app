@@ -40,3 +40,29 @@ Use `docker compose -p srunal-local -f compose.local.yml up -d` for the local
 database/API and `npm run dev -- --host 127.0.0.1` inside `web` for the client.
 After backend changes, restart the API container to apply migrations and rebuild.
 The first two welcome crops can be collected immediately; new plantings take 3h.
+
+## Feedback
+
+Short synthesized sound effects accompany successful planting, harvest, sale,
+seed purchases, pack openings and upgrades. Rare drops get a different melody.
+Audio starts only after a user gesture; the header toggle persists the preference.
+There is no background music or external audio dependency. Effects last under
+one second. Seedlings sway, planting pops into place, harvest highlights the barn,
+sales animate the wallet, and pack drops reveal in sequence. Reduced-motion
+preferences disable all game animations. `node --test src/apps/farm/sounds.test.ts`
+checks audio duration, gain, node cleanup and suspended-context behavior.
+
+## Validation
+
+- `npm run build`: TypeScript strict checks and production bundle.
+- `go test ./...`: backend unit checks (PostgreSQL integration tests skip without a test DSN).
+- `SRUNAL_TEST_DATABASE_URL=... go test -v ./internal/apps/farm`: creates a temporary
+  isolated schema, applies the actual farm migration, and checks authenticated
+  HTTP actions, persistence, account isolation, three-hour planting, early harvest
+  rejection, client-currency rejection, pack quantities and leaderboard revenue.
+  Eight simultaneous sales must credit the player exactly once. The temporary
+  schema is removed by test cleanup; live players are untouched.
+
+Remaining limits: no Telegram crop-ready notifications, automated season prizes,
+or live multi-user load test. The economy uses an initial balance suitable for
+playtesting and will need tuning from actual player behavior.

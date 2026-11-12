@@ -6,6 +6,7 @@ import { BackButton } from '@/shared/telegram/hooks';
 import { useFeedback } from '@/shared/ui/toast';
 import { actOnFarm, countdown, getFarm, getLeaderboard, type FarmAction, type FarmResponse } from './api';
 import { CropArt, Glyph, SeedPacket } from './art';
+import { useFarmSound } from './useFarmSound';
 import './farm.css';
 
 const tabs = [
@@ -44,6 +45,8 @@ export default function FarmRoutes() {
   const navigate = useNavigate();
   const feedback = useFeedback();
   const cache = useQueryClient();
+  const sound = useFarmSound();
+  const [effect, setEffect] = useState<{ kind: string; slot?: number; coins: number } | null>(null);
   const [tab, setTab] = useState<Tab>('garden');
   const [modal, setModal] = useState<Modal | null>(null);
   const [seed, setSeed] = useState('carrot');
@@ -58,6 +61,8 @@ export default function FarmRoutes() {
     mutationFn: actOnFarm,
     onSuccess: (data: FarmResponse, action: FarmAction) => {
       cache.setQueryData(queryKey, data);
+      setEffect({ kind: action.kind, slot: action.slot, coins: data.state.coins - (farm.data?.state.coins ?? data.state.coins) });
+      sound.play(action.kind === 'pack' && data.drops?.some((id) => id === 'blueberry' || id === 'dragonfruit') ? 'rare' : action.kind);
       if (action.kind === 'sell') void cache.invalidateQueries({ queryKey: boardKey });
       if (action.kind === 'plant') setModal(null);
       if (action.kind === 'pack') setModal({ kind: 'drops', drops: data.drops ?? [] });
@@ -66,7 +71,8 @@ export default function FarmRoutes() {
     onError: (error: Error) => feedback(error.message, 'error'),
   });
   useEffect(() => { const timer = window.setInterval(() => setTick(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  const act = (action: FarmAction) => { if (!mutation.isPending) mutation.mutate(action); };
+  useEffect(() => { if (!effect) return; const timer = window.setTimeout(() => setEffect(null), 1100); return () => window.clearTimeout(timer); }, [effect]);
+  const act = (action: FarmAction) => { if (!mutation.isPending) { sound.prime(); mutation.mutate(action); } };
   const back = () => navigate('/apps');
 
   if (session.status !== 'ready' || !farm.data) {
@@ -77,7 +83,7 @@ export default function FarmRoutes() {
   }
 
   const { state, crops, packs, server_time } = farm.data;
-  const now = Date.parse(server_time) + (tick - farm.dataUpdatedAt);
+  const now = Date.parse(server_time) + Math.max(0, tick - farm.dataUpdatedAt);
   const ready = state.plots.filter((plot) => plot && Date.parse(plot.ready_at) <= now).length;
   const occupied = state.plots.filter(Boolean).length;
   const barnValue = state.barn.reduce((sum, item) => sum + item.value, 0);
@@ -99,12 +105,12 @@ export default function FarmRoutes() {
     {!selectable && <span className="farm-seed-buy"><span>Купить семя</span><Coins value={crop.seed_price}/></span>}
   </button>)}</div>;
 
-  return <div className="farm-app">
+  return <div className={`farm-app ${effect ? `farm-action-${effect.kind}` : ''}`}>
     <BackButton onClick={back}/>
     <header className="farm-topbar"><div className="farm-topbar-inner">
       <Link to="/apps" className="farm-back" aria-label="К приложениям"><Glyph name="arrow" size={19}/></Link>
       <Link className="farm-brand" to="/apps/farm" onClick={() => setTab('garden')}><span className="farm-brand-mark"><Glyph name="sprout" size={25}/></span>Sru<span>Farm</span><span className="farm-beta">BETA</span></Link>
-      <div className="farm-topbar-right"><span className="farm-wallet"><Coins value={state.coins}/></span><button className="farm-avatar" onClick={() => setTab('top')} aria-label="Мой рейтинг">{(session.me?.public_name ?? 'Ф').slice(0,1).toUpperCase()}</button></div>
+      <div className="farm-topbar-right"><button className="farm-sound-toggle" onClick={sound.toggle} aria-label={sound.enabled ? 'Выключить звуки' : 'Включить звуки'} aria-pressed={sound.enabled} title={sound.enabled ? 'Звуки включены' : 'Звуки выключены'}><Glyph name={sound.enabled ? 'sound' : 'muted'} size={18}/></button><span className="farm-wallet"><Coins value={state.coins}/>{effect?.kind === 'sell' && <span className="farm-coin-pop" aria-hidden="true">+{number(effect.coins)}</span>}</span><button className="farm-avatar" onClick={() => setTab('top')} aria-label="Мой рейтинг">{(session.me?.public_name ?? 'Ф').slice(0,1).toUpperCase()}</button></div>
     </div></header>
 
     <div className="farm-layout">
@@ -121,7 +127,7 @@ export default function FarmRoutes() {
                 const mature = plot && Date.parse(plot.ready_at) <= now;
                 const remaining = plot ? Date.parse(plot.ready_at) - now : 0;
                 const progress = plot ? Math.min(100, Math.max(0, (1 - remaining / (3 * 3600_000)) * 100)) : 0;
-                return <button key={slot} className={`farm-plot ${plot ? mature ? 'ready' : 'growing' : 'empty'}`} disabled={mutation.isPending} onClick={() => plot ? mature ? act({ kind: 'harvest' }) : feedback(`Растёт ${cropByID(plot.seed).name.toLowerCase()}. До сбора ${countdown(remaining)}`) : openPlant(slot)} aria-label={plot ? `${cropByID(plot.seed).name}, ${mature ? 'собрать урожай' : `до сбора ${countdown(remaining)}`}` : `Посадить на грядке ${slot + 1}`}>
+                return <button key={slot} className={`farm-plot ${plot ? mature ? 'ready' : 'growing' : 'empty'} ${effect?.kind === 'plant' && effect.slot === slot ? 'fresh' : ''}`} disabled={mutation.isPending} onClick={() => plot ? mature ? act({ kind: 'harvest' }) : feedback(`Растёт ${cropByID(plot.seed).name.toLowerCase()}. До сбора ${countdown(remaining)}`) : openPlant(slot)} aria-label={plot ? `${cropByID(plot.seed).name}, ${mature ? 'собрать урожай' : `до сбора ${countdown(remaining)}`}` : `Посадить на грядке ${slot + 1}`}>
                   <span className="farm-plot-soil"/>
                   {plot ? <><CropArt seed={plot.seed} growing={!mature}/><span className="farm-plot-name">{cropByID(plot.seed).name}</span><span className={`farm-plot-status ${mature ? 'mature' : ''}`}><Glyph name={mature ? 'check' : 'clock'} size={13}/>{mature ? 'Собрать' : countdown(remaining)}</span>{!mature && <span className="farm-growth-track"><span style={{ width: `${progress}%` }}/></span>}<span className="farm-plot-care"><Glyph name={plot.care} size={15}/></span></> : <><span className="farm-plot-plus"><Glyph name="plus" size={25}/></span><span className="farm-plot-name">Посадить семя</span><span className="farm-empty-caption">Здесь всё начинается</span></>}
                 </button>;

@@ -19,6 +19,8 @@ const paths: Record<string, string> = {
   box: 'm3 7 9-4 9 4v10l-9 4-9-4V7Zm0 0 9 4 9-4m-9 4v10M7 5l10 4',
   spark: 'm12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z',
   sun: 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1',
+  sound: 'M11 4 6 8H3v8h3l5 4V4Zm4 4c3 2 3 6 0 8m3-11c5 4 5 10 0 14',
+  muted: 'M11 4 6 8H3v8h3l5 4V4Zm5 5 5 6m-5 0 5-6',
 };
 
 export function Glyph({ name, size = 20, className = '' }: { name: string; size?: number; className?: string }) {
