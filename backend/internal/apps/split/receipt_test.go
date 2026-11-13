@@ -178,3 +178,24 @@ func TestDetectImageMime(t *testing.T) {
 		t.Fatalf("jpeg magic: got %q", got)
 	}
 }
+
+func TestReceiptWeightsAvoidOverflow(t *testing.T) {
+	shares, err := splitByWeights(1_000_000_000_000, map[int64]int64{2: 900_000_000_000, 10: 100_000_000_000})
+	if err != nil || shares[2] != 900_000_000_000 || shares[10] != 100_000_000_000 {
+		t.Fatalf("large weights %v %v", shares, err)
+	}
+	discount, err := splitByWeights(-1, map[int64]int64{2: 1, 10: 1})
+	if err != nil || discount[2] != -1 || discount[10] != 0 {
+		t.Fatalf("discount %v %v", discount, err)
+	}
+	if _, err = splitByWeights(1, map[int64]int64{1: 9223372036854775807, 2: 1}); err == nil {
+		t.Fatal("accepted overflowing weights")
+	}
+}
+
+func TestReceiptServiceWithRoundedZeroShare(t *testing.T) {
+	allocation := Allocate(Receipt{TotalMinor: 2, Service: 1, Items: []ReceiptItem{{ID: 1, Name: "Tiny", Quantity: 1, AmountMinor: 1, Units: map[int64]int{1: 1, 2: 1, 3: 1}}}}, 1)
+	if allocation.Difference != 0 || allocation.SumShares != 2 || allocation.PerPerson[1] != 2 {
+		t.Fatalf("service must not disappear with zero-rounded shares: %#v", allocation)
+	}
+}

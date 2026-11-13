@@ -3,8 +3,11 @@ package split
 import (
 	"context"
 	"errors"
+	"math"
+	"math/big"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,17 +20,17 @@ import (
 
 // Receipt is a photographed check, from draft to saved expense.
 type Receipt struct {
-	ID          int64
-	GroupID     int64
-	AuthorID    int64
-	Status      string
-	OCRError    string
-	TotalMinor  int64
-	Discount    int64
-	Service     int64
-	Items       []ReceiptItem
+	ID             int64
+	GroupID        int64
+	AuthorID       int64
+	Status         string
+	OCRError       string
+	TotalMinor     int64
+	Discount       int64
+	Service        int64
+	Items          []ReceiptItem
 	SavedExpenseID *int64
-	CreatedAt   time.Time
+	CreatedAt      time.Time
 	// ImageState is none, stored, purged or processing.
 	ImageState string
 	// ImageExpiresAt is when the photo becomes eligible for deletion.
@@ -39,32 +42,32 @@ type Receipt struct {
 
 // ReceiptItem is one line, with how many units each person takes.
 type ReceiptItem struct {
-	ID         int64
-	Position   int
-	Name       string
-	Quantity   int
+	ID          int64
+	Position    int
+	Name        string
+	Quantity    int
 	AmountMinor int64
-	Unclear    bool
+	Unclear     bool
 	// Units maps a user to how many units of this line they take.
 	Units map[int64]int
 }
 
 // Debt is an obligation between two people.
 type Debt struct {
-	ID         int64
-	GroupID    int64
-	AuthorID   int64
-	CreditorID int64
-	DebtorID   int64
+	ID          int64
+	GroupID     int64
+	AuthorID    int64
+	CreditorID  int64
+	DebtorID    int64
 	AmountMinor int64
-	Note       string
+	Note        string
 	// SourceExpenseID set: the expense already carries this money, so the row
 	// must not be added to the balance again.
 	SourceExpenseID *int64
-	PaidMinor  int64
-	Outstanding int64
-	CreatedAt  time.Time
-	Payments   []DebtPayment
+	PaidMinor       int64
+	Outstanding     int64
+	CreatedAt       time.Time
+	Payments        []DebtPayment
 }
 
 // DebtPayment is one repayment against a debt.
@@ -109,8 +112,8 @@ func (s *Service) CreateManualReceipt(ctx context.Context, authorID, groupID int
 	var receipt Receipt
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO split_receipts (group_id, author_id, image_sealed, image_key_id, image_mime, image_bytes)
-			 VALUES ($1, $2, ''::bytea, 'none', 'image/png', 0)
+			`INSERT INTO split_receipts (group_id, author_id, image_sealed, image_key_id, image_mime, image_bytes, image_state)
+			 VALUES ($1, $2, ''::bytea, 'none', 'image/png', 0, 'none')
 			 RETURNING id, created_at`,
 			groupID, authorID,
 		).Scan(&receipt.ID, &receipt.CreatedAt); err != nil {
@@ -126,6 +129,7 @@ func (s *Service) CreateManualReceipt(ctx context.Context, authorID, groupID int
 	receipt.AuthorID = authorID
 	receipt.Status = "draft"
 	receipt.Items = []ReceiptItem{}
+	receipt.ImageState = "none"
 	return receipt, nil
 }
 
@@ -147,6 +151,10 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		return Receipt{}, httpapi.Validation(map[string]string{"image": "Поддерживаются JPEG, PNG и WebP"}, "Проверьте поля")
 	}
 
+	if err := s.checkReceiptBudget(ctx, s.pool, authorID); err != nil {
+		return Receipt{}, err
+	}
+
 	// Normalize before encrypting: compressing ciphertext would be pointless,
 	// and the stored bytes must already be the small, metadata-free version.
 	normalized, err := media.Normalize(image)
@@ -159,8 +167,20 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		}
 	}
 
+	if normalized.StoredBytes > maxImageBytes {
+		return Receipt{}, httpapi.Validation(map[string]string{"image": "Подготовленное фото больше 5 МБ: уменьшите размер изображения"}, "Проверьте фото")
+	}
+
 	var receipt Receipt
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		// Serialize the per-person recognition budget before making a paid request.
+		if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, authorID); err != nil {
+			return err
+		}
+		if err := s.checkReceiptBudget(ctx, tx, authorID); err != nil {
+			return err
+		}
+
 		// The photo is scheduled for deletion from the start: a draft that never
 		// becomes an expense must not keep its image for long.
 		if err := tx.QueryRow(ctx,
@@ -194,6 +214,7 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 	receipt.AuthorID = authorID
 	receipt.Status = "draft"
 	receipt.ImageState = "stored"
+	receipt.ImageWidth, receipt.ImageHeight, receipt.ImageBytes = normalized.Width, normalized.Height, normalized.StoredBytes
 	expires := receipt.CreatedAt.Add(draftImageTTL)
 	receipt.ImageExpiresAt = &expires
 
@@ -221,11 +242,23 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 	if err := s.storeRecognized(ctx, receipt.ID, result); err != nil {
 		return Receipt{}, err
 	}
-	receipt.Items, err = s.receiptItems(ctx, receipt.ID)
+	receipt.Items, err = s.receiptItems(ctx, s.pool, receipt.ID)
 	if err != nil {
 		return Receipt{}, err
 	}
 	return receipt, nil
+}
+
+func (s *Service) checkReceiptBudget(ctx context.Context, q receiptQuerier, authorID int64) error {
+	var attempts int
+	var latest *time.Time
+	if err := q.QueryRow(ctx, `SELECT count(*), max(created_at) FROM split_receipts WHERE author_id=$1 AND image_bytes>0 AND created_at>now()-interval '24 hours'`, authorID).Scan(&attempts, &latest); err != nil {
+		return err
+	}
+	if attempts >= 50 || (latest != nil && time.Since(*latest) < 30*time.Second) {
+		return &httpapi.Error{Status: 429, Code: "receipt_rate_limited", Message: "Между фото нужно 30 секунд, доступно до 50 распознаваний за 24 часа"}
+	}
+	return nil
 }
 
 // storeRecognized writes the recognized lines and totals onto the draft.
@@ -297,24 +330,35 @@ func (s *Service) sealOptional(value int64, aad string) ([]byte, *string, error)
 }
 
 // Receipt returns one draft or saved receipt. Only group members may read it.
+type receiptQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
 func (s *Service) Receipt(ctx context.Context, viewerID, receiptID int64) (Receipt, error) {
+	return s.receipt(ctx, s.pool, viewerID, receiptID)
+}
+
+func (s *Service) receipt(ctx context.Context, q receiptQuerier, viewerID, receiptID int64) (Receipt, error) {
 	var receipt Receipt
 	var totalSealed, discountSealed, serviceSealed []byte
 	var totalKey, discountKey, serviceKey *string
 	var ocrError *string
 	var savedExpense *int64
 
-	err := s.pool.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`SELECT r.id, r.group_id, r.author_id, r.status, r.ocr_error,
 		        r.total_sealed, r.total_key_id, r.discount_sealed, r.discount_key_id,
-		        r.service_sealed, r.service_key_id, r.saved_expense_id, r.created_at
+		        r.service_sealed, r.service_key_id, r.saved_expense_id, r.created_at,
+            r.image_state, coalesce(r.image_width,0), coalesce(r.image_height,0), r.image_bytes, r.image_expires_at
 		   FROM split_receipts r
 		   JOIN split_members m ON m.group_id = r.group_id
 		  WHERE r.id = $1 AND m.user_id = $2 AND m.state = 'active'`,
 		receiptID, viewerID,
 	).Scan(&receipt.ID, &receipt.GroupID, &receipt.AuthorID, &receipt.Status, &ocrError,
 		&totalSealed, &totalKey, &discountSealed, &discountKey,
-		&serviceSealed, &serviceKey, &savedExpense, &receipt.CreatedAt)
+		&serviceSealed, &serviceKey, &savedExpense, &receipt.CreatedAt,
+		&receipt.ImageState, &receipt.ImageWidth, &receipt.ImageHeight, &receipt.ImageBytes, &receipt.ImageExpiresAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Receipt{}, httpapi.NotFound("Чек не найден")
@@ -336,7 +380,7 @@ func (s *Service) Receipt(ctx context.Context, viewerID, receiptID int64) (Recei
 		return Receipt{}, err
 	}
 
-	receipt.Items, err = s.receiptItems(ctx, receipt.ID)
+	receipt.Items, err = s.receiptItems(ctx, q, receipt.ID)
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -354,8 +398,8 @@ func (s *Service) openOptional(sealed []byte, keyID *string, aad string) (int64,
 	return strconv.ParseInt(raw, 10, 64)
 }
 
-func (s *Service) receiptItems(ctx context.Context, receiptID int64) ([]ReceiptItem, error) {
-	rows, err := s.pool.Query(ctx,
+func (s *Service) receiptItems(ctx context.Context, q receiptQuerier, receiptID int64) ([]ReceiptItem, error) {
+	rows, err := q.Query(ctx,
 		`SELECT id, position, name_sealed, name_key_id, quantity, amount_sealed, amount_key_id, confidence
 		   FROM split_receipt_items WHERE receipt_id = $1 ORDER BY position`, receiptID)
 	if err != nil {
@@ -394,7 +438,7 @@ func (s *Service) receiptItems(ctx context.Context, receiptID int64) ([]ReceiptI
 		return nil, err
 	}
 
-	units, err := s.itemUnits(ctx, receiptID)
+	units, err := s.itemUnits(ctx, q, receiptID)
 	if err != nil {
 		return nil, err
 	}
@@ -406,8 +450,8 @@ func (s *Service) receiptItems(ctx context.Context, receiptID int64) ([]ReceiptI
 	return items, nil
 }
 
-func (s *Service) itemUnits(ctx context.Context, receiptID int64) (map[int64]map[int64]int, error) {
-	rows, err := s.pool.Query(ctx,
+func (s *Service) itemUnits(ctx context.Context, q receiptQuerier, receiptID int64) (map[int64]map[int64]int, error) {
+	rows, err := q.Query(ctx,
 		`SELECT u.item_id, u.user_id, u.units
 		   FROM split_receipt_item_units u
 		   JOIN split_receipt_items i ON i.id = u.item_id
@@ -455,19 +499,28 @@ func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, 
 	if err := s.requireMember(ctx, authorID, groupID); err != nil {
 		return Receipt{}, err
 	}
-	if total < 0 || discount < 0 || service < 0 {
-		return Receipt{}, httpapi.Validation(map[string]string{"total_minor": "Суммы не могут быть отрицательными"}, "Проверьте поля")
+	if total < 0 || discount < 0 || service < 0 || total > ocr.MaxMoneyMinor || discount > ocr.MaxMoneyMinor || service > ocr.MaxMoneyMinor {
+		return Receipt{}, httpapi.Validation(map[string]string{"total_minor": "Суммы должны быть от 0 до 10 миллиардов тенге"}, "Проверьте поля")
 	}
-	if len(items) == 0 {
-		return Receipt{}, httpapi.Validation(map[string]string{"items": "Добавьте хотя бы одну позицию"}, "Проверьте поля")
+	if len(items) == 0 || len(items) > ocr.MaxItems {
+		return Receipt{}, httpapi.Validation(map[string]string{"items": "Добавьте от 1 до 200 позиций"}, "Проверьте поля")
 	}
 
+	var itemsTotal int64
 	for index, item := range items {
-		if item.Quantity <= 0 {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Количество должно быть больше нуля"}, "Проверьте поля")
+		items[index].Name = strings.TrimSpace(item.Name)
+		if len([]rune(items[index].Name)) > 200 {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Название до 200 символов"}, "Проверьте позиции")
 		}
-		if item.AmountMinor < 0 {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Сумма не может быть отрицательной"}, "Проверьте поля")
+		if item.Quantity <= 0 || item.Quantity > ocr.MaxQuantity {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Количество должно быть от 1 до 999"}, "Проверьте поля")
+		}
+		if item.AmountMinor < 0 || item.AmountMinor > ocr.MaxMoneyMinor || itemsTotal > ocr.MaxMoneyMinor-item.AmountMinor {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Сумма позиций должна быть от 0 до 10 миллиардов тенге"}, "Проверьте поля")
+		}
+		itemsTotal += item.AmountMinor
+		if len(item.Units) > 100 {
+			return Receipt{}, httpapi.Validation(map[string]string{"items": "Не больше 100 участников в позиции"}, "Проверьте позиции")
 		}
 		// A line is shared by people, not by units: one pizza split between two
 		// people has quantity 1 and two participants. Quantity bounds the units
@@ -479,8 +532,8 @@ func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, 
 		}
 		units := 0
 		for userID, count := range item.Units {
-			if count <= 0 {
-				return Receipt{}, httpapi.Validation(map[string]string{"items": "Единицы должны быть больше нуля"}, "Проверьте поля")
+			if count <= 0 || count > ocr.MaxQuantity {
+				return Receipt{}, httpapi.Validation(map[string]string{"items": "Единицы должны быть от 1 до 999"}, "Проверьте поля")
 			}
 			units += count
 			if err := s.requireMember(ctx, userID, groupID); err != nil {
@@ -497,6 +550,15 @@ func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, 
 	}
 
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		// Save and edit lock the same draft; a late edit cannot rewrite a saved expense.
+		var lockedStatus string
+		if err := tx.QueryRow(ctx, `SELECT status FROM split_receipts WHERE id=$1 FOR UPDATE`, receiptID).Scan(&lockedStatus); err != nil {
+			return err
+		}
+		if lockedStatus != "draft" {
+			return httpapi.Conflict("receipt_saved", "Чек уже сохранён как расход")
+		}
+
 		if _, err := tx.Exec(ctx,
 			`DELETE FROM split_receipt_items WHERE receipt_id = $1`, receiptID,
 		); err != nil {
@@ -651,7 +713,9 @@ func Allocate(receipt Receipt, payerID int64) ReceiptAllocation {
 	if adjustment != 0 && len(perPerson) > 0 {
 		weights := make(map[int64]int64, len(perPerson))
 		for userID, share := range perPerson {
-			weights[userID] = share
+			if share > 0 {
+				weights[userID] = share
+			}
 		}
 		adjusted, err := splitByWeights(adjustment, weights)
 		if err == nil {
@@ -701,6 +765,9 @@ func splitByWeights(amount int64, weights map[int64]int64) (map[int64]int64, err
 		if weight <= 0 {
 			return nil, ErrInvalidAmount
 		}
+		if total > math.MaxInt64-weight {
+			return nil, ErrInvalidAmount
+		}
 		total += weight
 	}
 	if total <= 0 {
@@ -722,7 +789,9 @@ func splitByWeights(amount int64, weights map[int64]int64) (map[int64]int64, err
 	out := make(map[int64]int64, len(ids))
 	assigned := int64(0)
 	for _, id := range ids {
-		share := amount * weights[id] / total
+		// The product can exceed int64 even though the resulting share fits.
+		product := new(big.Int).Mul(big.NewInt(amount), big.NewInt(weights[id]))
+		share := product.Quo(product, big.NewInt(total)).Int64()
 		out[id] = share
 		assigned += share
 	}

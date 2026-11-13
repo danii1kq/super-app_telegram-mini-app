@@ -35,11 +35,7 @@ type Config struct {
 	DayAPIURL   string
 	DayAPIToken string
 
-	// Receipt recognition. Empty key means the feature reports "unavailable"
-	// and the UI offers manual entry; it never falls back to fake results.
-	OCRBaseURL      string
-	OCRAPIKey       string
-	OCRModel        string
+	// Image imports use a dedicated DeepSeek credential, never a frontend key.
 	DeepSeekBaseURL string
 	DeepSeekAPIKey  string
 	DeepSeekModel   string
@@ -68,9 +64,6 @@ func Load() (Config, error) {
 		DocAPIToken:      env("SRUNAL_DOC_API_TOKEN", ""),
 		DayAPIURL:        env("SRUNAL_DAY_API_URL", ""),
 		DayAPIToken:      env("SRUNAL_DAY_API_TOKEN", ""),
-		OCRBaseURL:       env("SRUNAL_OCR_BASE_URL", ""),
-		OCRAPIKey:        env("SRUNAL_OCR_API_KEY", ""),
-		OCRModel:         env("SRUNAL_OCR_MODEL", ""),
 		DeepSeekBaseURL:  env("SRUNAL_DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
 		DeepSeekAPIKey:   env("SRUNAL_DEEPSEEK_API_KEY", ""),
 		DeepSeekModel:    env("SRUNAL_DEEPSEEK_MODEL", "deepseek-flash"),

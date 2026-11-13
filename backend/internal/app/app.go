@@ -85,7 +85,7 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	notesService := notes.NewService(pool, content)
 	notes.NewHandler(notesService, authService).Register(mux)
 
-	split.NewHandler(split.NewService(pool, content, receiptReader(cfg), delivery), authService, pool).Register(mux)
+	split.NewHandler(split.NewService(pool, content, receiptReader(visionClient), delivery), authService, pool).Register(mux)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 
@@ -109,9 +109,9 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 // No key means the Disabled reader: the API answers "unavailable" and the UI
 // offers manual entry. There is deliberately no mock that returns invented
 // lines, because a fake receipt would look like a successful reading.
-func receiptReader(cfg config.Config) ocr.Reader {
-	if cfg.OCRAPIKey == "" {
+func receiptReader(client *vision.Client) ocr.Reader {
+	if !client.Configured() {
 		return ocr.Disabled{}
 	}
-	return ocr.NewOpenAI(cfg.OCRBaseURL, cfg.OCRAPIKey, cfg.OCRModel)
+	return ocr.NewDeepSeek(client)
 }

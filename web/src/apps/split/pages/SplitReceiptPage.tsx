@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   formatMinor,
@@ -6,6 +6,8 @@ import {
   useSplitGroups,
 } from '../api';
 import { newRequestId } from '../mutations';
+import { receiptPreview, MAX_RECEIPT_MINOR, MAX_RECEIPT_ITEMS } from '../receiptPreview';
+import { ApiError } from '@/shared/api/client';
 import {
   useGroupMembers,
   useManualReceipt,
@@ -30,6 +32,11 @@ import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
 import { usePeople } from '@/core/social/api';
 import { useT, type DictKey } from '@/shared/i18n';
+
+function parseReceiptMinor(input: string): number | null {
+  const value = parseMinor(input);
+  return value !== null && Number.isSafeInteger(value) && value <= MAX_RECEIPT_MINOR ? value : null;
+}
 
 /** One editable line of the draft. */
 interface DraftItem {
@@ -87,10 +94,29 @@ export function SplitReceiptPage() {
   const [ocrError, setOcrError] = useState<string>('');
   const [manual, setManual] = useState(false);
   const [saveKey, setSaveKey] = useState(newRequestId);
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [reviewedSignature, setReviewedSignature] = useState('');
+  const [savedImageBytes, setSavedImageBytes] = useState(0);
+  const [uncertainSave, setUncertainSave] = useState(false);
+  const uploading = useRef(false);
+  const submitting = useRef(false);
+  const saveAttempt = useRef<{ payerId: string; clientRequestId: string; description: string; category: string } | null>(null);
+  const draftSignature = JSON.stringify([items, total, discount, service, payerId, category]);
+  const reviewed = reviewedSignature === draftSignature;
+
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const updateReceipt = useUpdateReceipt(receiptId);
   const saveReceipt = useSaveReceipt(receiptId, groupId);
+  const draftLocked = updateReceipt.isPending || saveReceipt.isPending || uncertainSave;
+
+  useEffect(() => {
+    if (!selectedPhoto) { setPhotoUrl(''); return; }
+    const url = URL.createObjectURL(selectedPhoto); setPhotoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [selectedPhoto]);
 
 
   const group = groups.data?.find((candidate) => candidate.id === groupId);
@@ -117,9 +143,11 @@ export function SplitReceiptPage() {
     discount_minor: string;
     service_minor: string;
     ocr_error?: string;
+    image_bytes?: number;
     items: { name: string; quantity: number; amount_minor: string; unclear: boolean; units: Record<string, number> }[];
   }) => {
     setReceiptId(receipt.id);
+    setSavedImageBytes(receipt.image_bytes ?? 0);
     setTotal(receipt.total_minor === '0' ? '' : formatMinor(receipt.total_minor));
     setDiscount(receipt.discount_minor === '0' ? '' : formatMinor(receipt.discount_minor));
     setService(receipt.service_minor === '0' ? '' : formatMinor(receipt.service_minor));
@@ -138,16 +166,27 @@ export function SplitReceiptPage() {
   };
 
   const onPickFile = (file: File | undefined) => {
-    if (!file) return;
-    upload.mutate(file, {
+    if (!file || upload.isPending) return;
+    if (!file.size || file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      feedback(t('receiptImageLimit'), 'error'); return;
+    }
+    setSelectedPhoto(file); setConsent(false);
+  };
+
+  const recognize = () => {
+    if (!selectedPhoto || !consent || uploading.current) return;
+    uploading.current = true;
+    upload.mutate(selectedPhoto, {
       onSuccess: (receipt) => {
         applyReceipt(receipt);
-        if (receipt.ocr_error) {
+        if (receipt.ocr_error || !receipt.items.length) {
           setManual(true);
+          setItems([{ key: nextKey(), name: '', quantity: 1, amount: '', unclear: false, units: {} }]);
           feedback(t('receiptOcrFailed'), 'error');
         }
       },
-      onError: () => feedback(t('receiptUploadFailed'), 'error'),
+      onError: (error) => feedback(error instanceof ApiError ? error.message : t('receiptUploadFailed'), 'error'),
+      onSettled: () => { uploading.current = false; },
     });
   };
 
@@ -210,147 +249,57 @@ export function SplitReceiptPage() {
     );
   };
 
-  const itemsTotal = items.reduce((sum, item) => sum + (parseMinor(item.amount) ?? 0), 0);
-  const totalMinor = parseMinor(total) ?? itemsTotal;
+  const itemsTotal = items.reduce((sum, item) => sum + (parseReceiptMinor(item.amount) ?? 0), 0);
+  const totalMinor = parseReceiptMinor(total) ?? itemsTotal;
 
-  /**
-   * Local preview of the split.
-   *
-   * The server is the source of truth for a saved receipt, but a hand-typed
-   * draft has no receipt row yet, so the same arithmetic runs here to show the
-   * total, the shares and the difference before anything is saved. Integer minor
-   * units only, and the remainder goes to the largest shares first.
-   */
-  const preview = useMemo(() => {
-    const perPerson: Record<string, number> = {};
-    const unallocated: string[] = [];
+  const preview = useMemo(() => receiptPreview(
+    items.map((item) => ({ key: item.key, amount: parseReceiptMinor(item.amount) ?? 0, units: item.units })),
+    parseReceiptMinor(discount) ?? 0, parseReceiptMinor(service) ?? 0, totalMinor, payerId,
+  ), [items, discount, service, totalMinor, payerId]);
+  const validDraft = preview.valid && items.length > 0 && items.length <= MAX_RECEIPT_ITEMS && items.every((item) => {
+    const amount = parseReceiptMinor(item.amount);
+    const units = Object.values(item.units);
+    return units.reduce((sum, value) => sum + value, 0) <= Math.max(item.quantity, units.length) && item.name.trim() && item.name.trim().length <= 200 && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 999 && amount !== null && Number.isSafeInteger(amount) && amount <= MAX_RECEIPT_MINOR;
+  }) && [total, discount, service].every((value) => {
+    if (!value.trim() || /^0([.,]0{1,2})?$/.test(value.trim())) return true;
+    const amount = parseReceiptMinor(value); return amount !== null && Number.isSafeInteger(amount) && amount <= MAX_RECEIPT_MINOR;
+  });
 
-    for (const item of items) {
-      const amount = parseMinor(item.amount) ?? 0;
-      const entries = Object.entries(item.units).filter(([, count]) => count > 0);
-      if (entries.length === 0) {
-        unallocated.push(item.key);
-        continue;
-      }
-      const weightTotal = entries.reduce((sum, [, count]) => sum + count, 0);
-      let assigned = 0;
-      const ordered = [...entries].sort((a, b) => (b[1] !== a[1] ? b[1] - a[1] : a[0].localeCompare(b[0])));
-      for (const [userId, count] of ordered) {
-        const share = Math.floor((amount * count) / weightTotal);
-        perPerson[userId] = (perPerson[userId] ?? 0) + share;
-        assigned += share;
-      }
-      let remainder = amount - assigned;
-      let index = 0;
-      while (remainder !== 0 && ordered.length > 0) {
-        const entry = ordered[index % ordered.length];
-        if (!entry) break;
-        perPerson[entry[0]] = (perPerson[entry[0]] ?? 0) + (remainder > 0 ? 1 : -1);
-        remainder += remainder > 0 ? -1 : 1;
-        index += 1;
-      }
-    }
-
-    const discountMinor = parseMinor(discount) ?? 0;
-    const serviceMinor = parseMinor(service) ?? 0;
-    const adjustment = serviceMinor - discountMinor;
-    const participants = Object.entries(perPerson).filter(([, share]) => share > 0);
-    if (adjustment !== 0 && participants.length > 0) {
-      const weightTotal = participants.reduce((sum, [, share]) => sum + share, 0);
-      let assigned = 0;
-      const ordered = [...participants].sort((a, b) => (b[1] !== a[1] ? b[1] - a[1] : a[0].localeCompare(b[0])));
-      for (const [userId, share] of ordered) {
-        const delta = Math.floor((adjustment * share) / weightTotal);
-        perPerson[userId] = (perPerson[userId] ?? 0) + delta;
-        assigned += delta;
-      }
-      let remainder = adjustment - assigned;
-      let index = 0;
-      while (remainder !== 0 && ordered.length > 0) {
-        const entry = ordered[index % ordered.length];
-        if (!entry) break;
-        perPerson[entry[0]] = (perPerson[entry[0]] ?? 0) + (remainder > 0 ? 1 : -1);
-        remainder += remainder > 0 ? -1 : 1;
-        index += 1;
-      }
-    }
-
-    const sum = Object.values(perPerson).reduce((acc, share) => acc + share, 0);
-    const owes: Record<string, number> = {};
-    for (const [userId, share] of Object.entries(perPerson)) {
-      if (userId !== payerId && share > 0) owes[userId] = share;
-    }
-    return {
-      perPerson,
-      owes,
-      sum,
-      difference: totalMinor - sum,
-      unallocated,
-    };
-  }, [items, discount, service, totalMinor, payerId]);
-
-  const persist = (): boolean => {
-    if (!receiptId) return true;
-    const payload = {
-      totalMinor: String(totalMinor),
-      discountMinor: String(parseMinor(discount) ?? 0),
-      serviceMinor: String(parseMinor(service) ?? 0),
-      items: items.map((item) => ({
-        name: item.name.trim(),
-        quantity: item.quantity,
-        amountMinor: String(parseMinor(item.amount) ?? 0),
-        unclear: item.unclear,
-        units: item.units,
-      })),
-    };
-    updateReceipt.mutate(payload);
-    return true;
+  const commitExpense = () => {
+    const input = saveAttempt.current;
+    if (!input) return;
+    saveReceipt.mutate(input, {
+      onSuccess: () => {
+        saveAttempt.current = null; setUncertainSave(false); setSaveKey(newRequestId());
+        feedback(t('receiptSaved')); navigate(`/apps/split/${groupId}`);
+      },
+      onError: (error) => {
+        const uncertain = !(error instanceof ApiError) || error.status >= 500;
+        setUncertainSave(uncertain);
+        if (!uncertain) { saveAttempt.current = null; setSaveKey(newRequestId()); }
+        feedback(uncertain ? t('receiptSaveUncertain') : error instanceof ApiError ? error.message : t('receiptSaveFailed'), 'error');
+      },
+      onSettled: () => { submitting.current = false; },
+    });
   };
 
   const save = () => {
-    if (!payerId) {
-      feedback(t('receiptPickPayer'), 'error');
-      return;
+    if (submitting.current) return;
+    if (uncertainSave && saveAttempt.current) { submitting.current = true; commitExpense(); return; }
+    if (!reviewed || !validDraft || !payerId || !receiptId || preview.unallocated.length || preview.difference !== 0) {
+      feedback(t('receiptConfirmRequired'), 'error'); return;
     }
-    const unassigned = items.some((item) => Object.keys(item.units).length === 0);
-    if (unassigned) {
-      feedback(t('receiptUnassigned'), 'error');
-      return;
-    }
-    if (!receiptId) {
-      feedback(t('receiptNeedPhoto'), 'error');
-      return;
-    }
-    updateReceipt.mutate(
-      {
-        totalMinor: String(totalMinor),
-        discountMinor: String(parseMinor(discount) ?? 0),
-        serviceMinor: String(parseMinor(service) ?? 0),
-        items: items.map((item) => ({
-          name: item.name.trim(),
-          quantity: item.quantity,
-          amountMinor: String(parseMinor(item.amount) ?? 0),
-          unclear: item.unclear,
-          units: item.units,
-        })),
+    submitting.current = true;
+    updateReceipt.mutate({
+      totalMinor: String(totalMinor), discountMinor: String(parseReceiptMinor(discount) ?? 0), serviceMinor: String(parseReceiptMinor(service) ?? 0),
+      items: items.map((item) => ({ name: item.name.trim(), quantity: item.quantity, amountMinor: String(parseReceiptMinor(item.amount) ?? 0), unclear: false, units: item.units })),
+    }, {
+      onSuccess: () => {
+        saveAttempt.current = { payerId, clientRequestId: saveKey, description: group?.title ?? t('receiptTitle'), category };
+        commitExpense();
       },
-      {
-        onSuccess: () => {
-          saveReceipt.mutate(
-            { payerId, clientRequestId: saveKey, description: group?.title ?? t('receiptTitle'), category },
-            {
-              onSuccess: () => {
-                setSaveKey(newRequestId());
-                feedback(t('receiptSaved'));
-                navigate(`/apps/split/${groupId}`);
-              },
-              onError: () => feedback(t('receiptSaveFailed'), 'error'),
-            },
-          );
-        },
-        onError: () => feedback(t('receiptSaveFailed'), 'error'),
-      },
-    );
+      onError: (error) => { submitting.current = false; feedback(error instanceof ApiError ? error.message : t('receiptSaveFailed'), 'error'); },
+    });
   };
 
   const difference = preview.difference;
@@ -362,6 +311,10 @@ export function SplitReceiptPage() {
       }
       bottomSpace
     >
+      {photoUrl ? <Card className="mt-2 gap-2 p-3">
+        <img src={photoUrl} alt={t('receiptPhotoPreview')} className="max-h-64 w-full rounded-xl object-contain" />
+        {savedImageBytes > 0 ? <p className="text-caption text-ink-2">{t('receiptSavedImageInfo')}: {Math.max(1, Math.ceil(savedImageBytes / 1024))} KB</p> : <p className="text-caption text-ink-2">{t('receiptLocalPreview')}</p>}
+      </Card> : null}
       {!receiptId && !manual ? (
         <Card className="mt-2 p-4">
           <div className="flex flex-col items-center gap-2 py-4 text-center">
@@ -374,13 +327,20 @@ export function SplitReceiptPage() {
             type="file"
             accept="image/jpeg,image/png,image/webp"
             className="hidden"
-            onChange={(event) => onPickFile(event.target.files?.[0])}
+            onChange={(event) => { onPickFile(event.target.files?.[0]); event.target.value = ''; }}
           />
           <div className="flex flex-col gap-2 pt-2">
-            <PrimaryButton onClick={() => fileInput.current?.click()} full progress={upload.isPending}>
-              {upload.isPending ? t('receiptRecognizing') : t('receiptTakePhoto')}
+            <PrimaryButton onClick={() => fileInput.current?.click()} full disabled={upload.isPending}>
+              {selectedPhoto ? t('receiptChooseAnother') : t('receiptTakePhoto')}
             </PrimaryButton>
-            <SecondaryButton onClick={startManual} full>
+            {selectedPhoto ? <>
+              <label className="flex min-h-11 items-start gap-2 py-2 text-caption text-ink-2">
+                <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={upload.isPending} className="mt-0.5 size-5 shrink-0 accent-accent" />
+                {t('receiptDeepSeekConsent')}
+              </label>
+              <PrimaryButton onClick={recognize} full disabled={!consent} progress={upload.isPending}>{upload.isPending ? t('receiptRecognizing') : t('receiptRecognize')}</PrimaryButton>
+            </> : null}
+            <SecondaryButton onClick={startManual} full disabled={upload.isPending}>
               {t('receiptManual')}
             </SecondaryButton>
           </div>
@@ -397,6 +357,7 @@ export function SplitReceiptPage() {
 
       {items.length > 0 ? (
         <>
+          <fieldset disabled={draftLocked} className="m-0 min-w-0 border-0 p-0">
           <SectionLabel>{t('receiptItems')}</SectionLabel>
           <div className="flex flex-col gap-2">
             {items.map((item) => (
@@ -406,6 +367,8 @@ export function SplitReceiptPage() {
                     value={item.name}
                     onChange={(event) => patchItem(item.key, { name: event.target.value })}
                     placeholder={t('receiptItemName')}
+                    aria-label={t('receiptItemName')}
+                    maxLength={200}
                     className={`min-w-0 flex-1 rounded-lg px-3 py-2 text-body-strong text-ink outline-none placeholder:text-hint ${
                       item.unclear ? 'bg-warning-soft' : 'bg-neutral-soft/60'
                     }`}
@@ -424,6 +387,8 @@ export function SplitReceiptPage() {
                   <input
                     type="number"
                     min={1}
+                    max={999}
+                    aria-label={t('receiptQuantity')}
                     value={item.quantity}
                     onChange={(event) =>
                       patchItem(item.key, { quantity: Math.max(1, Number(event.target.value) || 1) })
@@ -453,21 +418,22 @@ export function SplitReceiptPage() {
                   <button
                     type="button"
                     onClick={() => takeAll(item.key)}
-                    className="h-8 rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent"
+                    className="min-h-11 max-w-full rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent"
                   >
                     {t('receiptEveryone')}
                   </button>
                   {members.map((person) => {
                     const units = item.units[person.id] ?? 0;
                     return (
-                      <span key={person.id} className="flex items-center gap-1">
+                      <span key={person.id} className="flex max-w-full flex-wrap items-center gap-1">
                         <button
                           type="button"
+                          aria-pressed={units > 0}
                           onClick={() => toggleUnit(item.key, person.id)}
                           className={
                             units > 0
-                              ? 'h-8 rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent'
-                              : 'h-8 rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
+                              ? 'min-h-11 max-w-full whitespace-normal break-words rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent'
+                              : 'min-h-11 max-w-full whitespace-normal break-words rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
                           }
                         >
                           {person.public_name}
@@ -476,18 +442,18 @@ export function SplitReceiptPage() {
                           <span className="flex items-center gap-0.5">
                             <button
                               type="button"
-                              aria-label="minus"
+                              aria-label={`${t('receiptLessUnits')}: ${person.public_name}`}
                               onClick={() => setUnits(item.key, person.id, units - 1)}
-                              className="flex size-6 items-center justify-center rounded-full bg-neutral-soft text-ink-2"
+                              className="flex size-11 items-center justify-center rounded-full bg-neutral-soft text-ink-2"
                             >
                               <Icon name="remove" size={14} />
                             </button>
                             <span className="min-w-4 text-center text-caption text-ink">{units}</span>
                             <button
                               type="button"
-                              aria-label="plus"
+                              aria-label={`${t('receiptMoreUnits')}: ${person.public_name}`}
                               onClick={() => setUnits(item.key, person.id, units + 1)}
-                              className="flex size-6 items-center justify-center rounded-full bg-neutral-soft text-ink-2"
+                              className="flex size-11 items-center justify-center rounded-full bg-neutral-soft text-ink-2"
                             >
                               <Icon name="add" size={14} />
                             </button>
@@ -509,6 +475,7 @@ export function SplitReceiptPage() {
                 { key: nextKey(), name: '', quantity: 1, amount: '', unclear: false, units: {} },
               ])
             }
+            disabled={items.length >= MAX_RECEIPT_ITEMS}
             className="mt-2 flex w-full items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-left text-body-lg text-hint"
           >
             <Icon name="add_circle" size={20} className="text-accent" />
@@ -528,8 +495,8 @@ export function SplitReceiptPage() {
                   onClick={() => setCategory(name)}
                   className={
                     category === name
-                      ? 'h-8 rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent'
-                      : 'h-8 rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
+                      ? 'min-h-11 max-w-full whitespace-normal break-words rounded-full bg-accent-soft px-3 text-caption font-semibold text-accent'
+                      : 'min-h-11 max-w-full whitespace-normal break-words rounded-full bg-neutral-soft px-3 text-caption text-ink-2'
                   }
                 >
                   {t(CATEGORY_KEY[name] ?? 'catOther')}
@@ -585,7 +552,6 @@ export function SplitReceiptPage() {
                   title={person.public_name}
                   onClick={() => {
                     setPayerId(person.id);
-                    persist();
                   }}
                   trailing={
                     payerId === person.id ? (
@@ -603,19 +569,19 @@ export function SplitReceiptPage() {
               <span className="text-body-secondary text-ink-2">{t('receiptTotal')}</span>
               <span className="text-body-strong text-ink">{formatMinor(String(totalMinor))} ₸</span>
             </div>
-            {(parseMinor(discount) ?? 0) > 0 ? (
+            {(parseReceiptMinor(discount) ?? 0) > 0 ? (
               <div className="flex items-center justify-between pt-1">
                 <span className="text-body-secondary text-ink-2">{t('receiptDiscount')}</span>
                 <span className="text-body-secondary text-success">
-                  -{formatMinor(String(parseMinor(discount) ?? 0))} ₸
+                  -{formatMinor(String(parseReceiptMinor(discount) ?? 0))} ₸
                 </span>
               </div>
             ) : null}
-            {(parseMinor(service) ?? 0) > 0 ? (
+            {(parseReceiptMinor(service) ?? 0) > 0 ? (
               <div className="flex items-center justify-between pt-1">
                 <span className="text-body-secondary text-ink-2">{t('receiptService')}</span>
                 <span className="text-body-secondary text-warning">
-                  +{formatMinor(String(parseMinor(service) ?? 0))} ₸
+                  +{formatMinor(String(parseReceiptMinor(service) ?? 0))} ₸
                 </span>
               </div>
             ) : null}
@@ -656,14 +622,21 @@ export function SplitReceiptPage() {
             ) : null}
           </Card>
 
+          <label className="mt-3 flex min-h-11 items-start gap-2 rounded-xl bg-surface p-3 text-caption text-ink">
+            <input type="checkbox" checked={reviewed} onChange={(event) => setReviewedSignature(event.target.checked ? draftSignature : '')} className="mt-0.5 size-5 shrink-0 accent-accent" />
+            {t('receiptReviewConfirmed')}
+          </label>
+          {!validDraft ? <p role="alert" className="pt-2 text-caption text-danger">{t('receiptDraftInvalid')}</p> : null}
+          </fieldset>
+          {uncertainSave ? <Banner tone="warning" icon="info" title={t('receiptSaveUncertain')} /> : null}
           <div className="pt-3">
             <PrimaryButton
               onClick={save}
               full
               progress={saveReceipt.isPending || updateReceipt.isPending}
-              disabled={difference !== 0 || !payerId}
+              disabled={!uncertainSave && (difference !== 0 || !payerId || !reviewed || !validDraft || preview.unallocated.length > 0)}
             >
-              {t('receiptSave')}
+              {t(uncertainSave ? 'receiptRetrySave' : 'receiptSave')}
             </PrimaryButton>
           </div>
         </>
