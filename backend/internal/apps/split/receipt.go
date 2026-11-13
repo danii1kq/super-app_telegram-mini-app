@@ -24,6 +24,8 @@ type Receipt struct {
 	GroupID        int64
 	AuthorID       int64
 	Status         string
+	Review         *ReceiptReview
+	Approvals      []ReceiptApproval
 	Version        int
 	OCRError       string
 	TotalMinor     int64
@@ -360,6 +362,9 @@ func (s *Service) receipt(ctx context.Context, q receiptQuerier, viewerID, recei
 		return Receipt{}, err
 	}
 
+	if err = s.receiptReview(ctx, q, &receipt, viewerID); err != nil {
+		return Receipt{}, err
+	}
 	receipt.Items, err = s.receiptItems(ctx, q, receipt.ID)
 	if err != nil {
 		return Receipt{}, err

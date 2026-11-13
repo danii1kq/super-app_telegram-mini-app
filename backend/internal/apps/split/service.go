@@ -25,6 +25,7 @@ type Service struct {
 	reader       ocr.Reader
 	delivery     *secure.Cipher
 	receiptSlots chan struct{}
+	MiniAppURL   string
 }
 
 func NewService(pool *postgres.Pool, content *secure.Cipher, reader ocr.Reader, delivery *secure.Cipher) *Service {

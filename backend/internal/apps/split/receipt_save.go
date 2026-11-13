@@ -25,8 +25,31 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 		return Expense{}, httpapi.BadRequest("description_length", "Название до 200 символов")
 	}
 	category = normalizeCategory(category)
+
 	var expenseID, groupID int64
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT group_id FROM split_receipts WHERE id=$1`, receiptID).Scan(&groupID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return httpapi.NotFound("Чек не найден")
+			}
+			return err
+		}
+		if err := lockGroup(ctx, tx, groupID); err != nil {
+			return err
+		}
+		var err error
+		expenseID, err = s.saveReceiptTx(ctx, tx, authorID, receiptID, payerID, clientRequestID, description, category)
+		return err
+	})
+	if err != nil {
+		return Expense{}, err
+	}
+	return s.Expense(ctx, authorID, groupID, expenseID)
+}
+
+func (s *Service) saveReceiptTx(ctx context.Context, tx pgx.Tx, authorID, receiptID, payerID int64, clientRequestID, description, category string) (int64, error) {
+	var expenseID, groupID int64
+	err := func() error {
 		if err := tx.QueryRow(ctx, `SELECT group_id FROM split_receipts WHERE id=$1 FOR UPDATE`, receiptID).Scan(&groupID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return httpapi.NotFound("Чек не найден")
@@ -61,8 +84,8 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if receipt.Status != "draft" {
-			return httpapi.Conflict("receipt_saved", "Чек уже сохранён как расход")
+		if receipt.Status != "review" {
+			return httpapi.Conflict("receipt_approval_required", "Обновите приложение и подтвердите чек всеми участниками")
 		}
 		if len(receipt.Items) == 0 {
 			return httpapi.Validation(map[string]string{"items": "Добавьте позиции"}, "Проверьте чек")
@@ -103,6 +126,14 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 		if allocation.Difference != 0 || allocation.SumShares <= 0 || !CheckShares(receipt.TotalMinor, allocation.PerPerson) {
 			return httpapi.Validation(map[string]string{"total_minor": "Сумма долей не совпадает с итогом чека"}, "Проверьте суммы")
 		}
+		var pending, reviewers int
+		if err = tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE decision<>'accepted' OR revision<>$2),count(*) FROM split_receipt_approvals WHERE receipt_id=$1`, receiptID, receipt.Version).Scan(&pending, &reviewers); err != nil {
+			return err
+		}
+		if pending != 0 || reviewers == 0 {
+			return httpapi.Conflict("receipt_approval_required", "Дождитесь согласия всех участников")
+		}
+
 		err = tx.QueryRow(ctx, `INSERT INTO split_expenses(group_id,author_id,payer_id,description_sealed,amount_sealed,key_id,client_request_id,category) VALUES($1,$2,$3,''::bytea,''::bytea,'pending',$4,$5) RETURNING id`, groupID, authorID, payerID, clientRequestID, category).Scan(&expenseID)
 		if err != nil {
 			var conflict *pgconn.PgError
@@ -131,13 +162,14 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 				return err
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE split_receipts SET status='saved',saved_expense_id=$2,image_expires_at=CASE WHEN image_state='stored' THEN now()+$3::interval ELSE NULL END,updated_at=now() WHERE id=$1`, receiptID, expenseID, savedImageTTL)
-		return err
-	})
-	if err != nil {
-		return Expense{}, err
-	}
-	return s.Expense(ctx, authorID, groupID, expenseID)
+		_, err = tx.Exec(ctx, `UPDATE split_receipts SET status='saved',saved_expense_id=$2,version=version+1,image_expires_at=CASE WHEN image_state='stored' THEN now()+$3::interval ELSE NULL END,updated_at=now() WHERE id=$1`, receiptID, expenseID, savedImageTTL)
+		if err != nil {
+			return err
+		}
+		return s.receiptDebtsTx(ctx, tx, receipt, expenseID, payerID, allocation)
+
+	}()
+	return expenseID, err
 }
 
 func (s *Service) openSealedString(sealed []byte, keyID *string, aad string) (string, error) {

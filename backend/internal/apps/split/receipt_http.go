@@ -471,6 +471,16 @@ func receiptJSON(receipt Receipt) map[string]any {
 		"created_at":     receipt.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 	out["image_state"], out["image_width"], out["image_height"], out["image_bytes"] = receipt.ImageState, receipt.ImageWidth, receipt.ImageHeight, receipt.ImageBytes
+	approvals := []map[string]any{}
+	for _, a := range receipt.Approvals {
+		approvals = append(approvals, map[string]any{"user_id": strconv.FormatInt(a.UserID, 10), "decision": a.Decision, "question": a.Question})
+	}
+	out["approvals"] = approvals
+	if receipt.Review != nil {
+		out["payer_id"] = strconv.FormatInt(receipt.Review.PayerID, 10)
+		out["description"] = receipt.Review.Description
+		out["category"] = receipt.Review.Category
+	}
 	if receipt.ImageExpiresAt != nil {
 		out["image_expires_at"] = receipt.ImageExpiresAt.UTC().Format(time.RFC3339)
 	}

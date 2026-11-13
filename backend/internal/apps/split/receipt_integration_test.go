@@ -74,7 +74,7 @@ func receiptTestService(t *testing.T) (*Service, *receiptTestReader) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql", "000015_split_memory_only_photos.up.sql", "000016_split_receipt_items.up.sql"} {
+	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql", "000015_split_memory_only_photos.up.sql", "000016_split_receipt_items.up.sql", "000017_split_collaboration.up.sql"} {
 		raw, err := os.ReadFile("../../../../db/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
@@ -248,6 +248,7 @@ func TestReceiptPhotoNeverPersists(t *testing.T) {
 				if _, err = s.UpdateReceipt(ctx, 1, id, 100, 0, 0, receipt.Items); err != nil {
 					t.Fatal(err)
 				}
+				authorizeSaveFixture(t, s, id)
 				if _, err = s.SaveReceipt(ctx, 1, id, 1, "memory-save", "Tea", "cafe"); err != nil {
 					t.Fatal(err)
 				}
@@ -353,11 +354,12 @@ func TestReceiptSavesReviewedFreeModifiers(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = s.SaveReceipt(ctx, 1, receipt.ID, 1, "free-not-reviewed", "Doner", "cafe")
-	requireReceiptStatus(t, err, 422)
+	requireReceiptStatus(t, err, 409)
 	items[1].Unclear = false
 	if _, err = s.UpdateReceipt(ctx, 1, receipt.ID, 234996, 0, 0, items); err != nil {
 		t.Fatal(err)
 	}
+	authorizeSaveFixture(t, s, receipt.ID)
 	expense, err := s.SaveReceipt(ctx, 1, receipt.ID, 1, "free-reviewed", "Doner", "cafe")
 	if err != nil || expense.AmountMinor != 234996 || expense.Shares[2] != 234996 {
 		t.Fatal("free modifier prevented exact reviewed expense", expense, err)
@@ -374,7 +376,23 @@ func makeAllocatedReceipt(t *testing.T, s *Service, groupID int64) Receipt {
 	if err != nil {
 		t.Fatal(err)
 	}
+	authorizeSaveFixture(t, s, receipt.ID)
 	return receipt
+}
+
+// Save transaction fixtures start after unanimous review; workflow tests exercise the actual transitions.
+func authorizeSaveFixture(t *testing.T, s *Service, id int64) {
+	t.Helper()
+	_, err := s.pool.Exec(context.Background(), `UPDATE split_receipts SET status='review' WHERE id=$1;
+ `, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.pool.Exec(context.Background(), `INSERT INTO split_receipt_approvals(receipt_id,user_id,revision,decision)
+ SELECT r.id,m.user_id,r.version,'accepted' FROM split_receipts r JOIN split_members m ON m.group_id=r.group_id AND m.state='active' WHERE r.id=$1 ON CONFLICT DO NOTHING`, id)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestReceiptSaveReplayAndConflicts(t *testing.T) {
@@ -503,5 +521,5 @@ func TestReceiptUnclearRequiresReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = s.SaveReceipt(ctx, 1, receipt.ID, 1, "unreviewed", "Dinner", "cafe")
-	requireReceiptStatus(t, err, 422)
+	requireReceiptStatus(t, err, 409)
 }

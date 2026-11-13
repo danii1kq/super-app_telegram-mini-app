@@ -23,6 +23,7 @@ type Config struct {
 
 	// Telegram
 	BotToken         string
+	BotUsername      string
 	WebhookSecret    string
 	AllowedBotID     int64
 	InitDataMaxAge   time.Duration
@@ -55,6 +56,7 @@ func Load() (Config, error) {
 		Addr:             env("SRUNAL_ADDR", ":8080"),
 		DatabaseURL:      env("SRUNAL_DATABASE_URL", ""),
 		BotToken:         env("SRUNAL_BOT_TOKEN", ""),
+		BotUsername:      env("SRUNAL_BOT_USERNAME", ""),
 		WebhookSecret:    env("SRUNAL_WEBHOOK_SECRET", ""),
 		AllowedBotID:     envInt("SRUNAL_BOT_ID", 0),
 		InitDataMaxAge:   envDuration("SRUNAL_INITDATA_MAX_AGE", 24*time.Hour),
