@@ -229,6 +229,53 @@ func (s *Service) Respond(ctx context.Context, viewerID, statusID int64) error {
 	})
 }
 
+// Responder is one account that answered a status.
+type Responder struct {
+	UserID   int64
+	Name     string
+	Username string
+	At       time.Time
+}
+
+// Responders lists who answered, newest first. Only the author may see the
+// list: a responder must not learn who else was invited, because the audience
+// itself is private to the author.
+func (s *Service) Responders(ctx context.Context, viewerID, statusID int64) ([]Responder, error) {
+	var authorID int64
+	if err := s.pool.QueryRow(ctx,
+		`SELECT author_id FROM pulse_statuses WHERE id = $1`, statusID,
+	).Scan(&authorID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, httpapi.NotFound("Статус не найден")
+		}
+		return nil, err
+	}
+	if authorID != viewerID {
+		return nil, httpapi.NotFound("Статус не найден")
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT r.user_id, u.public_name, coalesce(u.username, ''), r.created_at
+		   FROM pulse_responses r
+		   JOIN users u ON u.id = r.user_id
+		  WHERE r.status_id = $1
+		  ORDER BY r.created_at DESC, r.user_id`, statusID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]Responder, 0, 8)
+	for rows.Next() {
+		var item Responder
+		if err := rows.Scan(&item.UserID, &item.Name, &item.Username, &item.At); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 // Close ends the author's own status early.
 func (s *Service) Close(ctx context.Context, authorID, statusID int64) error {
 	tag, err := s.pool.Exec(ctx,

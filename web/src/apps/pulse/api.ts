@@ -16,7 +16,25 @@ export interface PulseStatus {
 
 export const pulseKeys = {
   feed: ['pulse', 'feed'] as const,
+  responders: (statusId: string) => ['pulse', 'responders', statusId] as const,
 };
+
+export interface PulseResponder {
+  user_id: string;
+  name: string;
+  username: string;
+  answered_at: string;
+}
+
+/** Who answered a status. Only the author may read this list. */
+export function usePulseResponders(statusId: string, enabled = true) {
+  return useQuery({
+    queryKey: pulseKeys.responders(statusId),
+    queryFn: () => api<{ responders: PulseResponder[] }>(`/pulse/${statusId}/responses`),
+    select: (data) => data.responders,
+    enabled: Boolean(statusId) && enabled,
+  });
+}
 
 export function usePulseFeed(enabled = true) {
   return useQuery({

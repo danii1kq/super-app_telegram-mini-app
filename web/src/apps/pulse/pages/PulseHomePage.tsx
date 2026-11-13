@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { minutesLeft, usePulseFeed } from '../api';
 import { useCloseStatus, useCreateStatus, useRespond } from '../mutations';
+import { ResponderList } from '../ResponderList';
 import {
   AppHeader,
   Avatar,
@@ -204,6 +205,8 @@ export function PulseHomePage() {
                   </button>
                 )}
               </div>
+
+              {status.mine && status.responses > 0 ? <ResponderList statusId={status.id} /> : null}
             </Card>
           );
         })}
