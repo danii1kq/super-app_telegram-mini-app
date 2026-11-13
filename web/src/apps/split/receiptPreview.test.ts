@@ -1,6 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { receiptPreview } from './receiptPreview.ts';
+import { receiptPreview, parseReceiptMinor } from './receiptPreview.ts';
+
+test('receipt prices accept printed free modifiers and exact minor units', () => {
+  assert.equal(parseReceiptMinor('0,00'), 0);
+  assert.equal(parseReceiptMinor('0'), 0);
+  assert.equal(parseReceiptMinor('2 349,96'), 234996);
+  assert.equal(parseReceiptMinor('1950.02'), 195002);
+  for (const invalid of ['', '-1', '1,234', 'unknown', '10000000000.01']) assert.equal(parseReceiptMinor(invalid), null);
+  const result = receiptPreview([{ key: 'doner', amount: 234996, units: { '1': 1 } }, { key: 'free', amount: parseReceiptMinor('0,00')!, units: { '1': 1 } }], 0, 0, 234996, '1');
+  assert.equal(result.valid, true);
+  assert.equal(result.difference, 0);
+  assert.deepEqual(result.unallocated, []);
+});
 
 test('receipt preview preserves personal items and exact discount rounding', () => {
   const result = receiptPreview([{ key: 'pizza', amount: 400000, units: { '1': 1, '2': 1 } }, { key: 'burger', amount: 200000, units: { '2': 1 } }], 0, 0, 600000, '1');

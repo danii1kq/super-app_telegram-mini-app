@@ -74,7 +74,7 @@ func receiptTestService(t *testing.T) (*Service, *receiptTestReader) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql"} {
+	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql", "000015_split_memory_only_photos.up.sql"} {
 		raw, err := os.ReadFile("../../../../db/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
@@ -166,19 +166,16 @@ func TestReceiptImportPrivacyBudgetAndConsent(t *testing.T) {
 	if err = s.pool.QueryRow(ctx, `SELECT image_sealed FROM split_receipts WHERE id=$1`, body.ID).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Equal(stored, raw) || bytes.HasPrefix(stored, []byte{255, 216}) {
-		t.Fatal("receipt photo stored as plaintext")
+	if len(stored) != 0 {
+		t.Fatal("receipt photo persisted after recognition")
 	}
-	for token, want := range map[string]int{"test-2": 200, "test-3": 404} {
+	for token, want := range map[string]int{"test-2": 404, "test-3": 404} {
 		r := httptest.NewRequest("GET", "/api/v1/split/receipts/"+body.ID+"/image", nil)
 		r.Header.Set("Authorization", "Bearer "+token)
 		imageResponse := httptest.NewRecorder()
 		mux.ServeHTTP(imageResponse, r)
 		if imageResponse.Code != want {
 			t.Fatalf("image rights: %d", imageResponse.Code)
-		}
-		if want == 200 && (imageResponse.Header().Get("Cache-Control") != "private, no-store" || imageResponse.Header().Get("X-Content-Type-Options") != "nosniff") {
-			t.Fatal("image caching")
 		}
 	}
 	if w = send("test-1", true, raw); w.Code != 429 {
@@ -192,6 +189,103 @@ func TestReceiptImportPrivacyBudgetAndConsent(t *testing.T) {
 	}
 	if w = send("test-1", true, raw); w.Code != 429 {
 		t.Fatalf("dailybudget: %d", w.Code)
+	}
+}
+
+type receiptReaderFunc func(context.Context, []byte, string) (ocr.Result, error)
+
+func (f receiptReaderFunc) Read(ctx context.Context, raw []byte, mime string) (ocr.Result, error) {
+	return f(ctx, raw, mime)
+}
+
+func TestReceiptPhotoNeverPersists(t *testing.T) {
+	for _, scenario := range []string{"success", "provider_error", "request_cancelled"} {
+		t.Run(scenario, func(t *testing.T) {
+			s, _ := receiptTestService(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			group, err := s.CreateGroup(ctx, 1, "Memory only", []int64{2})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var id int64
+			s.reader = receiptReaderFunc(func(_ context.Context, photo []byte, mime string) (ocr.Result, error) {
+				var stored, bytes, width int
+				var state string
+				if err := s.pool.QueryRow(context.Background(), `SELECT id,octet_length(image_sealed),image_bytes,image_state,image_width FROM split_receipts WHERE group_id=$1`, group.ID).Scan(&id, &stored, &bytes, &state, &width); err != nil {
+					t.Fatal(err)
+				}
+				if len(photo) == 0 || mime != "image/jpeg" || stored != 0 || bytes != 0 || width != 120 || state != "processing" {
+					t.Fatalf("image persisted during OCR: stored=%d bytes=%d state=%s", stored, bytes, state)
+				}
+				if scenario == "request_cancelled" {
+					cancel()
+					return ocr.Result{}, context.Canceled
+				}
+				if scenario == "provider_error" {
+					return ocr.Result{}, ocr.ErrUnavailable
+				}
+				return ocr.Result{Currency: "KZT", Total: 100, Items: []ocr.Item{{Name: "Tea", Quantity: 1, Amount: 100}}}, nil
+			})
+			receipt, err := s.CreateReceipt(ctx, 1, group.ID, testReceiptImage(t), "image/png")
+			if scenario == "request_cancelled" {
+				if err == nil {
+					t.Fatal("cancelled request succeeded")
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if receipt.ImageBytes != 0 || receipt.ImageExpiresAt != nil || receipt.ImageState != "purged" {
+					t.Fatal("photo advertised as stored", receipt)
+				}
+				if scenario == "provider_error" && receipt.OCRError != "unavailable" {
+					t.Fatal("missing manual fallback", receipt)
+				}
+			}
+			if scenario == "success" {
+				receipt.Items[0].Units = map[int64]int{2: 1}
+				if _, err = s.UpdateReceipt(ctx, 1, id, 100, 0, 0, receipt.Items); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = s.SaveReceipt(ctx, 1, id, 1, "memory-save", "Tea", "cafe"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var stored, bytes int
+			var expiry *time.Time
+			if err = s.pool.QueryRow(context.Background(), `SELECT octet_length(image_sealed),image_bytes,image_expires_at FROM split_receipts WHERE id=$1`, id).Scan(&stored, &bytes, &expiry); err != nil || stored != 0 || bytes != 0 || expiry != nil {
+				t.Fatal("image survived completion", stored, bytes, expiry, err)
+			}
+			_, _, err = s.ReceiptImage(context.Background(), 2, id)
+			requireReceiptStatus(t, err, 404)
+		})
+	}
+}
+
+func TestReceiptUploadTwentyMiBBoundary(t *testing.T) {
+	s, reader := receiptTestService(t)
+	group, err := s.CreateGroup(context.Background(), 1, "Upload limit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := receiptTestMux(t, s)
+	raw := testReceiptImage(t)
+	photo := append(raw, make([]byte, maxImageBytes-len(raw)+1)...)
+	for _, size := range []int{maxImageBytes + 1, maxImageBytes} {
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/split/groups/%d/receipts", group.ID), bytes.NewReader(photo[:size]))
+		req.Header.Set("Authorization", "Bearer test-1")
+		req.Header.Set("X-AI-Consent", "deepseek")
+		req.Header.Set("Content-Type", "image/png")
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, req)
+		if size > maxImageBytes {
+			if response.Code != 422 || reader.calls.Load() != 0 {
+				t.Fatal("oversized upload reached provider", response.Code, reader.calls.Load())
+			}
+		} else if response.Code != 201 || reader.calls.Load() != 1 {
+			t.Fatal("20 MiB upload rejected", response.Code, response.Body.String())
+		}
 	}
 }
 
@@ -240,6 +334,33 @@ func TestReceiptDraftLimits(t *testing.T) {
 	for _, item := range []ReceiptItem{{Name: "x", Quantity: 1000, AmountMinor: 100}, {Name: strings.Repeat("x", 201), Quantity: 1, AmountMinor: 100}, {Name: "x", Quantity: 1, AmountMinor: ocr.MaxMoneyMinor + 1}, {Name: "x", Quantity: 1, AmountMinor: 100, Units: map[int64]int{1: 1000}}} {
 		_, err = s.UpdateReceipt(ctx, 1, r.ID, 100, 0, 0, []ReceiptItem{item})
 		requireReceiptStatus(t, err, 422)
+	}
+}
+
+func TestReceiptSavesReviewedFreeModifiers(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	group, err := s.CreateGroup(ctx, 1, "Doner", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := s.CreateManualReceipt(ctx, 1, group.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := []ReceiptItem{{Name: "Doner", Quantity: 1, AmountMinor: 234996, Units: map[int64]int{2: 1}}, {Name: "Jalapeno included", Quantity: 1, AmountMinor: 0, Units: map[int64]int{2: 1}, Unclear: true}}
+	if _, err = s.UpdateReceipt(ctx, 1, receipt.ID, 234996, 0, 0, items); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.SaveReceipt(ctx, 1, receipt.ID, 1, "free-not-reviewed", "Doner", "cafe")
+	requireReceiptStatus(t, err, 422)
+	items[1].Unclear = false
+	if _, err = s.UpdateReceipt(ctx, 1, receipt.ID, 234996, 0, 0, items); err != nil {
+		t.Fatal(err)
+	}
+	expense, err := s.SaveReceipt(ctx, 1, receipt.ID, 1, "free-reviewed", "Doner", "cafe")
+	if err != nil || expense.AmountMinor != 234996 || expense.Shares[2] != 234996 {
+		t.Fatal("free modifier prevented exact reviewed expense", expense, err)
 	}
 }
 func makeAllocatedReceipt(t *testing.T, s *Service, groupID int64) Receipt {

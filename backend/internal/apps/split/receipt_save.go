@@ -69,7 +69,7 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 		}
 		participants := map[int64]bool{authorID: true, payerID: true}
 		for _, item := range receipt.Items {
-			if item.Unclear || strings.TrimSpace(item.Name) == "" || item.AmountMinor <= 0 {
+			if item.Unclear || strings.TrimSpace(item.Name) == "" || item.AmountMinor < 0 {
 				return httpapi.Validation(map[string]string{"items": "Проверьте название и цену каждой позиции"}, "Подтвердите распознанные позиции")
 			}
 			for id := range item.Units {
@@ -131,7 +131,7 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 				return err
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE split_receipts SET status='saved',saved_expense_id=$2,image_expires_at=now()+$3::interval,updated_at=now() WHERE id=$1`, receiptID, expenseID, savedImageTTL)
+		_, err = tx.Exec(ctx, `UPDATE split_receipts SET status='saved',saved_expense_id=$2,image_expires_at=CASE WHEN image_state='stored' THEN now()+$3::interval ELSE NULL END,updated_at=now() WHERE id=$1`, receiptID, expenseID, savedImageTTL)
 		return err
 	})
 	if err != nil {
