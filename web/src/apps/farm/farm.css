@@ -119,7 +119,7 @@
 .farm-barn-total { display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed #e5e8dc; padding: 15px 0; font-size:12px; color: var(--farm-muted); }
 .farm-barn-items { max-height: 260px; overflow-y: auto; margin: 14px -4px; }
 .farm-barn-item { display: flex; align-items: center; gap: 5px; margin: 7px 0; }
-.farm-barn-item .farm-crop-art { width: 46px; height: 46px; }.farm-barn-item > div { flex: 1; }.farm-barn-item strong { font-size:12px; font-weight: 550; }.farm-barn-item strong small { color: #87937a; font-size:11px; }.farm-barn-item > div > span { display: block; font-size:11px; color: var(--farm-muted); }.farm-barn-item > .farm-coins { font-size:13px; }
+.farm-barn-item .farm-crop-art { width: 46px; height: 46px; }.farm-barn-item > div { flex: 1; }.farm-barn-item strong { font-size:12px; font-weight: 550; }.farm-barn-item strong small { color: var(--farm-muted); font-size:11px; }.farm-barn-item > div > span { display: block; font-size:11px; color: var(--farm-muted); }.farm-barn-item > .farm-coins { font-size:13px; }
 .farm-pack-teaser { display: flex; align-items: center; position: relative; overflow: hidden; width: 100%; min-height: 203px; border: 1px solid #e4e8ce; border-radius: 18px; padding: 23px 20px; background: #eff2df; text-align: left; }
 .farm-pack-teaser h3 { font-size: 22px; font-weight: 550; letter-spacing: -.6px; margin-top: 9px; color: #4b603c; }
 .farm-pack-teaser p { color: #8a9673; font-size:12px; line-height: 1.8; margin-top: 7px; }
