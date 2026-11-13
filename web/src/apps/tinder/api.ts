@@ -7,6 +7,8 @@ export interface TinderProfile {
   photo_url: string;
   has_photo: boolean;
   university: string;
+  gender: string;
+  seeking: string[];
   age: number;
   active: boolean;
 }
@@ -19,6 +21,7 @@ export interface TinderCard {
   photo_url: string;
   has_photo: boolean;
   university: string;
+  gender: string;
   age: number;
   likes_you: boolean;
   created_at: string;
@@ -90,7 +93,7 @@ export function useTinderMatches(enabled = true) {
 export function useSaveProfile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { bio: string; photo_url: string; university: string; age: number; active: boolean }) =>
+    mutationFn: (input: { bio: string; photo_url: string; university: string; gender: string; seeking: string[]; age: number; active: boolean }) =>
       api<{ profile: TinderProfile }>('/tinder/profile', { method: 'PUT', body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: tinderKeys.profile });

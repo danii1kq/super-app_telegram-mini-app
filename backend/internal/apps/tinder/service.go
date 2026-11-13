@@ -31,12 +31,14 @@ func NewService(pool *postgres.Pool, content *secure.Cipher) *Service {
 
 // Profile is the viewer's own card.
 type Profile struct {
-	UserID   int64
-	Bio      string
-	PhotoURL string
+	UserID     int64
+	Bio        string
+	PhotoURL   string
 	University string
-	Age      int
-	Active   bool
+	Age        int
+	Gender     string
+	Seeking    []string
+	Active     bool
 }
 
 // Card is one profile in the deck, as another player sees it.
@@ -48,6 +50,7 @@ type Card struct {
 	PhotoURL  string
 	University string
 	Age       int
+	Gender    string
 	LikesYou  bool
 	HasPhoto  bool
 	CreatedAt time.Time
@@ -65,6 +68,37 @@ type Match struct {
 
 func profileAAD(userID int64) string {
 	return "tinder_profile:" + itoa(userID)
+}
+
+// genderValues is the accepted set. An empty string means "not specified" and
+// is allowed so an existing profile stays valid.
+var genderValues = map[string]bool{"": true, "male": true, "female": true, "other": true}
+
+func validGender(value string) bool {
+	return genderValues[value]
+}
+
+// normalizeSeeking validates the preference list and removes duplicates.
+//
+// An empty list is meaningful: it means "no preference" and shows everyone, so
+// a player who does not care is never filtered out of anyone's deck.
+func normalizeSeeking(values []string) ([]string, error) {
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if !genderValues[value] {
+			return nil, httpapi.Validation(map[string]string{"seeking": "Некорректный выбор"}, "Проверьте поля")
+		}
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out, nil
 }
 
 func photoAAD(userID int64) string {
@@ -162,7 +196,7 @@ func (s *Service) HasPhoto(ctx context.Context, userID int64) (bool, error) {
 
 // SaveProfile creates or replaces the viewer's card. Bio is sealed like every
 // other free-form text in this project.
-func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, university string, age int, active bool) (Profile, error) {
+func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, university, gender string, seeking []string, age int, active bool) (Profile, error) {
 	if len([]rune(bio)) > 500 {
 		return Profile{}, httpapi.Validation(map[string]string{"bio": "Слишком длинный текст"}, "Проверьте поля")
 	}
@@ -172,27 +206,36 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, 
 	if len(photoURL) > 500 || len(university) > 80 {
 		return Profile{}, httpapi.Validation(map[string]string{"photo_url": "Слишком длинное значение"}, "Проверьте поля")
 	}
+	if !validGender(gender) {
+		return Profile{}, httpapi.Validation(map[string]string{"gender": "Выберите пол"}, "Проверьте поля")
+	}
+	seeking, err := normalizeSeeking(seeking)
+	if err != nil {
+		return Profile{}, err
+	}
 
 	sealed, err := s.content.SealString(bio, profileAAD(userID))
 	if err != nil {
 		return Profile{}, err
 	}
 	_, err = s.pool.Exec(ctx,
-		`INSERT INTO tinder_profiles (user_id, bio_sealed, key_id, photo_url, university, age, active)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		`INSERT INTO tinder_profiles (user_id, bio_sealed, key_id, photo_url, university, gender, seeking, age, active)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET bio_sealed = EXCLUDED.bio_sealed,
 		        key_id = EXCLUDED.key_id,
 		        photo_url = EXCLUDED.photo_url,
 		        university = EXCLUDED.university,
+		        gender = EXCLUDED.gender,
+		        seeking = EXCLUDED.seeking,
 		        age = EXCLUDED.age,
 		        active = EXCLUDED.active,
 		        updated_at = now()`,
-		userID, sealed.Ciphertext, sealed.KeyID, photoURL, university, age, active)
+		userID, sealed.Ciphertext, sealed.KeyID, photoURL, university, gender, seeking, age, active)
 	if err != nil {
 		return Profile{}, err
 	}
-	return Profile{UserID: userID, Bio: bio, PhotoURL: photoURL, University: university, Age: age, Active: active}, nil
+	return Profile{UserID: userID, Bio: bio, PhotoURL: photoURL, University: university, Gender: gender, Seeking: seeking, Age: age, Active: active}, nil
 }
 
 // OwnProfile returns the viewer's card, or a zero profile when none exists.
@@ -201,9 +244,9 @@ func (s *Service) OwnProfile(ctx context.Context, userID int64) (Profile, bool, 
 	var keyID string
 	var profile Profile
 	err := s.pool.QueryRow(ctx,
-		`SELECT bio_sealed, key_id, photo_url, university, coalesce(age, 0), active
+		`SELECT bio_sealed, key_id, photo_url, university, gender, seeking, coalesce(age, 0), active
 		   FROM tinder_profiles WHERE user_id = $1`, userID,
-	).Scan(&sealed, &keyID, &profile.PhotoURL, &profile.University, &profile.Age, &profile.Active)
+	).Scan(&sealed, &keyID, &profile.PhotoURL, &profile.University, &profile.Gender, &profile.Seeking, &profile.Age, &profile.Active)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, false, nil
 	}
@@ -225,17 +268,27 @@ func (s *Service) OwnProfile(ctx context.Context, userID int64) (Profile, bool, 
 // either direction, and profiles that are switched off. Ordered so that a
 // profile which already liked the viewer comes first: in a small network that
 // is what turns a session into a match instead of a pile of maybes.
+//
+// The gender filter runs both ways, which is the only correct reading of a
+// preference: a card appears only when the viewer is looking for that gender
+// AND that person is looking for the viewer's gender. An empty seeking list
+// means no preference, so a player who did not choose is never hidden.
 func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT p.user_id, u.public_name, coalesce(u.username, ''),
-		        p.bio_sealed, p.key_id, p.photo_url, p.university, coalesce(p.age, 0), coalesce(p.photo_key_id <> '', false),
+		`WITH me AS (
+		     SELECT gender, seeking FROM tinder_profiles WHERE user_id = $1
+		 )
+		 SELECT p.user_id, u.public_name, coalesce(u.username, ''),
+		        p.bio_sealed, p.key_id, p.photo_url, p.university, coalesce(p.age, 0), p.gender,
+		        coalesce(p.photo_key_id <> '', false),
 		        EXISTS (SELECT 1 FROM tinder_likes l WHERE l.from_id = p.user_id AND l.to_id = $1) AS likes_you,
 		        p.updated_at
 		   FROM tinder_profiles p
 		   JOIN users u ON u.id = p.user_id
+		   LEFT JOIN me ON true
 		  WHERE p.active
 		    AND p.user_id <> $1
 		    AND u.status = 'active'
@@ -244,6 +297,10 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 		    AND NOT EXISTS (SELECT 1 FROM social_blocks b
 		                     WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id)
 		                        OR (b.blocker_id = p.user_id AND b.blocked_id = $1))
+		    -- The viewer wants this gender (or has no preference).
+		    AND (coalesce(cardinality(me.seeking), 0) = 0 OR p.gender = ANY(me.seeking))
+		    -- This person wants the viewer's gender (or has no preference).
+		    AND (coalesce(cardinality(p.seeking), 0) = 0 OR me.gender = ANY(p.seeking))
 		  ORDER BY likes_you DESC, p.updated_at DESC
 		  LIMIT $2`, viewerID, limit)
 	if err != nil {
@@ -257,7 +314,7 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 		var sealed []byte
 		var keyID string
 		if err := rows.Scan(&card.UserID, &card.Name, &card.Username, &sealed, &keyID,
-			&card.PhotoURL, &card.University, &card.Age, &card.HasPhoto, &card.LikesYou, &card.CreatedAt); err != nil {
+			&card.PhotoURL, &card.University, &card.Age, &card.Gender, &card.HasPhoto, &card.LikesYou, &card.CreatedAt); err != nil {
 			return nil, err
 		}
 		bio, err := s.content.OpenString(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, profileAAD(card.UserID))

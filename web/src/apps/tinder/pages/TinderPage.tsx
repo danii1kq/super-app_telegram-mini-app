@@ -28,6 +28,20 @@ import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
 import { useT } from '@/shared/i18n';
 
+/** The gender options. An empty value means "not specified". */
+const GENDERS = [
+  { value: 'male', label: 'tinderMale' },
+  { value: 'female', label: 'tinderFemale' },
+  { value: 'other', label: 'tinderOther' },
+] as const;
+
+/** Who the viewer is looking for. Nothing selected means no preference. */
+const SEEKING = [
+  { value: 'male', label: 'tinderMale' },
+  { value: 'female', label: 'tinderFemale' },
+  { value: 'other', label: 'tinderOther' },
+] as const;
+
 /**
  * CardPhoto loads the stored photo through the authenticated route and shows it
  * from a blob URL. The image is never public, so a plain <img src> cannot work.
@@ -63,6 +77,8 @@ export function TinderPage() {
   const [bio, setBio] = useState('');
   const [university, setUniversity] = useState('');
   const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [seeking, setSeeking] = useState<string[]>([]);
   const [photo, setPhoto] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [showMatches, setShowMatches] = useState(false);
@@ -76,8 +92,16 @@ export function TinderPage() {
     setBio(own?.bio ?? '');
     setUniversity(own?.university ?? '');
     setAge(own?.age ? String(own.age) : '');
+    setGender(own?.gender ?? '');
+    setSeeking(own?.seeking ?? []);
     setPhoto(own?.photo_url ?? '');
     setEditing(true);
+  };
+
+  const toggleSeeking = (value: string) => {
+    setSeeking((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+    );
   };
 
   const submitProfile = () => {
@@ -91,6 +115,8 @@ export function TinderPage() {
       {
         bio: bio.trim(),
         university: university.trim(),
+        gender,
+        seeking,
         age: Number(age) || 0,
         photo_url: photo.trim(),
         active: true,
@@ -155,6 +181,41 @@ export function TinderPage() {
               maxLength={500}
               className="w-full resize-none rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-lg text-ink outline-none placeholder:text-hint"
             />
+            <div className="pt-1 text-caption text-ink-2">{t('tinderGender')}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {GENDERS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setGender(option.value)}
+                  className={
+                    gender === option.value
+                      ? 'h-9 rounded-full bg-accent-soft px-4 text-caption font-semibold text-accent'
+                      : 'h-9 rounded-full bg-neutral-soft px-4 text-caption text-ink-2'
+                  }
+                >
+                  {t(option.label)}
+                </button>
+              ))}
+            </div>
+            <div className="pt-1 text-caption text-ink-2">{t('tinderSeeking')}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {SEEKING.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => toggleSeeking(option.value)}
+                  className={
+                    seeking.includes(option.value)
+                      ? 'h-9 rounded-full bg-accent-soft px-4 text-caption font-semibold text-accent'
+                      : 'h-9 rounded-full bg-neutral-soft px-4 text-caption text-ink-2'
+                  }
+                >
+                  {t(option.label)}
+                </button>
+              ))}
+            </div>
+            <div className="text-caption text-hint">{t('tinderSeekingHint')}</div>
             <div className="flex gap-2">
               <input
                 value={university}

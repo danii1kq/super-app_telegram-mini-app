@@ -80,6 +80,7 @@ func cardJSON(card Card) map[string]any {
 		"bio":        card.Bio,
 		"photo_url":  card.PhotoURL,
 		"university": card.University,
+		"gender":     card.Gender,
 		"age":        card.Age,
 		"likes_you":  card.LikesYou,
 		"has_photo":  card.HasPhoto,
@@ -113,6 +114,8 @@ func (h *Handler) ownProfile(w http.ResponseWriter, r *http.Request) {
 			"bio":       profile.Bio,
 			"photo_url": profile.PhotoURL,
 			"university": profile.University,
+			"gender":     profile.Gender,
+			"seeking":    seekingOrEmpty(profile.Seeking),
 			"age":       profile.Age,
 			"active":    profile.Active,
 		},
@@ -121,11 +124,22 @@ func (h *Handler) ownProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 type profileRequest struct {
-	Bio      string `json:"bio"`
-	PhotoURL string `json:"photo_url"`
-	University string `json:"university"`
-	Age      int    `json:"age"`
-	Active   *bool  `json:"active"`
+	Bio        string   `json:"bio"`
+	PhotoURL   string   `json:"photo_url"`
+	University string   `json:"university"`
+	Gender     string   `json:"gender"`
+	Seeking    []string `json:"seeking"`
+	Age        int      `json:"age"`
+	Active     *bool    `json:"active"`
+}
+
+// seekingOrEmpty keeps the JSON shape stable: a nil slice would marshal as null
+// and the client would have to handle two empty cases.
+func seekingOrEmpty(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }
 
 func (h *Handler) saveProfile(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +157,7 @@ func (h *Handler) saveProfile(w http.ResponseWriter, r *http.Request) {
 	if body.Active != nil {
 		active = *body.Active
 	}
-	profile, err := h.service.SaveProfile(r.Context(), user.ID, body.Bio, body.PhotoURL, body.University, body.Age, active)
+	profile, err := h.service.SaveProfile(r.Context(), user.ID, body.Bio, body.PhotoURL, body.University, body.Gender, body.Seeking, body.Age, active)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return
@@ -154,6 +168,8 @@ func (h *Handler) saveProfile(w http.ResponseWriter, r *http.Request) {
 			"bio":       profile.Bio,
 			"photo_url": profile.PhotoURL,
 			"university": profile.University,
+			"gender":     profile.Gender,
+			"seeking":    seekingOrEmpty(profile.Seeking),
 			"age":       profile.Age,
 			"active":    profile.Active,
 		},
