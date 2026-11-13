@@ -23,6 +23,9 @@ import (
 type Service struct {
 	pool    *postgres.Pool
 	content *secure.Cipher
+	// delivery seals outbox payloads. It is nil when notifications are not
+	// configured, and every send path checks for that.
+	delivery *secure.Cipher
 }
 
 func NewService(pool *postgres.Pool, content *secure.Cipher) *Service {
@@ -361,6 +364,11 @@ func (s *Service) Like(ctx context.Context, fromID, toID int64) (matched bool, m
 			return err
 		}
 		if !mutual {
+			if s.delivery != nil {
+				if err := s.notifyLike(ctx, tx, fromID, toID); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 
@@ -376,6 +384,13 @@ func (s *Service) Like(ctx context.Context, fromID, toID int64) (matched bool, m
 			return err
 		}
 		matched = true
+		// Both sides hear about a match; the like that caused it is not
+		// announced separately, because the match already says it.
+		if s.delivery != nil {
+			if err := s.notifyMatch(ctx, tx, fromID, toID); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {

@@ -91,7 +91,9 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	split.NewHandler(split.NewService(pool, content, receiptReader(cfg), delivery), authService, pool).Register(mux)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
-	tinder.NewHandler(tinder.NewService(pool, content), authService).Register(mux)
+	tinderService := tinder.NewService(pool, content)
+	tinderService.SetDelivery(delivery)
+	tinder.NewHandler(tinderService, authService).Register(mux)
 	farmHandler := farm.NewHandler(pool, authService)
 	if cfg.DevInsecureKeys {
 		if err := farmHandler.SeedDevThemes(ctx); err != nil {
