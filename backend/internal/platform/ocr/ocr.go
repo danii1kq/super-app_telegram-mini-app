@@ -60,9 +60,13 @@ Rules:
 - This application supports KZT only. Report the printed currency, never convert another currency into KZT. Use an empty currency if you cannot identify it.
 - Monetary values are whole integer minor units: tenge times 100. Do not use decimals or strings.
 - amount_minor is the price of the entire line, not the unit price. Do not multiply it again by quantity.
+- For each item use the final printed line cost AFTER its own discount (often labelled Стоимость or Құны), not the price before that discount. Read every digit, including cents. Do not subtract item discounts again in discount_minor.
+- discount_minor is only a separate whole-receipt discount not already included in line costs. If all discounts are per-item, return discount_minor 0.
+- Explicitly free modifiers or items with a printed 0 price are valid amount_minor 0 and do not need unclear true just because they are free.
 - quantity is the printed number of items, 1..999; when unreadable use null and unclear true.
 - Blurry, missing or unreadable names or prices must remain empty/0 with unclear true. Do not guess.
 - total_minor, discount_minor and service_minor are the printed totals; use 0 when missing. Do not add separate discount or service lines to items.
+- Cross-check sum(items.amount_minor) + service_minor - discount_minor against the printed total_minor. If it differs, reread line costs and discounts. Never change the printed total or invent an adjustment to force a match; mark unresolved data unclear.
 - Return no more than 200 lines. Do not invent hidden or cropped items. Never decide who pays or divide the bill.`
 
 func (r *DeepSeekRecognizer) Read(ctx context.Context, image []byte, mime string) (Result, error) {
@@ -88,7 +92,7 @@ func parseResult(raw []byte) (Result, error) {
 		Items    []struct {
 			Name     string `json:"name"`
 			Quantity *int   `json:"quantity"`
-			Amount   int64  `json:"amount_minor"`
+			Amount   *int64 `json:"amount_minor"`
 			Unclear  bool   `json:"unclear"`
 		} `json:"items"`
 	}
@@ -111,15 +115,24 @@ func parseResult(raw []byte) (Result, error) {
 	for _, line := range payload.Items {
 		name := strings.TrimSpace(line.Name)
 		quantity := 1
-		unclear := line.Unclear || name == "" || line.Amount == 0 || line.Quantity == nil
+		amount := int64(0)
+		if line.Amount != nil {
+			amount = *line.Amount
+		}
+		unclear := line.Unclear || name == "" || line.Amount == nil || line.Quantity == nil
 		if line.Quantity != nil {
 			quantity = *line.Quantity
 		}
-		if len([]rune(name)) > 200 || quantity < 1 || quantity > MaxQuantity || line.Amount < 0 || line.Amount > MaxMoneyMinor || sum > MaxMoneyMinor-line.Amount {
+		if len([]rune(name)) > 200 || quantity < 1 || quantity > MaxQuantity || amount < 0 || amount > MaxMoneyMinor || sum > MaxMoneyMinor-amount {
 			return Result{}, ErrUnreadable
 		}
-		sum += line.Amount
-		result.Items = append(result.Items, Item{Name: name, Quantity: quantity, Amount: line.Amount, Unclear: unclear})
+		sum += amount
+		result.Items = append(result.Items, Item{Name: name, Quantity: quantity, Amount: amount, Unclear: unclear})
+	}
+	if sum+result.Service-result.Discount != result.Total {
+		for index := range result.Items {
+			result.Items[index].Unclear = true
+		}
 	}
 	return result, nil
 }

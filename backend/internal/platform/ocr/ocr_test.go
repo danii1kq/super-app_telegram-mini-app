@@ -79,3 +79,33 @@ func TestReceiptOutputValidation(t *testing.T) {
 		t.Fatal("accepted too long item name")
 	}
 }
+
+func TestReceiptPerItemDiscountsAndFreeModifiers(t *testing.T) {
+	const receipt = `{"currency":"KZT","total_minor":720000,"discount_minor":0,"service_minor":0,"items":[{"name":"Doner large","quantity":1,"amount_minor":234996,"unclear":false},{"name":"Jalapeno","quantity":1,"amount_minor":0,"unclear":false},{"name":"Doner","quantity":1,"amount_minor":195002,"unclear":false},{"name":"Doner and drink","quantity":1,"amount_minor":290002,"unclear":false},{"name":"Cola included","quantity":1,"amount_minor":0,"unclear":false}]}`
+	result, err := parseResult([]byte(receipt))
+	if err != nil || result.Total != 720000 || result.Discount != 0 {
+		t.Fatal("per-item discounts must not be applied twice", result, err)
+	}
+	for _, item := range result.Items {
+		if item.Unclear {
+			t.Fatal("readable zero-cost modifier marked unclear", item)
+		}
+	}
+	wrong := strings.Replace(receipt, "234996", "214900", 1)
+	result, err = parseResult([]byte(wrong))
+	if err != nil || result.Items[0].Amount != 214900 || result.Total != 720000 {
+		t.Fatal("mismatching printed values must stay editable", result, err)
+	}
+	for _, item := range result.Items {
+		if !item.Unclear {
+			t.Fatal("inconsistent receipt was presented as confident", item)
+		}
+	}
+	for _, replacement := range []string{`"amount_minor":null,`, ""} {
+		missing := strings.Replace(receipt, `"amount_minor":0,`, replacement, 1)
+		result, err = parseResult([]byte(missing))
+		if err != nil || !result.Items[1].Unclear {
+			t.Fatal("missing price mistaken for a known free item", result, err)
+		}
+	}
+}
