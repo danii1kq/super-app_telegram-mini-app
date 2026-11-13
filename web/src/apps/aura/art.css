@@ -12,7 +12,7 @@
 .aura-dungeon-art{display:block;width:100%;height:auto;aspect-ratio:28/15;overflow:hidden;border-radius:inherit}
 .aura-relic-art{display:block;width:100%;height:100%;max-width:100%;aspect-ratio:1;flex-shrink:0}
 .aura-painted-relic{position:relative;isolation:isolate;overflow:visible}
-.aura-painted-relic-image{position:absolute;inset:0;background:url('/aura/relics-atlas.webp') no-repeat;background-size:400% 300%;mask-image:radial-gradient(ellipse,#000 85%,transparent 100%)}
+.aura-painted-relic-image{position:absolute;inset:0;background:url('/aura/sheet-1.webp') no-repeat;background-size:300% 200%}
 .aura-relic-runes{position:absolute;inset:7%;border:1px dashed currentColor;border-radius:50%;opacity:0;pointer-events:none}
 .awakening-3 .aura-relic-runes,.awakening-5 .aura-relic-runes{opacity:.6;box-shadow:0 0 20px color-mix(in srgb,currentColor 20%,transparent)}
 .awakening-2 .aura-relic-runes{opacity:.25}.awakening-4 .aura-relic-runes{opacity:.85;box-shadow:0 0 24px color-mix(in srgb,currentColor 25%,transparent)}.awakening-4 .aura-relic-fragments{opacity:.45}
@@ -26,9 +26,12 @@ span.aura-relic-fragments>i:nth-child(1){left:9%;top:32%}span.aura-relic-fragmen
 @keyframes aura-art-breathe{0%,100%{opacity:.2;translate:0 4px}50%{opacity:.85;translate:0 -3px}}
 @media(prefers-reduced-motion:reduce){.aura-hunter-sparks{animation:none}}
 
-/* Extra relic sheets: same 4x3 grid, so only the image changes. */
-.aura-sheet-2 .aura-painted-relic-image{background-image:url('/aura/relics-atlas-2.webp')}
-.aura-sheet-3 .aura-painted-relic-image{background-image:url('/aura/relics-atlas-3.webp')}
-.aura-sheet-4 .aura-painted-relic-image{background-image:url('/aura/relics-atlas-4.webp')}
-.aura-sheet-5 .aura-painted-relic-image{background-image:url('/aura/relics-atlas-5.webp')}
-.aura-sheet-6 .aura-painted-relic-image{background-image:url('/aura/relics-atlas-6.webp')}
+/* Extra relic sheets: same 3x2 grid, so only the image changes. */
+
+/* Painted relic sheets: same 3x2 grid, only the image changes. */
+.aura-sheet-1 .aura-painted-relic-image{background-image:url('/aura/sheet-1.webp')}
+.aura-sheet-2 .aura-painted-relic-image{background-image:url('/aura/sheet-2.webp')}
+.aura-sheet-3 .aura-painted-relic-image{background-image:url('/aura/sheet-3.webp')}
+.aura-sheet-4 .aura-painted-relic-image{background-image:url('/aura/sheet-4.webp')}
+.aura-sheet-5 .aura-painted-relic-image{background-image:url('/aura/sheet-5.webp')}
+.aura-sheet-6 .aura-painted-relic-image{background-image:url('/aura/sheet-6.webp')}
