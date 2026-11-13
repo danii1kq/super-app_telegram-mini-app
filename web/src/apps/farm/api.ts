@@ -18,7 +18,8 @@ export interface FarmState {
   claimed_levels: number[]; orders: OrderBoard;
 }
 export interface Pack { id: string; name: string; price: number; weights: number[]; pity_after: number; guarantee: string }
-export interface Upgrade { id: string; name: string; icon: string; description: string; benefit: string; level: number; max_level: number; cost: number }
+export interface Upgrade { id: string; name: string; icon: string; description: string; benefit: string; level: number; max_level: number; cost: number; required_level: number }
+export interface FarmBonuses { perfect_percent: number; choice_percent: number; mutation_percent: number; yield_percent: number; nursery_percent: number; market_percent: number }
 export interface FarmTheme { id: string; name: string; description: string; stars: number }
 export interface Mutation { id: string; name: string; multiplier: number; min_genetics: number; unlocked: boolean }
 export interface Order { id: string; seed: string; quality: string; mutation: string; quantity: number; coins: number; xp: number }
@@ -27,14 +28,14 @@ export interface DailyReward { day: number; coins: number; seeds: Record<string,
 export interface DailyInfo { day: number; streak: number; best: number; claimable: boolean; rewards: DailyReward[] }
 export interface LevelReward { level: number; title: string; coins: number; seeds: Record<string, number>; plots: number }
 export interface LevelInfo { level: number; title: string; into: number; need: number; max: number; pending: number[]; rewards: LevelReward[] }
-export interface ExpeditionRoute { id: string; name: string; description: string; price: number; duration_seconds: number; seeds: Record<string,number>; xp: number }
+export interface ExpeditionRoute { id: string; name: string; description: string; price: number; duration_seconds: number; seeds: Record<string,number>; xp: number; required_level: number }
 export interface Expedition { route: string; name: string; started_at: string; ready_at: string; seeds: Record<string,number>; xp: number }
 export interface CrashRound { id: string; stake: number; started_at: string; status: 'running'|'cashed'|'busted'; multiplier_bp: number; payout: number; bust_bp?: number; return_percent: number }
 export interface GameResult { id: string; kind: 'crash'|'flip'|'upgrade'; status: string; stake: number; payout: number; multiplier_bp?: number; seed?: string; mutation?: string; chance_bp?: number; side?: string; at: string }
 export interface GameRules { min_stake: number; max_stake: number; crash_max_bp: number; crash_return_percent: number; crash_growth: number; flip_fee_percent: number; flip_expiry_seconds: number; upgrade_return_percent: number; upgrade_max_chance_bp: number }
 export interface Coinflip { id: string; host_id: string; host_name: string; guest_id: string; guest_name: string; stake: number; host_side: string; result_side: string; winner_id: string; status: string; created_at: string; expires_at: string; fee_percent: number }
 export interface UpgradeQuote { source_value: number; target_value: number; chance_bp: number; stake: number; target: Harvest }
-export interface FarmResponse { state: FarmState; crops: Crop[]; recipes: Recipe[]; mutations: Mutation[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null; level: LevelInfo; daily: DailyInfo; expeditions: ExpeditionRoute[]; games: GameRules }
+export interface FarmResponse { state: FarmState; crops: Crop[]; recipes: Recipe[]; mutations: Mutation[]; packs: Pack[]; upgrades: Upgrade[]; themes: FarmTheme[]; stars_available: boolean; server_time: string; message: string; drops: string[] | null; level: LevelInfo; daily: DailyInfo; expeditions: ExpeditionRoute[]; games: GameRules; seed_levels: Record<string,number>; pack_levels: Record<string,number>; bonuses: FarmBonuses }
 export interface FarmAction { kind: 'plant' | 'harvest' | 'sell' | 'buy' | 'pack' | 'upgrade' | 'theme' | 'redeem' | 'breed' | 'claim_breed' | 'keep' | 'return_trophy' | 'claim_level' | 'fulfill_order' | 'claim_daily' | 'start_expedition' | 'claim_expedition' | 'crash_start' | 'crash_cashout' | 'plant_upgrade' | 'flip_create' | 'flip_join' | 'flip_cancel'; slot?: number; seed?: string; care?: string; pack?: string; upgrade?: string; theme?: string; code?: string; item?: string; level?: number; stake?: number; side?: string; request_id?: string }
 export interface Leaderboard { entries: { id: string; name: string; revenue: number; rank: number; mine: boolean }[]; ends_at: string }
 

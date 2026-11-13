@@ -18,7 +18,7 @@ function RouteArt({route}:{route:string}) {
   </svg>;
 }
 
-export function Expeditions({routes,journey,crops,coins,now,busy,onAction}:{routes:ExpeditionRoute[];journey:Expedition|null|undefined;crops:Crop[];coins:number;now:number;busy:boolean;onAction:(action:FarmAction)=>void}) {
+export function Expeditions({routes,journey,crops,coins,level,now,busy,onAction}:{routes:ExpeditionRoute[];journey:Expedition|null|undefined;crops:Crop[];coins:number;level:number;now:number;busy:boolean;onAction:(action:FarmAction)=>void}) {
   const ready=!!journey && Date.parse(journey.ready_at)<=now;
   const progress=journey?Math.max(0,Math.min(100,(now-Date.parse(journey.started_at))/Math.max(1,Date.parse(journey.ready_at)-Date.parse(journey.started_at))*100)):0;
   const rewards=(seeds:Record<string,number>)=><div className="farm-expedition-rewards">{Object.entries(seeds).map(([id,count])=><span key={id}><CropArt seed={id}/><span>{crops.find(c=>c.id===id)?.name??id}<strong>×{count}</strong></span></span>)}</div>;
@@ -31,7 +31,7 @@ export function Expeditions({routes,journey,crops,coins,now,busy,onAction}:{rout
     </section>
     <header className="farm-section-heading spaced"><div><h2>Куда отправимся?</h2><p>Одновременно доступна одна экспедиция. Растения на грядках продолжают расти.</p></div><span className="farm-count">{routes.length} маршрута</span></header>
     <div className="farm-expedition-grid">{routes.map((route,i)=><article className={`farm-expedition-card route-${route.id}`} key={route.id}>
-      <RouteArt route={route.id}/><div className="farm-expedition-copy"><span className="farm-eyebrow">МАРШРУТ {String(i+1).padStart(2,'0')} · {Math.round(route.duration_seconds/3600)} ЧАСА</span><h2>{route.name}</h2><p>{route.description}</p><span className="farm-expedition-label">ПРИВЕЗЁТ С СОБОЙ</span>{rewards(route.seeds)}<small>И ещё +{route.xp} опыта фермы</small><button className="farm-primary full" disabled={busy||!!journey||coins<route.price} onClick={()=>onAction({kind:'start_expedition',item:route.id})}>{journey?journey.route===route.id?'Садовник в пути':'Дождись возвращения':coins<route.price?'Не хватает монет':'Отправиться'}<span className="farm-expedition-price"><Glyph name="coin" size={16}/>{route.price.toLocaleString('ru-RU')}</span></button></div>
+      <RouteArt route={route.id}/><div className="farm-expedition-copy"><span className="farm-eyebrow">МАРШРУТ {String(i+1).padStart(2,'0')} · {Math.round(route.duration_seconds/3600)} ЧАСА</span><h2>{route.name}</h2><p>{route.description}</p><span className="farm-expedition-label">ПРИВЕЗЁТ С СОБОЙ</span>{rewards(route.seeds)}<small>И ещё +{route.xp} опыта фермы{level < route.required_level ? ` · Откроется на ${route.required_level} уровне` : ''}</small><button className="farm-primary full" disabled={busy||!!journey||coins<route.price||level<route.required_level} onClick={()=>onAction({kind:'start_expedition',item:route.id})}>{journey?journey.route===route.id?'Садовник в пути':'Дождись возвращения':level<route.required_level?`С ${route.required_level} уровня`:coins<route.price?'Не хватает монет':'Отправиться'}<span className="farm-expedition-price"><Glyph name="coin" size={16}/>{route.price.toLocaleString('ru-RU')}</span></button></div>
     </article>)}</div>
   </>;
 }

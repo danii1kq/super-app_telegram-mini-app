@@ -11,12 +11,12 @@ import { GameReveal } from './GameReveal';
 type Mode='crash'|'flip'|'upgrade';
 const modes=[['crash','lamp','Переросток','Забери до взрыва'],['flip','sun','Коинфлип','Солнце или луна'],['upgrade','spark','Апгрейд','Рискни ради редкости']] as const;
 
-export function Games({state,crops,mutations,rules,serverTime,receivedAt,me,busy,onAction,play}:{state:FarmState;crops:Crop[];mutations:Mutation[];rules:GameRules;serverTime:string;receivedAt:number;me:string;busy:boolean;onAction:(action:FarmAction)=>void;play:(sound:FarmSound)=>void}) {
+export function Games({state,crops,mutations,rules,serverTime,receivedAt,me,level,seedLevels,busy,onAction,play}:{state:FarmState;crops:Crop[];mutations:Mutation[];rules:GameRules;serverTime:string;receivedAt:number;me:string;level:number;seedLevels:Record<string,number>;busy:boolean;onAction:(action:FarmAction)=>void;play:(sound:FarmSound)=>void}) {
   const [mode,setMode]=useState<Mode>('crash');
   const [stakeText,setStakeText]=useState('1000');
   const [side,setSide]=useState('heads');
   const [sourceID,setSourceID]=useState('');
-  const [target,setTarget]=useState('lotus');
+  const [target,setTarget]=useState(()=>crops.filter(c=>(seedLevels[c.id]??1)<=level).sort((a,b)=>b.price-a.price)[0]?.id??'carrot');
   const [targetMutation,setTargetMutation]=useState('crystal');
   const [frame,setFrame]=useState(Date.now());
   const [reveal,setReveal]=useState<GameResult|null>(null);
@@ -32,7 +32,8 @@ export function Games({state,crops,mutations,rules,serverTime,receivedAt,me,busy
   const bp=crash?(running?gameMultiplier(liveNow,crash.started_at,rules.crash_growth,rules.crash_max_bp):crash.multiplier_bp):100;
   const source=state.barn.find(item=>item.id===sourceID)??state.barn[0];
   const flips=useQuery({queryKey:['farm-coinflips',me],queryFn:getCoinflips,enabled:mode==='flip',refetchInterval:2000,retry:1});
-  const quote=useQuery({queryKey:['farm-upgrade-quote',me,source?.id,source?.quantity,source?.value,target,targetMutation,stake,state.upgrades.market,rules.upgrade_return_percent,rules.upgrade_max_chance_bp],queryFn:()=>getUpgradeQuote({item:source!.id,seed:target,upgrade:targetMutation,stake:stake!}),enabled:mode==='upgrade'&&!!source&&stake!==null,retry:false});
+  const targetUnlocked=(seedLevels[target]??1)<=level&&!!mutations.find(m=>m.id===targetMutation&&m.unlocked);
+  const quote=useQuery({queryKey:['farm-upgrade-quote',me,source?.id,source?.quantity,source?.value,target,targetMutation,stake,state.upgrades.market,state.xp,state.upgrades.genetics,rules.upgrade_return_percent,rules.upgrade_max_chance_bp],queryFn:()=>getUpgradeQuote({item:source!.id,seed:target,upgrade:targetMutation,stake:stake!}),enabled:mode==='upgrade'&&!!source&&stake!==null&&targetUnlocked,retry:false});
   useEffect(()=>{const timer=window.setInterval(()=>setFrame(Date.now()),running&&mode==='crash'?50:1000);return()=>window.clearInterval(timer)},[running,mode]);
   useEffect(()=>{
     const last=history.at(-1);if(!last||lastSeen.current===last.id)return;lastSeen.current=last.id;
@@ -73,9 +74,9 @@ export function Games({state,crops,mutations,rules,serverTime,receivedAt,me,busy
       {mode==='upgrade'&&<div className="farm-upgrade-game"><span className="farm-game-label">ИЗ АМБАРА В РЕДКОСТЬ</span><h2>Апгрейд растения</h2><p>Один экземпляр и монеты расходуются за попытку. При успехе получишь выбранное идеальное растение в амбар.</p>
         {!source?<div className="farm-game-empty"><Glyph name="box" size={40}/><p>Сначала собери урожай. Для попытки нужно растение из амбара.</p></div>:<>
           <div className="farm-upgrade-pair"><div><CropArt seed={source.seed} mutation={source.mutation}/><small>ОДИН ЭКЗЕМПЛЯР</small><strong>{name(source.seed)}</strong><span>{mutationNames[source.mutation]}</span></div><span className="farm-upgrade-arrow"><Glyph name="forward" size={30}/></span><div><CropArt seed={target} mutation={targetMutation}/><small>ИДЕАЛЬНОЕ РАСТЕНИЕ</small><strong>{name(target)}</strong><span>{mutationNames[targetMutation]}</span></div></div>
-          <div className="farm-upgrade-selects"><label>Что отдаём<select value={source.id} onChange={e=>setSourceID(e.target.value)}>{state.barn.map(item=><option key={item.id} value={item.id}>{name(item.seed)} · {mutationNames[item.mutation]} · {gameNumber(Math.floor(item.value/item.quantity))} монет/шт.</option>)}</select></label><label>Что получим<select value={target} onChange={e=>setTarget(e.target.value)}>{crops.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Мутация результата<select value={targetMutation} onChange={e=>setTargetMutation(e.target.value)}>{mutations.map(m=><option key={m.id} value={m.id}>{m.name} ×{m.multiplier}</option>)}</select></label></div>
+          <div className="farm-upgrade-selects"><label>Что отдаём<select value={source.id} onChange={e=>setSourceID(e.target.value)}>{state.barn.map(item=><option key={item.id} value={item.id}>{name(item.seed)} · {mutationNames[item.mutation]} · {gameNumber(Math.floor(item.value/item.quantity))} монет/шт.</option>)}</select></label><label>Что получим<select value={target} onChange={e=>setTarget(e.target.value)}>{crops.map(c=><option key={c.id} value={c.id} disabled={(seedLevels[c.id]??1)>level}>{c.name}{(seedLevels[c.id]??1)>level?` · с ${seedLevels[c.id]} уровня`:''}</option>)}</select></label><label>Мутация результата<select value={targetMutation} onChange={e=>setTargetMutation(e.target.value)}>{mutations.map(m=><option key={m.id} value={m.id} disabled={!m.unlocked}>{m.name} ×{m.multiplier}{!m.unlocked?` · генетика ${m.min_genetics}`:''}</option>)}</select></label></div>
           <div className="farm-upgrade-odds">{quote.isFetching?<span>Считаем шанс…</span>:quote.isError?<span role="alert">{quote.error.message}</span>:quote.data?<><strong>{(quote.data.chance_bp/100).toFixed(2)}%<small>ШАНС УСПЕХА</small></strong><div><span>Растение + монеты <b>{gameNumber(quote.data.source_value+quote.data.stake)}</b></span><span>Цена результата <b>{gameNumber(quote.data.target_value)}</b></span><small>Рыночные цены с учётом твоей лавки.</small></div></>:<span>Выбери ставку от {gameNumber(rules.min_stake)} монет.</span>}</div>
-          <button className="farm-primary full" disabled={busy||!valid||!quote.data||quote.isFetching||quote.isError} onClick={()=>onAction({kind:'plant_upgrade',item:source.id,seed:target,upgrade:targetMutation,stake:stake!})}>Попробовать апгрейд<Glyph name="spark" size={18}/></button>
+          <button className="farm-primary full" disabled={busy||!valid||!targetUnlocked||!quote.data||quote.isFetching||quote.isError} onClick={()=>onAction({kind:'plant_upgrade',item:source.id,seed:target,upgrade:targetMutation,stake:stake!})}>Попробовать апгрейд<Glyph name="spark" size={18}/></button>
         </>}
         {lastUpgrade&&<div className={`farm-upgrade-outcome ${lastUpgrade.status}`} key={lastUpgrade.id}><Glyph name={lastUpgrade.status==='won'?'check':'seed'} size={22}/><span><strong>{lastUpgrade.status==='won'?'Апгрейд удался!':'Последняя попытка не удалась'}</strong><small>{name(lastUpgrade.seed??'')} · {mutationNames[lastUpgrade.mutation??'none']} · шанс {((lastUpgrade.chance_bp??0)/100).toFixed(2)}%</small></span></div>}
       </div>}

@@ -12,12 +12,14 @@ export function LevelPanel({level, busy, onClaim}:{level:LevelInfo; busy:boolean
   const capped = level.level >= level.max;
   const pending = level.pending[0];
   const percent = capped ? 100 : Math.min(100, Math.round(level.into / Math.max(1, level.need) * 100));
+  const nextReward = level.rewards.find(reward => reward.level > level.level);
   return <section className="farm-level">
     <span className="farm-level-badge">{level.level}</span>
     <div>
-      <strong>{level.title}</strong>
+      <strong>{level.title} · {level.level}/{level.max}</strong>
       <span>{capped ? 'Высший уровень достигнут' : `${level.into} / ${level.need} опыта до уровня ${level.level + 1}`}</span>
       <span className="farm-level-track"><span style={{width:`${percent}%`}}/></span>
+      {nextReward && <small className="farm-level-next">На {nextReward.level} уровне: +{nextReward.coins.toLocaleString('ru-RU')} монет{Object.keys(nextReward.seeds).length > 0 ? ' и семена' : ''}{nextReward.plots > 0 ? ' и грядка' : ''}</small>}
     </div>
     {pending !== undefined && <button className="farm-level-claim" disabled={busy} onClick={()=>onClaim(pending)}>
       <Glyph name="spark" size={13}/>Награда<span>ур. {pending}</span>
