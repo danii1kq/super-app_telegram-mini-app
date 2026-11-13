@@ -20,7 +20,7 @@ export interface Receipt {
   id: string;
   group_id: string;
   author_id: string;
-  status: 'draft' | 'saved';
+  status: 'draft' | 'collecting' | 'review' | 'saved' | 'cancelled';
   version: number;
   total_minor: string;
   discount_minor: string;
@@ -34,6 +34,10 @@ export interface Receipt {
   image_bytes?: number;
   image_width?: number;
   image_height?: number;
+  payer_id?: string;
+  description?: string;
+  category?: string;
+  approvals: { user_id: string; decision: 'pending' | 'accepted' | 'question'; question: string }[];
 }
 
 export interface Allocation {
@@ -95,11 +99,30 @@ export function useGroupMembers(groupId: string) {
   });
 }
 
+export function useGroupPeople(groupId: string) {
+  return useQuery({queryKey:debtKeys.members(groupId),queryFn:()=>api<{members:string[];people:{id:string;public_name:string}[]}>(`/split/groups/${groupId}/members`),select:r=>r.people,enabled:Boolean(groupId),refetchInterval:5000});
+}
+
 export function useReceipt(id: string) {
   return useQuery({
     queryKey: receiptKeys.one(id),
     queryFn: () => api<Receipt>(`/split/receipts/${id}`),
     enabled: Boolean(id),
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useReceipts(groupId: string) {
+  return useQuery({ queryKey: ['split', 'receipts', groupId], queryFn: () => api<{receipts: Receipt[]}>(`/split/groups/${groupId}/receipts`), select: r => r.receipts, enabled: Boolean(groupId), refetchInterval: 5000 });
+}
+
+export function useReceiptAction(id: string, groupId: string) {
+  const cache=useQueryClient();
+  return useMutation({ mutationFn: ({action,...body}: {action:string;version?:number;item_id?:string;count?:number;decision?:string;question?:string;payer_id?:string;client_request_id?:string;description?:string;category?:string}) => api<Receipt>(`/split/receipts/${id}/${action}`,{method:'POST',body}),
+   onSuccess:r=>{cache.setQueryData(receiptKeys.one(id),r);void cache.invalidateQueries({queryKey:['split','receipts',groupId]});void cache.invalidateQueries({queryKey:['split','expenses',groupId]});void cache.invalidateQueries({queryKey:['split','balances',groupId]});void cache.invalidateQueries({queryKey:debtKeys.list(groupId)});},
+   onError:()=>{void cache.invalidateQueries({queryKey:receiptKeys.one(id)});}
   });
 }
 

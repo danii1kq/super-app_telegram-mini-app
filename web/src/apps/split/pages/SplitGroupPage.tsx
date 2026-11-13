@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { formatMinor, parseMinor, useSplitBalances, useSplitExpenses } from '../api';
 import { newRequestId, useAddExpense } from '../mutations';
+import { useReceipts } from '../receipts';
 import { usePeople } from '@/core/social/api';
 import {
   AppHeader,
@@ -35,6 +36,7 @@ export function SplitGroupPage() {
   const ready = status === 'ready';
   const expenses = useSplitExpenses(groupId, ready);
   const balances = useSplitBalances(groupId, ready);
+  const receipts = useReceipts(groupId);
   const addExpense = useAddExpense(groupId);
   const people = usePeople(Boolean(groupId) && ready);
 
@@ -98,6 +100,8 @@ export function SplitGroupPage() {
         </SecondaryButton>
       </div>
 
+      <SectionLabel>{t('receiptItems')}</SectionLabel>
+      <Card>{receipts.data?.map(receipt=><Row key={receipt.id} icon="receipt_long" title={`${t('receiptTitle')} ${receipt.id}`} subtitle={t(receipt.status==='saved'?'splitSaved':receipt.status==='review'?'splitReview':receipt.status==='collecting'?'splitCollecting':receipt.status==='cancelled'?'splitCancelled':'splitDraft')} value={`${formatMinor(receipt.total_minor)} ₸`} onClick={()=>navigate(`/apps/split/${groupId}/receipts/${receipt.id}`)}/>)}</Card>
       <SectionLabel>{t('balances')}</SectionLabel>
       <Card>
         {balances.isLoading ? (
