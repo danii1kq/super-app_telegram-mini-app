@@ -58,6 +58,8 @@ export function DungeonArt({dungeon = 'crypt',className = ''}:DungeonProps) {
 }
 
 const featuredRelics = ['rusty_blade','moonlit_saber','dragon_fang','world_ender','troll_heart','world_shell','origin_crown','hourglass','echo_blade','executioner','void_reaver','storm_spear'];
+// Second sheet: the early and mid game relics, which a new player sees first.
+const atlasedRelics = ['apprentice_staff','hunters_bow','twin_daggers','storm_spear','cloth_robe','leather_vest','chain_mail','guardian_plate','frost_aegis','astral_shroud','eternal_bulwark','copper_ring'];
 
 export function RelicArt({relicKey = '',rank = 'E',slot = 'accessory',level = 1,className = ''}:ArtProps & {relicKey?:string;rank?:string;slot?:string;level?:number}) {
   const id = useId().replaceAll(':','');
@@ -66,7 +68,9 @@ export function RelicArt({relicKey = '',rank = 'E',slot = 'accessory',level = 1,
   const armor = slot === 'armor' || /robe|vest|mail|plate|aegis|shroud|bulwark|shell/.test(relicKey);
   const awakening = Math.min(5,Math.max(1,level));
   const tile = featuredRelics.indexOf(relicKey);
-  if (tile>=0) return <div className={`aura-relic-art aura-painted-relic awakening-${awakening} ${className}`} role="img" aria-label={`Реликвия, пробуждение ${level}`} style={{color}}><span className="aura-painted-relic-image" style={{backgroundPosition:`${tile%4/3*100}% ${Math.floor(tile/4)/2*100}%`}}/><span className="aura-relic-runes" aria-hidden="true"/>{awakening>=4&&<span className="aura-relic-fragments" aria-hidden="true"><i/><i/><i/><i/></span>}</div>;
+  const sheet = tile >= 0 ? 1 : atlasedRelics.indexOf(relicKey) >= 0 ? 2 : 0;
+  const index = tile >= 0 ? tile : sheet === 2 ? atlasedRelics.indexOf(relicKey) : -1;
+  if (sheet > 0) return <div className={`aura-relic-art aura-painted-relic aura-sheet-${sheet} awakening-${awakening} ${className}`} role="img" aria-label={`Реликвия, пробуждение ${level}`} style={{color}}><span className="aura-painted-relic-image" style={{backgroundPosition:`${index%4/3*100}% ${Math.floor(index/4)/2*100}%`}}/><span className="aura-relic-runes" aria-hidden="true"/>{awakening>=4&&<span className="aura-relic-fragments" aria-hidden="true"><i/><i/><i/><i/></span>}</div>;
   return <svg className={`aura-relic-art awakening-${awakening} ${className}`} viewBox="0 0 100 100" fill="none" role="img" aria-label={weapon ? 'Реликвия оружия' : armor ? 'Реликвия брони' : 'Магический артефакт'}>
     <defs><radialGradient id={`${id}-aura`}><stop stopColor={color} stopOpacity=".27"/><stop offset="1" stopColor={color} stopOpacity="0"/></radialGradient><linearGradient id={`${id}-metal`} x1="30" y1="20" x2="70" y2="80" gradientUnits="userSpaceOnUse"><stop stopColor="#e3e7f1"/><stop offset=".43" stopColor={color}/><stop offset=".5" stopColor="#6c718e"/><stop offset="1" stopColor="#2c3049"/></linearGradient></defs>
     <circle cx="50" cy="50" r="48" fill={`url(#${id}-aura)`}/><path d="m50 7 37 21v44L50 93 13 72V28Z" stroke={color} opacity=".16"/>
