@@ -17,3 +17,14 @@ export function levelProgress(total:number,level:number,need:number):number {
   for(let current=1;current<level;current++)spent+=80+(current-1)*40;
   return Math.max(0,Math.min(need,total-spent));
 }
+
+export function relicComparison(candidate:{key:string;passive:string;value:number},equipped?:{key:string;passive:string;value:number}):number|null {
+  if(!equipped||candidate.key===equipped.key||candidate.passive!==equipped.passive)return null;
+  return Math.round((candidate.value-equipped.value)*10000)/100;
+}
+
+export function lootRevealDelay(rank:string):number {
+  return ({E:850,D:1000,C:1150,B:1350,A:1600,S:2000,SS:2300,SSS:2600} as Record<string,number>)[rank]??850;
+}
+
+export const materialLabel = (key:string):string => ({bone:'Костяные осколки',ember:'Угли кузницы',void:'Эссенция пустоты',seal:'Печати аномалий'} as Record<string,string>)[key]??key;

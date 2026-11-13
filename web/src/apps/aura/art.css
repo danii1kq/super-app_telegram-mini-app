@@ -11,5 +11,17 @@
 .aura-enemy-art.is-guard .aura-character-portrait{filter:saturate(.65) brightness(.78);transform:scale(.95)}
 .aura-dungeon-art{display:block;width:100%;height:auto;aspect-ratio:28/15;overflow:hidden;border-radius:inherit}
 .aura-relic-art{display:block;width:100%;height:100%;max-width:100%;aspect-ratio:1;flex-shrink:0}
+.aura-painted-relic{position:relative;isolation:isolate;overflow:visible}
+.aura-painted-relic-image{position:absolute;inset:0;background:url('/aura/relics-atlas.webp') no-repeat;background-size:400% 300%;mask-image:radial-gradient(ellipse,#000 85%,transparent 100%)}
+.aura-relic-runes{position:absolute;inset:7%;border:1px dashed currentColor;border-radius:50%;opacity:0;pointer-events:none}
+.awakening-3 .aura-relic-runes,.awakening-5 .aura-relic-runes{opacity:.6;box-shadow:0 0 20px color-mix(in srgb,currentColor 20%,transparent)}
+.awakening-2 .aura-relic-runes{opacity:.25}.awakening-4 .aura-relic-runes{opacity:.85;box-shadow:0 0 24px color-mix(in srgb,currentColor 25%,transparent)}.awakening-4 .aura-relic-fragments{opacity:.45}
+.awakening-5 .aura-relic-runes{border-style:solid;inset:3%;box-shadow:0 0 28px color-mix(in srgb,currentColor 30%,transparent),inset 0 0 18px color-mix(in srgb,currentColor 15%,transparent)}
+span.aura-relic-fragments{position:absolute;inset:0;pointer-events:none}
+span.aura-relic-fragments>i{position:absolute;width:5%;height:8%;background:currentColor;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);box-shadow:0 0 12px currentColor}
+span.aura-relic-fragments>i:nth-child(1){left:9%;top:32%}span.aura-relic-fragments>i:nth-child(2){right:7%;top:57%}span.aura-relic-fragments>i:nth-child(3){left:33%;top:5%}span.aura-relic-fragments>i:nth-child(4){right:30%;bottom:5%}
+.aura-hunter-art[data-set=crypt] .aura-hunter-sigil{border-color:#73d4bd99;box-shadow:0 0 65px #73d4bd50,inset 0 0 35px #73d4bd25}
+.aura-hunter-art[data-set=forge] .aura-hunter-sigil{border-color:#ffad6499;box-shadow:0 0 65px #ffad6450,inset 0 0 35px #ffad6425}
+.aura-hunter-art[data-set=void] .aura-hunter-sigil{border-color:#bd8bffbb;box-shadow:0 0 65px #bd8bff60,inset 0 0 35px #bd8bff25}
 @keyframes aura-art-breathe{0%,100%{opacity:.2;translate:0 4px}50%{opacity:.85;translate:0 -3px}}
 @media(prefers-reduced-motion:reduce){.aura-hunter-sparks{animation:none}}
