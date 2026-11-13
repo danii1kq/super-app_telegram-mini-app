@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func fixed(n int) (int, error) { return 99 % n, nil }
+func fixed(n int) (int, error) { return n - 1, nil }
 
 func TestPlantHarvestSellCycle(t *testing.T) {
 	now := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
@@ -103,7 +103,7 @@ func TestPackGuaranteeAndUpgradeCap(t *testing.T) {
 	if s.Pity["exotic"] != 0 {
 		t.Fatal("guarantee leaked across packs")
 	}
-	s.Upgrades["water"] = 5
+	s.Upgrades["water"] = 20
 	coins := s.Coins
 	if _, _, _, err = apply(&s, Action{Kind: "upgrade", Upgrade: "water"}, time.Now(), fixed); err == nil || s.Coins != coins {
 		t.Fatal("upgrade cap ignored")
@@ -156,6 +156,7 @@ func TestExpandedPackUsesRarityInsteadOfPosition(t *testing.T) {
 		hits := make(map[string]bool)
 		for value := 0; value < 100; value++ {
 			s = initialState(time.Now())
+			s.XP = 100000
 			s.Coins = pack.Price
 			_, drops, _, err = apply(&s, Action{Kind: "pack", Pack: pack.ID}, time.Now(), func(int) (int, error) { return value, nil })
 			if err != nil {
@@ -177,6 +178,7 @@ func TestExpandedPackUsesRarityInsteadOfPosition(t *testing.T) {
 
 func TestNewUpgradesAndExistingPlayers(t *testing.T) {
 	s := initialState(time.Now())
+	s.XP = 100000
 	s.Coins = 100000
 	for i := 0; i < 4; i++ {
 		if _, _, _, err := apply(&s, Action{Kind: "upgrade", Upgrade: "land"}, time.Now(), fixed); err != nil {
@@ -226,6 +228,7 @@ func TestSelectionProbabilitiesAndLunarGuarantee(t *testing.T) {
 	s := initialState(time.Now())
 	s.Coins = 10000
 	s.Pity["lunar"] = 5
+	s.XP = 100000
 	_, drops, _, err := apply(&s, Action{Kind: "pack", Pack: "lunar"}, time.Now(), func(int) (int, error) { return 0, nil })
 	if err != nil || drops[0] != "dragonfruit" || s.Pity["lunar"] != 2 || s.Coins != 9100 {
 		t.Fatalf("lunar guarantee failed: %v %v", drops, err)

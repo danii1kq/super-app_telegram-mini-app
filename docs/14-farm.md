@@ -14,19 +14,25 @@ Visual variance 5, motion 3, density 5, asset dependence 5, shell fidelity 10.
 - Four initial plots, expandable to eight. Each crop takes exactly three real hours. Mature crops never rot.
 - A new account receives 250 coins, seven seeds and two mature welcome plants.
 - Eighteen base species and nine craftable hybrids, three qualities, eight mutation states (including ordinary).
-- Care is selected at planting: water (free, better quality), fertilizer (12 coins,
-  one extra plant), or lamp (20 coins, five extra percentage points of mutation).
-- Water, soil and lamp upgrades have five levels. Cost: `100 * (level + 1)^2`.
-  Their effects are snapshotted at planting, so later upgrades cannot reroll crops.
-- Land adds one plot per level (four levels, base cost 300). Market adds 5% sale
-  revenue per level (five levels, base cost 200). Selection adds one percentage
-  point of legendary seed probability per level (five levels, base cost 250).
-  Genetics adds 2 percentage points to mutation chance per level (five levels, base 350),
-  unlocking electric at level 1, ancient at 2 and rainbow at 3. Nursery returns one
-  seed per harvested plot with a 10% chance per level (five levels, base 180).
-  Gallery adds two trophy slots per level (three levels, base 300), up to twelve.
-  Upgrade cost is `base * (level + 1)^2`; server metadata supplies actual levels,
-  caps and prices. Personalized weights are returned by the same logic used to roll.
+- Care is selected at planting: water (free, +5 percentage points perfect quality
+  and +10 choice), fertilizer (12 coins, +25% expected extra yield), or lamp
+  (20 coins, +5 percentage points mutation, with total chance capped at 40%).
+- Permanent development has 133 steps across nine paths, costing 54,201,676
+  coins before free plot rewards. Water, soil, lamp, market and nursery cap at
+  20; selection and genetics at 10; land at 4; gallery at 9 (24 trophy slots).
+  For the first five levels, soil gives +15% expected yield per step. Later
+  steps add +5%, reaching +150% at level 20. Each whole 100% adds one plant;
+  the remainder rolls for one more. Yield and all growing bonuses are fixed
+  at planting. Existing plots without a saved yield retain the old rules.
+- Water, market, lamp and nursery keep their first five levels' former effects,
+  then give smaller gains. Water adds +1 point perfect and choice per later
+  step; market +1% sale; lamp +0.5 point mutation; nursery +1 point seed return.
+  Genetics adds 2 mutation points per first five steps and 1 per later step,
+  unlocking electric at 1, ancient at 2 and rainbow at 3. Selection adds 1 point
+  legendary seed probability per level. All bonuses come from server metadata.
+- For a next upgrade level `n <= 5`, price is `base*n*n`; later prices are
+  `floor(base*n*n*(n-3)*(n+5)/10)`. Required player level is `1+2*(n-1)` through
+  step 5, then `2*n`. Purchased levels and old barn values remain unchanged.
 - Plants sell as a batch. Discoveries persist after sale. Collection is 27 species
   times 8 mutation states, 216 entries. Quality affects value, not album completion.
 - Packs each contain three seeds. Per-seed probabilities are returned by the API.
@@ -84,7 +90,7 @@ only once. There is one laboratory job at a time.
 
 New harvest batches carry unique IDs and specimen weight. Keeping a trophy moves
 exactly one plant and its unit value out of the barn. Six display slots are
-available initially, expandable to twelve with the gallery upgrade. Selling harvest never sells trophies; returning a trophy
+available initially, expandable to twenty-four with the gallery upgrade. Selling harvest never sells trophies; returning a trophy
 moves the same specimen back to the barn. Legacy harvest receives stable local
 IDs and displays an unknown weight instead of inventing a record. Collection
 quality retains the best observed grade.
@@ -102,7 +108,10 @@ uses two visible rows rather than hiding the new sections offscreen.
 ## Genetics and recovery
 
 There is at most one mutation per plant. Lamp and genetics levels plus care give
-`3 + 2*lamp + 2*genetics + (lamp care ? 5 : 0)` percent chance, at most 28%.
+`3 + 2*min(lamp,5) + 0.5*max(lamp-5,0) + 2*min(genetics,5)
++ max(genetics-5,0) + (lamp care ? 5 : 0)` percent chance, capped at 40%.
+New harvests use basis-point rolls to preserve fractional chances. Legacy
+planted crops keep their former whole-percentage rules and snapshotted yield.
 An independent weighted roll then selects from unlocked mutation types:
 giant x2, dew x2, gold x5, electric x6, crystal x8, ancient x10, rainbow x12.
 Classic mutations remain obtainable at every genetics level. Mutation metadata
@@ -118,7 +127,7 @@ the plot once and reports any recovered seeds in the success message.
 ## Levels and rewards
 
 Harvest gives ten XP per plot. Orders, daily rewards and expeditions also grant XP. The curve is
-`100 + (level-1)*40` per level, capped at level 10; XP keeps accumulating past
+`100 + (level-1)*40` per level, capped at level 50; XP keeps accumulating past
 the cap so the bar never freezes mid-track. The server owns the curve and
 returns `level`, `title`, `into`, `need`, `max`, `pending` and the full reward
 table, so the client never recomputes progression.
@@ -131,7 +140,26 @@ garden is already at the land cap, the plot reward pays its base cost in coins
 instead of vanishing.
 
 Titles are cumulative milestones: Новичок at 1, Садовод at 3, Хозяин фермы at 5,
-Мастер урожая at 7, Легенда сада at 9.
+Мастер урожая at 7, Легенда сада at 9, with further titles at 15, 20, 30, 40
+and 50. The original ten levels need the same XP and keep the same rewards.
+Levels 11-50 award `level*150` coins, with extra seeds every five levels.
+
+Shop access opens gradually: uncommon crops at 3, most rare crops at 6,
+dragonfruit at 9, lotus at 10, moonflower at 12, mango at 16, starfruit at 20.
+Exotic/lunar/orchard packs unlock at 6/12/16; meadow/orchard/astral expeditions
+at 6/16/20. Plant upgrades check species access and mutation genetics. Garden
+packs intentionally retain a small chance of an early rare or legendary find.
+All previously owned seeds remain plantable, and existing trips remain claimable.
+
+`TestProgressionAcrossRegularVisits` runs twenty seeded 180-day scenarios via
+real server actions, without developer grants. With four visits daily, level 10
+arrives on day 8, level 20 on day 25, full upgrades on days 100-105 and level 50
+on day 116. Two daily visits reach level 20 on days 47-48, and level 44 with
+upgrades still to buy at day 180. First upgrades arrive on day one in all runs.
+The model sells harvest, claims daily/level rewards and runs expeditions. It
+omits orders, packs, breeding, collection and games; real players may progress
+faster or spend differently. After all progression is complete, money still
+accumulates. These are modeled pacing checks, not player retention evidence.
 
 ## Village orders
 
@@ -291,11 +319,11 @@ A won plant follows the normal market rules when subsequently sold.
 
 One round per account, with stake debited at start. A crypto-random uniform
 integer `r` in `[0,1000000)` selects a private threshold
-`floor(55000000/(r+1))` in hundredths. The displayed multiplier is
+`floor(85000000/(r+1))` in hundredths. The displayed multiplier is
 `floor(exp(elapsed_seconds*0.08)*100)`, capped at 1000 (x10). A round busts when
 the multiplier exceeds its threshold; survivors automatically cash out at x10.
-There is a 45% immediate loss rate, 27.5% survival to x2, approximately18.33% to x3, 11% to x5 and 5.5% to x10.
-The theoretical gross return is at most 55%, with integer coin payouts rounded
+There is a 15% immediate loss rate, 42.5% survival to x2, approximately28.33% to x3, 17% to x5 and 8.5% to x10.
+The theoretical gross return is at most 85%, with integer coin payouts rounded
 down. Numerical probability tests enumerate all one million roll values.
 
 Only the server clock and saved threshold decide payouts. Active responses omit
@@ -310,8 +338,8 @@ is determined when the server processes cashout under the player row lock.
 Migration000014 stores offers separately from player JSON. A host chooses sun or
 moon and escrows its stake. One open offer per host is enforced by a partial
 unique index. An authenticated, different player joins the opposite side with
-an equal stake. A crypto-random result pays the winner `floor(stake*1.5)`, taking
-25% of the combined bank, with rounding down. Offer and both player saves commit
+an equal stake. A crypto-random result pays the winner `floor(stake*1.8)`, taking
+10% of the combined bank, with rounding down. Offer and both player saves commit
 together. Offer rows lock before player rows, with paired account IDs ordered.
 Concurrent joins and join/cancel races have exactly one successful settlement.
 
@@ -324,7 +352,7 @@ creates an offer. The host's open offer stays visible ahead of the40-row limit.
 
 A player selects one barn specimen, a target species, target mutation and coin
 stake. Targets have perfect quality. The server quote uses market-upgraded
-prices and returns `min(4500,floor((source_unit_market+stake)*6000/target_market))`
+prices and returns `min(6500,floor((source_unit_market+stake)*8000/target_market))`
 as basis points. The target must cost more than the plant and coins combined.
 The action recalculates the quote while locked, consumes exactly one source
 specimen and the stake, then rolls once. Success adds the target to the barn
@@ -348,7 +376,8 @@ No live player balances or clocks are changed by those fixtures.
 Balance changes affect new stakes. Existing crash rounds retain their saved
 threshold and declared return; old rounds without a return field report96%.
 Migration000015 preserves a10% fee for existing coinflip offers, while new offers
-snapshot25%. Both offer previews and payout settlement use the saved fee.
+snapshot10%. Existing offers retain their saved fee, including 25% offers.
+Both offer previews and payout settlement use the saved fee.
 
 Upgrade reveals now use five accelerating charge strikes and a2.35s finale.
 Seed reveals use faster accelerating strikes, a hexagonal energy sigil, a focused

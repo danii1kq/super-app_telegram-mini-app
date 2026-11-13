@@ -336,6 +336,12 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	if request("POST", "/api/v1/farm/actions", `{"kind":"claim_breed"}`, 2).Code != 400 {
 		t.Fatal("double HTTP breeding claim")
 	}
+	if request("POST", "/api/v1/farm/actions", `{"kind":"start_expedition","item":"meadow"}`, 2).Code != 400 {
+		t.Fatal("locked route accepted before level 6")
+	}
+	if _, err = pool.Exec(ctx, `UPDATE farm_players SET state=jsonb_set(state,'{xp}','1000'::jsonb) WHERE user_id=2`); err != nil {
+		t.Fatal(err)
+	}
 	started := readState(request("POST", "/api/v1/farm/actions", `{"kind":"start_expedition","item":"meadow"}`, 2))
 	if started.Expedition == nil || started.Coins != claimed.Coins-90 {
 		t.Fatal("expedition did not persist its price and route")

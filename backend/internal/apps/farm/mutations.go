@@ -35,6 +35,14 @@ func mutationChance(plot Plot) int {
 	return chance
 }
 
+func mutationChanceBP(plot Plot) int {
+	chance := mutationBP(plot.Lamp, plot.Genetics)
+	if plot.Care == "lamp" {
+		chance += 500
+	}
+	return min(chance, 4000)
+}
+
 func chooseMutation(level, roll int) (string, int) {
 	total := 0
 	for _, kind := range MutationTypes {

@@ -12,10 +12,10 @@ import (
 const minGameStake = 100
 const maxGameStake = 100000
 const maxCrashBP = 1000
-const crashReturnPercent = 55
-const flipFeePercent = 25
-const upgradeReturnPercent = 60
-const upgradeMaxChanceBP = 4500
+const crashReturnPercent = 85
+const flipFeePercent = 10
+const upgradeReturnPercent = 80
+const upgradeMaxChanceBP = 6500
 
 type CrashRound struct {
 	ReturnPercent int       `json:"return_percent"`
@@ -164,9 +164,15 @@ func plantUpgradeQuote(state State, action Action) (UpgradeQuote, error) {
 	if !ok {
 		return bad("Такого растения нет")
 	}
+	if levelFor(state.XP) < seedUnlockLevel(crop.ID) {
+		return bad(fmt.Sprintf("Это растение откроется на уровне %d", seedUnlockLevel(crop.ID)))
+	}
 	bonus := 0
-	for _, mutation := range MutationTypes {
+	for _, mutation := range mutationCatalog(state.Upgrades["genetics"]) {
 		if mutation.ID == action.Upgrade {
+			if !mutation.Unlocked {
+				return bad(fmt.Sprintf("Для этой мутации нужна генетическая станция уровня %d", mutation.MinGenetics))
+			}
 			bonus = mutation.Multiplier
 			break
 		}
@@ -175,7 +181,7 @@ func plantUpgradeQuote(state State, action Action) (UpgradeQuote, error) {
 		return bad("Выбери мутацию результата")
 	}
 	target := Harvest{Seed: crop.ID, Quality: "perfect", Mutation: action.Upgrade, Quantity: 1, Value: crop.Price * 3 * bonus}
-	market := 100 + state.Upgrades["market"]*5
+	market := 100 + marketPercent(state.Upgrades["market"])
 	sourceValue := source.Value / source.Quantity * market / 100
 	targetValue := target.Value * market / 100
 	if targetValue <= sourceValue+action.Stake {

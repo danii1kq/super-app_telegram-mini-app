@@ -138,7 +138,7 @@ func orderPayout(state State, order Order) int {
 	if remaining > 0 {
 		return order.Coins
 	}
-	market := value * (100 + state.Upgrades["market"]*5) / 100
+	market := value * (100 + marketPercent(state.Upgrades["market"])) / 100
 	return max(order.Coins, (market*125+99)/100)
 }
 

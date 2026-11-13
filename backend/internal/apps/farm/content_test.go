@@ -14,6 +14,7 @@ func TestWonderGardenSpeciesAndHybridsArePlayable(t *testing.T) {
 	}
 	for seed, hybrid := range want {
 		s := initialState(now)
+		s.XP = 100000
 		s.Plots = make([]*Plot, 4)
 		s.Coins = 10000
 		crop, ok := species(seed)
@@ -88,6 +89,7 @@ func TestOrchardPackGuaranteeUsesItsOwnCounter(t *testing.T) {
 	now := time.Now()
 	s := initialState(now)
 	s.Coins = 1100
+	s.XP = 100000
 	s.Pity["orchard"] = 9
 	_, drops, _, err := apply(&s, Action{Kind: "pack", Pack: "orchard"}, now, func(int) (int, error) { return 15, nil })
 	if err != nil || len(drops) != 3 || drops[0] != "blueberry" || drops[1] != "pepper" || s.Pity["orchard"] != 2 || s.Pity["garden"] != 0 || s.Coins != 0 {

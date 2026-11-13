@@ -69,6 +69,7 @@ func TestExpandedGalleryAndUpgradeLimits(t *testing.T) {
 	now := time.Now()
 	s := initialState(now)
 	s.Coins = 1000000
+	s.XP = 100000
 	s.Barn = []Harvest{{ID: "batch", Quantity: 13, Value: 1300}}
 	for level := 0; level < 3; level++ {
 		if _, _, _, err := apply(&s, Action{Kind: "upgrade", Upgrade: "gallery"}, now, fixed); err != nil {

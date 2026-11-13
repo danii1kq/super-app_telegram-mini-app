@@ -118,7 +118,7 @@ func (h *Handler) writePlayer(w http.ResponseWriter, state State, now time.Time,
 	state = publicGameState(state, now)
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"state": state, "crops": Crops, "recipes": Recipes, "mutations": mutationCatalog(state.Upgrades["genetics"]), "packs": packsFor(state.Upgrades["selection"]), "upgrades": upgradesFor(state), "themes": Themes, "stars_available": h.stars != nil, "server_time": now, "message": message, "drops": drops,
 		"level": map[string]any{"level": level, "title": titleFor(level), "into": into, "need": need, "max": MaxLevel, "pending": claimableLevels(state), "rewards": levelCatalog(state)},
-		"daily": dailyCatalog(state, now), "expeditions": expeditionCatalog(), "games": gameRules()})
+		"daily": dailyCatalog(state, now), "expeditions": expeditionCatalog(), "games": gameRules(), "seed_levels": seedLevels(), "pack_levels": packLevels(), "bonuses": farmBonuses(state)})
 }
 
 func weekStart(now time.Time) time.Time {

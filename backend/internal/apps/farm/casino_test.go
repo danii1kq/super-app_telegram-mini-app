@@ -68,7 +68,7 @@ func TestCrashInstantLossAutoCashoutAndRequestReplay(t *testing.T) {
 }
 
 func TestCrashDistributionMatchesPublishedChances(t *testing.T) {
-	for bp, expected := range map[int]int{100: 550000, 200: 275000, 300: 183333, 500: 110000, 1000: 55000} {
+	for bp, expected := range map[int]int{100: 850000, 200: 425000, 300: 283333, 500: 170000, 1000: 85000} {
 		wins := 0
 		for r := 0; r < 1000000; r++ {
 			if crashThreshold(r) >= bp {
@@ -85,6 +85,7 @@ func TestUpgradeQuoteConsumptionAndBoundaries(t *testing.T) {
 	for _, win := range []bool{false, true} {
 		s := initialState(time.Now())
 		s.Coins = 10000
+		s.XP = 1000000
 		normalizeState(&s)
 		s.Upgrades["market"] = 5
 		s.Barn = []Harvest{{ID: "source", Seed: "carrot", Quality: "normal", Mutation: "none", Quantity: 3, Value: 96}}
@@ -93,7 +94,7 @@ func TestUpgradeQuoteConsumptionAndBoundaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if q.SourceValue != 40 || q.TargetValue != 18600 || q.ChanceBP != 335 {
+		if q.SourceValue != 40 || q.TargetValue != 18600 || q.ChanceBP != 447 {
 			t.Fatalf("quote mismatch %+v", q)
 		}
 		roll := q.ChanceBP
@@ -121,23 +122,66 @@ func TestUpgradeQuoteConsumptionAndBoundaries(t *testing.T) {
 
 func TestRebalancedRulesAndExistingCrash(t *testing.T) {
 	rules := gameRules()
-	if rules["crash_return_percent"] != 55 || rules["flip_fee_percent"] != 25 || rules["upgrade_return_percent"] != 60 || rules["upgrade_max_chance_bp"] != 4500 {
+	if rules["crash_return_percent"] != 85 || rules["flip_fee_percent"] != 10 || rules["upgrade_return_percent"] != 80 || rules["upgrade_max_chance_bp"] != 6500 {
 		t.Fatal("published rules do not match rebalanced settings")
 	}
 	now := time.Now()
 	s := initialState(now)
+	s.XP = 1000000
 	normalizeState(&s)
 	s.Crash = &CrashRound{ID: "old", Stake: 1000, StartedAt: now.Add(-10 * time.Second), Status: "running", BustBP: 480}
 	if refreshCrash(&s, now) || publicGameState(s, now).Crash.ReturnPercent != 96 || s.Crash.BustBP != 480 {
 		t.Fatal("old crash threshold or published return changed")
 	}
+	s.Crash.ReturnPercent = 55
+	if refreshCrash(&s, now) || publicGameState(s, now).Crash.ReturnPercent != 55 || s.Crash.BustBP != 480 {
+		t.Fatal("saved crash rules were replaced by the new balance")
+	}
 	s.Barn = []Harvest{{ID: "source", Seed: "carrot", Quantity: 1, Value: 32}}
 	q, err := plantUpgradeQuote(s, Action{Item: "source", Seed: "lotus", Upgrade: "crystal", Stake: 14000})
-	if err != nil || q.ChanceBP != 4500 {
-		t.Fatal("upgrade maximum is not 45%")
+	if err != nil || q.ChanceBP != 6500 {
+		t.Fatal("upgrade maximum is not 65%")
 	}
 	if coinflipPayout(1000, 25) != 1500 || coinflipPayout(1000, 10) != 1800 || coinflipPayout(101, 25) != 151 {
 		t.Fatal("current or legacy coinflip payout changed")
+	}
+}
+
+func TestUpgradeProgressionGatesDoNotConsumeResources(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		xp             int
+		seed, mutation string
+	}{
+		{"species level", 0, "starfruit", "crystal"},
+		{"hybrid level", 0, "astral_lotus", "crystal"},
+		{"mutation research", 1000000, "starfruit", "rainbow"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := initialState(time.Now())
+			s.Coins = 10000
+			s.XP = tc.xp
+			s.Barn = []Harvest{{ID: "source", Seed: "carrot", Quality: "normal", Mutation: "none", Quantity: 1, Value: 32}}
+			normalizeState(&s)
+			a := Action{Kind: "plant_upgrade", Item: "source", Seed: tc.seed, Upgrade: tc.mutation, Stake: 1000, RequestID: gameRequest(101)}
+			if _, err := plantUpgradeQuote(s, a); err == nil {
+				t.Fatal("locked target was quoted")
+			}
+			if _, _, _, err := apply(&s, a, time.Now(), fixed); err == nil {
+				t.Fatal("locked target was upgraded")
+			}
+			if s.Coins != 10000 || len(s.Barn) != 1 || s.Barn[0].Quantity != 1 || len(s.GameHistory) != 0 || len(s.GameRequests) != 0 {
+				t.Fatal("rejected upgrade consumed resources")
+			}
+		})
+	}
+	s := initialState(time.Now())
+	s.XP = 1000000
+	normalizeState(&s)
+	s.Upgrades["genetics"] = 3
+	s.Barn = []Harvest{{ID: "source", Seed: "carrot", Quantity: 1, Value: 32}}
+	if _, err := plantUpgradeQuote(s, Action{Item: "source", Seed: "starfruit", Upgrade: "rainbow", Stake: 1000}); err != nil {
+		t.Fatal("unlocked target rejected", err)
 	}
 }
 

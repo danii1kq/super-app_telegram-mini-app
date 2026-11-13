@@ -6,9 +6,8 @@ import (
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
 )
 
-// MaxLevel caps progression. Rewards stop there but XP keeps accumulating so
-// the bar never freezes at a full track.
-const MaxLevel = 10
+// XP keeps accumulating after the final level, without granting repeat rewards.
+const MaxLevel = 50
 
 // LevelReward is what a player receives once, on reaching Level.
 //
@@ -31,19 +30,40 @@ var levelTitles = map[int]string{
 	5:  "Хозяин фермы",
 	7:  "Мастер урожая",
 	9:  "Легенда сада",
+	15: "Хранитель оранжереи",
+	20: "Мастер селекции",
+	30: "Создатель чудес",
+	40: "Хранитель созвездий",
+	50: "Легенда оранжереи",
 }
 
-var levelRewards = []LevelReward{
-	{Level: 2, Coins: 150, Seeds: map[string]int{"carrot": 3}},
-	{Level: 3, Coins: 250, Seeds: map[string]int{"strawberry": 2}},
-	{Level: 4, Coins: 400, Seeds: map[string]int{"pumpkin": 2}},
-	{Level: 5, Coins: 600, Plots: 1},
-	{Level: 6, Coins: 900, Seeds: map[string]int{"blueberry": 2}},
-	{Level: 7, Coins: 1300, Seeds: map[string]int{"watermelon": 2}},
-	{Level: 8, Coins: 1800, Plots: 1},
-	{Level: 9, Coins: 2500, Seeds: map[string]int{"dragonfruit": 1}},
-	{Level: 10, Coins: 4000, Seeds: map[string]int{"moonflower": 1}},
-}
+var levelRewards = func() []LevelReward {
+	rewards := []LevelReward{
+		{Level: 2, Coins: 150, Seeds: map[string]int{"carrot": 3}},
+		{Level: 3, Coins: 250, Seeds: map[string]int{"strawberry": 2}},
+		{Level: 4, Coins: 400, Seeds: map[string]int{"pumpkin": 2}},
+		{Level: 5, Coins: 600, Plots: 1},
+		{Level: 6, Coins: 900, Seeds: map[string]int{"blueberry": 2}},
+		{Level: 7, Coins: 1300, Seeds: map[string]int{"watermelon": 2}},
+		{Level: 8, Coins: 1800, Plots: 1},
+		{Level: 9, Coins: 2500, Seeds: map[string]int{"dragonfruit": 1}},
+		{Level: 10, Coins: 4000, Seeds: map[string]int{"moonflower": 1}},
+	}
+	seeds := map[int]map[string]int{
+		15: {"lotus": 2},
+		20: {"mango": 2},
+		25: {"starfruit": 2},
+		30: {"moonflower": 3},
+		35: {"lotus": 3},
+		40: {"mango": 3},
+		45: {"starfruit": 3},
+		50: {"starfruit": 5, "moonflower": 3},
+	}
+	for level := 11; level <= MaxLevel; level++ {
+		rewards = append(rewards, LevelReward{Level: level, Coins: level * 150, Seeds: seeds[level]})
+	}
+	return rewards
+}()
 
 // levelNeed is the XP required to move from level to level+1. The first levels
 // are quick so a new player sees the bar move on the first day, then it grows.

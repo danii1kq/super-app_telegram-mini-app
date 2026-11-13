@@ -10,7 +10,7 @@ func TestLevelCurveIsMonotonicAndCapped(t *testing.T) {
 		t.Fatal("a new player must start at level 1")
 	}
 	previous := 1
-	for xp := 0; xp < 5000; xp += 7 {
+	for xp := 0; xp < 60_000; xp += 7 {
 		level := levelFor(xp)
 		if level < previous {
 			t.Fatalf("level went backwards at xp=%d", xp)
@@ -52,7 +52,10 @@ func TestTitleFollowsHighestMilestone(t *testing.T) {
 	if titleFor(4) != "Садовод" {
 		t.Fatal("level 4 must keep the level 3 title")
 	}
-	if titleFor(MaxLevel) != "Легенда сада" {
+	if titleFor(10) != "Легенда сада" {
+		t.Fatal("existing level 10 title changed")
+	}
+	if titleFor(MaxLevel) != "Легенда оранжереи" {
 		t.Fatal("max level title")
 	}
 }
@@ -130,15 +133,65 @@ func TestClaimLevelRejectsUnknownLevels(t *testing.T) {
 
 func TestLevelCatalogCoversEveryReward(t *testing.T) {
 	catalog := levelCatalog(initialState(time.Now()))
-	if len(catalog) != len(levelRewards) {
+	if len(catalog) != len(levelRewards) || len(catalog) != MaxLevel-1 {
 		t.Fatalf("catalog has %d entries, rewards have %d", len(catalog), len(levelRewards))
 	}
-	for _, entry := range catalog {
-		if entry.Level < 2 || entry.Level > MaxLevel {
+	for i, entry := range catalog {
+		if entry.Level != i+2 {
 			t.Fatalf("unexpected level in catalog: %d", entry.Level)
 		}
 		if entry.Coins <= 0 && len(entry.Seeds) == 0 && entry.Plots == 0 {
 			t.Fatalf("level %d gives nothing", entry.Level)
 		}
+	}
+}
+
+func TestExtendedLevelsPreserveOldProgress(t *testing.T) {
+	if levelFor(2339) != 9 || levelFor(2340) != 10 {
+		t.Fatal("the original level 10 threshold changed")
+	}
+	if levelFor(51_939) != 49 || levelFor(51_940) != 50 {
+		t.Fatal("level 50 must require 51,940 XP")
+	}
+	s := initialState(time.Now())
+	s.XP = 2340
+	s.ClaimedLevels = []int{2, 3, 4, 5, 6, 7, 8, 9, 10}
+	if pending := claimableLevels(s); len(pending) != 0 {
+		t.Fatalf("previously claimed rewards became available: %v", pending)
+	}
+	s.XP = 51_940
+	pending := claimableLevels(s)
+	if len(pending) != 40 || pending[0] != 11 || pending[len(pending)-1] != 50 {
+		t.Fatalf("expected only the 40 new rewards, got %v", pending)
+	}
+	if _, err := claimLevel(&s, 10); err == nil {
+		t.Fatal("old level reward was granted again")
+	}
+	for level := 11; level <= MaxLevel; level++ {
+		reward, ok := rewardFor(level)
+		if !ok || reward.Coins != level*150 || reward.Plots != 0 {
+			t.Fatalf("unexpected extended reward at level %d: %+v", level, reward)
+		}
+		if (level%5 == 0) != (len(reward.Seeds) > 0) {
+			t.Fatalf("seed reward must appear every five levels, got %+v", reward)
+		}
+	}
+}
+
+func TestFinalLevelRewardPaysOnce(t *testing.T) {
+	s := initialState(time.Now())
+	s.XP = 51_940
+	coins, starfruit, moonflower, plots := s.Coins, s.Seeds["starfruit"], s.Seeds["moonflower"], len(s.Plots)
+	if _, err := claimLevel(&s, 50); err != nil {
+		t.Fatal(err)
+	}
+	if s.Coins != coins+7500 || s.Seeds["starfruit"] != starfruit+5 || s.Seeds["moonflower"] != moonflower+3 || len(s.Plots) != plots {
+		t.Fatal("final reward did not grant the advertised resources")
+	}
+	if _, err := claimLevel(&s, 50); err == nil {
+		t.Fatal("final reward was granted twice")
+	}
+	if s.Coins != coins+7500 || s.Seeds["starfruit"] != starfruit+5 || s.Seeds["moonflower"] != moonflower+3 {
+		t.Fatal("rejected repeat claim changed resources")
 	}
 }

@@ -42,6 +42,8 @@ var Crops = []Species{
 }
 
 type Plot struct {
+	// A missing yield keeps the original rules for crops already planted before the balance update.
+	Yield     int       `json:"yield,omitempty"`
 	Genetics  int       `json:"genetics"`
 	Nursery   int       `json:"nursery"`
 	Seed      string    `json:"seed"`
@@ -127,34 +129,43 @@ var Packs = []Pack{
 }
 
 type Upgrade struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Icon        string `json:"icon"`
-	Description string `json:"description"`
-	Benefit     string `json:"benefit"`
-	MaxLevel    int    `json:"max_level"`
-	BaseCost    int    `json:"-"`
-	Level       int    `json:"level"`
-	Cost        int    `json:"cost"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Icon          string `json:"icon"`
+	Description   string `json:"description"`
+	Benefit       string `json:"benefit"`
+	MaxLevel      int    `json:"max_level"`
+	BaseCost      int    `json:"-"`
+	Level         int    `json:"level"`
+	Cost          int    `json:"cost"`
+	RequiredLevel int    `json:"required_level"`
 }
 
 var Upgrades = []Upgrade{
-	{ID: "water", Name: "Бережный полив", Icon: "water", Description: "Больше отборных и идеальных растений.", Benefit: "+2% идеального и +3% отборного за уровень", MaxLevel: 5, BaseCost: 100},
-	{ID: "soil", Name: "Плодородная почва", Icon: "soil", Description: "Больше урожая с каждой грядки.", Benefit: "+1 растение с грядки за уровень", MaxLevel: 5, BaseCost: 100},
-	{ID: "lamp", Name: "Лаборатория света", Icon: "lamp", Description: "Повышает шанс необычных мутаций.", Benefit: "+2% к шансу мутации за уровень", MaxLevel: 5, BaseCost: 100},
+	{ID: "water", Name: "Бережный полив", Icon: "water", Description: "Больше отборных и идеальных растений. После 5-го уровня бонусы растут плавнее.", MaxLevel: 20, BaseCost: 100},
+	{ID: "soil", Name: "Плодородная почва", Icon: "soil", Description: "Первые 5 уровней дают по 15% урожайности, следующие по 5%. Каждые 100% гарантируют дополнительное растение, остаток даёт шанс ещё на одно.", MaxLevel: 20, BaseCost: 100},
+	{ID: "lamp", Name: "Лаборатория света", Icon: "lamp", Description: "Первые 5 уровней дают по 2 п.п. мутации, следующие по 0,5 п.п.", MaxLevel: 20, BaseCost: 100},
 	{ID: "land", Name: "Новые горизонты", Icon: "garden", Description: "Больше места для твоих экспериментов.", Benefit: "+1 грядка за уровень, до 8 грядок", MaxLevel: 4, BaseCost: 300},
-	{ID: "market", Name: "Фермерская лавка", Icon: "coin", Description: "Продавай свой урожай дороже.", Benefit: "+5% к цене продажи за уровень", MaxLevel: 5, BaseCost: 200},
-	{ID: "selection", Name: "Секреты селекции", Icon: "spark", Description: "Повышает шансы легендарных семян во всех наборах.", Benefit: "+1 п.п. к легендарному шансу за уровень", MaxLevel: 5, BaseCost: 250},
-	{ID: "genetics", Name: "Генетическая станция", Icon: "spark", Description: "Открывает грозовые, древние и радужные растения.", Benefit: "+2% мутации за уровень; новые виды на уровнях 1, 2, 3", MaxLevel: 5, BaseCost: 350},
-	{ID: "nursery", Name: "Заботливый питомник", Icon: "sprout", Description: "Часть растений возвращает семя после сбора.", Benefit: "+10% возврата одного семени за уровень", MaxLevel: 5, BaseCost: 180},
-	{ID: "gallery", Name: "Трофейный павильон", Icon: "trophy", Description: "Больше места для самых необычных находок.", Benefit: "+2 места на витрине за уровень, до 12 мест", MaxLevel: 3, BaseCost: 300},
+	{ID: "market", Name: "Фермерская лавка", Icon: "coin", Description: "Первые 5 уровней дают по 5% к продаже, следующие по 1%.", MaxLevel: 20, BaseCost: 200},
+	{ID: "selection", Name: "Секреты селекции", Icon: "spark", Description: "Каждый уровень добавляет 1 п.п. легендарных семян во всех наборах.", MaxLevel: 10, BaseCost: 250},
+	{ID: "genetics", Name: "Генетическая станция", Icon: "spark", Description: "Новые мутации на уровнях 1, 2, 3. Первые 5 уровней дают по 2 п.п. мутации, следующие по 1 п.п.", MaxLevel: 10, BaseCost: 350},
+	{ID: "nursery", Name: "Заботливый питомник", Icon: "sprout", Description: "Первые 5 уровней дают по 10% возврата семени, следующие по 1%. Возвращается максимум одно семя с грядки.", MaxLevel: 20, BaseCost: 180},
+	{ID: "gallery", Name: "Трофейный павильон", Icon: "trophy", Description: "По 2 новых места на витрине за уровень, до 24 мест.", MaxLevel: 9, BaseCost: 300},
 }
 
 func upgradesFor(state State) []Upgrade {
 	result := append([]Upgrade(nil), Upgrades...)
 	for i := range result {
 		result[i].Level = state.Upgrades[result[i].ID]
-		result[i].Cost = result[i].BaseCost * (result[i].Level + 1) * (result[i].Level + 1)
+		next := min(result[i].Level+1, result[i].MaxLevel)
+		result[i].Cost = upgradeCost(result[i], next)
+		result[i].RequiredLevel = upgradeRequiredLevel(next)
+		result[i].Benefit = upgradeBenefit(result[i].ID, result[i].Level)
+		if result[i].Level < result[i].MaxLevel {
+			result[i].Benefit += " → " + upgradeBenefit(result[i].ID, next)
+		} else {
+			result[i].Cost = 0
+		}
 	}
 	return result
 }
@@ -257,6 +268,9 @@ func outcome(plot Plot, qualityRoll, mutationRoll, varietyRoll int) Harvest {
 	quality, multiplier := "normal", 1
 	ideal := 5 + plot.Water*2
 	selectChance := 20 + plot.Water*3
+	if plot.Yield > 0 {
+		ideal, selectChance = perfectPercent(plot.Water), choicePercent(plot.Water)
+	}
 	if plot.Care == "water" {
 		ideal += 5
 		selectChance += 10
@@ -267,12 +281,19 @@ func outcome(plot Plot, qualityRoll, mutationRoll, varietyRoll int) Harvest {
 		quality, multiplier = "choice", 2
 	}
 	mutation, bonus := "none", 1
-	if mutationRoll < mutationChance(plot) {
+	threshold := mutationChance(plot)
+	if plot.Yield > 0 {
+		threshold = mutationChanceBP(plot)
+	}
+	if mutationRoll < threshold {
 		mutation, bonus = chooseMutation(plot.Genetics, varietyRoll)
 	}
 	quantity := 1 + plot.Soil
 	if plot.Care == "soil" {
 		quantity++
+	}
+	if plot.Yield > 0 {
+		quantity = plot.Yield
 	}
 	return Harvest{Seed: plot.Seed, Quality: quality, Mutation: mutation, Quantity: quantity, Value: crop.Price * multiplier * bonus * quantity}
 }
@@ -336,11 +357,24 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		default:
 			return bad("Выберите уход")
 		}
-		if !spend(cost) {
+		if state.Coins < cost {
 			return bad("Недостаточно монет на уход")
 		}
+		yieldRoll, err := roll(100)
+		if err != nil {
+			return "", nil, 0, err
+		}
+		yieldBonus := soilPercent(state.Upgrades["soil"])
+		if action.Care == "soil" {
+			yieldBonus += 25
+		}
+		quantity := 1 + yieldBonus/100
+		if yieldRoll < yieldBonus%100 {
+			quantity++
+		}
+		spend(cost)
 		state.Seeds[action.Seed]--
-		state.Plots[action.Slot] = &Plot{Seed: action.Seed, PlantedAt: now, ReadyAt: now.Add(GrowTime), Care: action.Care, Water: state.Upgrades["water"], Soil: state.Upgrades["soil"], Lamp: state.Upgrades["lamp"], Genetics: state.Upgrades["genetics"], Nursery: state.Upgrades["nursery"]}
+		state.Plots[action.Slot] = &Plot{Yield: quantity, Seed: action.Seed, PlantedAt: now, ReadyAt: now.Add(GrowTime), Care: action.Care, Water: state.Upgrades["water"], Soil: state.Upgrades["soil"], Lamp: state.Upgrades["lamp"], Genetics: state.Upgrades["genetics"], Nursery: state.Upgrades["nursery"]}
 		return "Семя посажено. Урожай через 3 часа", nil, 0, nil
 	case "harvest":
 		count := 0
@@ -353,7 +387,11 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 			if err != nil {
 				return "", nil, 0, err
 			}
-			m, err := roll(100)
+			mutationScale := 100
+			if plot.Yield > 0 {
+				mutationScale = 10000
+			}
+			m, err := roll(mutationScale)
 			if err != nil {
 				return "", nil, 0, err
 			}
@@ -380,7 +418,11 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 				if err != nil {
 					return "", nil, 0, err
 				}
-				if recovery < plot.Nursery*10 {
+				chance := plot.Nursery * 10
+				if plot.Yield > 0 {
+					chance = nurseryPercent(plot.Nursery)
+				}
+				if recovery < chance {
 					state.Seeds[plot.Seed]++
 					recovered++
 				}
@@ -408,7 +450,7 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		for _, item := range state.Barn {
 			amount += item.Value
 		}
-		amount = amount * (100 + state.Upgrades["market"]*5) / 100
+		amount = amount * (100 + marketPercent(state.Upgrades["market"])) / 100
 		if amount == 0 {
 			return bad("Амбар пока пуст")
 		}
@@ -420,6 +462,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		crop, ok := species(action.Seed)
 		if !ok || crop.SeedPrice <= 0 {
 			return bad("Семена не найдены")
+		}
+		if required := seedUnlockLevel(crop.ID); levelFor(state.XP) < required {
+			return bad(fmt.Sprintf("Покупка этих семян откроется на %d уровне", required))
 		}
 		if !spend(crop.SeedPrice) {
 			return bad("Недостаточно монет")
@@ -436,6 +481,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		}
 		if pack == nil {
 			return bad("Набор не найден")
+		}
+		if required := packLevels()[pack.ID]; levelFor(state.XP) < required {
+			return bad(fmt.Sprintf("Набор откроется на %d уровне", required))
 		}
 		if !spend(pack.Price) {
 			return bad("Недостаточно монет")
@@ -487,6 +535,9 @@ func apply(state *State, action Action, now time.Time, roll func(int) (int, erro
 		}
 		if selected == nil || selected.Level >= selected.MaxLevel {
 			return bad("Улучшение недоступно")
+		}
+		if levelFor(state.XP) < selected.RequiredLevel {
+			return bad(fmt.Sprintf("Следующий уровень улучшения откроется на %d уровне фермы", selected.RequiredLevel))
 		}
 		if !spend(selected.Cost) {
 			return bad("Недостаточно монет")

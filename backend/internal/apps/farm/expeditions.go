@@ -15,6 +15,7 @@ type ExpeditionRoute struct {
 	DurationSeconds int            `json:"duration_seconds"`
 	Seeds           map[string]int `json:"seeds"`
 	XP              int            `json:"xp"`
+	RequiredLevel   int            `json:"required_level"`
 }
 
 type Expedition struct {
@@ -27,9 +28,9 @@ type Expedition struct {
 }
 
 var expeditionRoutes = []ExpeditionRoute{
-	{ID: "meadow", Name: "Цветущий луг", Description: "Собери ароматные семена среди полевых цветов.", Price: 90, DurationSeconds: int(GrowTime.Seconds()), Seeds: map[string]int{"pepper": 2, "lavender": 1}, XP: 10},
-	{ID: "orchard", Name: "Забытый сад", Description: "Найди сочные сорта в тени старых плодовых деревьев.", Price: 360, DurationSeconds: int(GrowTime.Seconds()), Seeds: map[string]int{"pear": 2, "mango": 1}, XP: 20},
-	{ID: "astral", Name: "Звёздные острова", Description: "Вернись с семенами, которые растут под светом созвездий.", Price: 950, DurationSeconds: int(GrowTime.Seconds()), Seeds: map[string]int{"lotus": 1, "starfruit": 2}, XP: 35},
+	{ID: "meadow", Name: "Цветущий луг", Description: "Собери ароматные семена среди полевых цветов.", Price: 90, DurationSeconds: int(GrowTime.Seconds()), Seeds: map[string]int{"pepper": 2, "lavender": 1}, XP: 10, RequiredLevel: 6},
+	{ID: "orchard", Name: "Забытый сад", Description: "Найди сочные сорта в тени старых плодовых деревьев.", Price: 360, DurationSeconds: int(GrowTime.Seconds()), Seeds: map[string]int{"pear": 2, "mango": 1}, XP: 20, RequiredLevel: 16},
+	{ID: "astral", Name: "Звёздные острова", Description: "Вернись с семенами, которые растут под светом созвездий.", Price: 950, DurationSeconds: int(GrowTime.Seconds()), Seeds: map[string]int{"lotus": 1, "starfruit": 2}, XP: 35, RequiredLevel: 20},
 }
 
 func expeditionCatalog() []ExpeditionRoute {
@@ -58,6 +59,9 @@ func expeditionAction(state *State, action Action, now time.Time) (string, error
 		for _, route := range expeditionRoutes {
 			if route.ID != action.Item {
 				continue
+			}
+			if levelFor(state.XP) < route.RequiredLevel {
+				return bad(fmt.Sprintf("Маршрут откроется на %d уровне", route.RequiredLevel))
 			}
 			if state.Coins < route.Price {
 				return bad("Недостаточно монет на экспедицию")

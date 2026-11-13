@@ -12,6 +12,8 @@ func TestExpeditionCostsAndRewardsExactlyOnce(t *testing.T) {
 	for _, route := range expeditionCatalog() {
 		t.Run(route.ID, func(t *testing.T) {
 			s := initialState(now)
+			s.XP = 100000
+			initialXP := s.XP
 			s.Coins = route.Price
 			before := copyExpeditionSeeds(s.Seeds)
 			if _, err := expeditionAction(&s, Action{Kind: "start_expedition", Item: route.ID}, now); err != nil {
@@ -23,7 +25,7 @@ func TestExpeditionCostsAndRewardsExactlyOnce(t *testing.T) {
 			if _, err := expeditionAction(&s, Action{Kind: "claim_expedition"}, now.Add(GrowTime-time.Nanosecond)); err == nil {
 				t.Fatal("claimed before the server deadline")
 			}
-			if !reflect.DeepEqual(s.Seeds, before) || s.XP != 0 {
+			if !reflect.DeepEqual(s.Seeds, before) || s.XP != initialXP {
 				t.Fatal("early claim changed rewards")
 			}
 			if _, err := expeditionAction(&s, Action{Kind: "claim_expedition"}, now.Add(GrowTime)); err != nil {
@@ -34,7 +36,7 @@ func TestExpeditionCostsAndRewardsExactlyOnce(t *testing.T) {
 					t.Fatalf("wrong reward for %s", id)
 				}
 			}
-			if s.XP != route.XP || s.Expedition != nil || s.Coins != 0 {
+			if s.XP != initialXP+route.XP || s.Expedition != nil || s.Coins != 0 {
 				t.Fatal("wrong experience, cleared job or currency")
 			}
 			saved, _ := json.Marshal(s)
@@ -52,6 +54,7 @@ func TestExpeditionCostsAndRewardsExactlyOnce(t *testing.T) {
 func TestExpeditionRejectsInvalidStartsWithoutSpending(t *testing.T) {
 	now := time.Now()
 	s := initialState(now)
+	s.XP = 100000
 	s.Coins = 89
 	for _, action := range []Action{{Kind: "start_expedition", Item: "meadow"}, {Kind: "start_expedition", Item: "missing"}, {Kind: "claim_expedition"}, {Kind: "missing"}} {
 		if _, err := expeditionAction(&s, action, now); err == nil || s.Coins != 89 || s.Expedition != nil {
@@ -73,6 +76,7 @@ func TestExpeditionRejectsInvalidStartsWithoutSpending(t *testing.T) {
 func TestExpeditionSnapshotsAndCatalogStayIndependent(t *testing.T) {
 	now := time.Now()
 	s := initialState(now)
+	s.XP = 100000
 	if _, err := expeditionAction(&s, Action{Kind: "start_expedition", Item: "meadow"}, now); err != nil {
 		t.Fatal(err)
 	}
