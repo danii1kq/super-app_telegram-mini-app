@@ -11,8 +11,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-
-
+	_ "image/png" // register the PNG decoder: a phone screenshot is a PNG
 
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp" // register the WebP decoder
