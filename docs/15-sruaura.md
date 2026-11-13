@@ -38,8 +38,9 @@ sound controls apply to feedback. Artwork details and generation prompt are in
   upgrades increase actual effects. Signature relics add combo echoes, healing,
   additional time and finishing damage. Recipes consume named dungeon materials
   and aura. Prices and requirements come from the server.
-- The expanded catalog contains 64 relics: 18 exclusive to events, 43 craftable
-  E-A items and three ordinary S items obtainable as drops. All original IDs
+- The expanded catalog contains 73 relics: 18 exclusive to events, six one-time
+  trophies/conditional rewards, 46 craftable E-A items and three ordinary S
+  items obtainable as drops. All original IDs
   remain valid. S, SS, SSS and event items have no recipe, enforced by the API.
 - Signature recipes stay accessible for early build experiments. Crafting the
   original relics scales quadratically with rarity. Awakening stages four and
@@ -76,6 +77,31 @@ mask, fractured gold halo and violet rim lighting. It matches the existing
 atlas palette. Dungeon cards preserve square portrait geometry and align the
 image to the top, keeping heads visible on mobile. Rank colors match across
 icons, item cards and loot dialogs.
+
+## Item visuals and collections
+
+The three WebP textures total 856,132 bytes, including twelve new painted relic
+portraits (185,018 bytes). The two former PNG textures alone were 6,201,819
+bytes; their WebP replacements are 671,114 bytes. Public builds contain no Aura
+PNG. Full prompts and tile order are in [aura-relic-art.md](aura-relic-art.md).
+
+Item inspection shows lore, actual effect, matching-slot comparisons, exact
+awakening costs and the next server-computed effect. Five visual stages add
+runes, stronger glow and floating fragments. The boss chest reveals already
+committed loot, can be skipped and respects reduced motion. Bonus trophies and
+conditional items appear alongside the random drop.
+
+Three two-piece sets alter damage, protection or critical chance and tint the
+hero's aura. Cursed equipment provides a stronger passive with a charge, health
+or healing tradeoff. First boss victories award a trophy once. Three other
+relics require a clean crypt, forge without healing or an empowered final hit
+in the void. The journal gradually discloses their conditions. A row-locked
+favorite action displays up to three owned items without consuming equipment.
+
+Favorites, discoveries and new journal progress live in the existing JSONB
+progress column. Existing owned items, levels, currency and active snapshots
+are retained. HTTP tests cover concurrent first-boss rewards, one-time drops,
+favorite ownership and the three-slot limit.
 
 ## Persistence and verification
 

@@ -48,6 +48,15 @@ const (
 
 // Relic is one collectible. Passive is the numeric bonus the engine applies.
 type Relic struct {
+	SetID            string         `json:"set_id"`
+	SetName          string         `json:"set_name"`
+	SetBonus         string         `json:"set_bonus"`
+	Lore             string         `json:"lore"`
+	Curse            string         `json:"curse"`
+	ConditionHint    string         `json:"condition_hint"`
+	Favorite         bool           `json:"favorite"`
+	NextValue        float64        `json:"next_value"`
+	NextDescription  string         `json:"next_description"`
 	Source           string         `json:"source"`
 	Dungeon          string         `json:"dungeon"`
 	Craftable        bool           `json:"craftable"`
@@ -137,6 +146,15 @@ var relicCatalog = []Relic{
 	{Key: "false_gate_throne", Name: "Печать трона за вратами", Rank: RankSS, Slot: SlotAccessory, Passive: "execute", Value: .70, Source: "false_gate"},
 	{Key: "red_gate_sovereign", Name: "Доспех багрового суверена", Rank: RankSS, Slot: SlotArmor, Passive: "negate", Value: .27, Source: "red_gate"},
 	{Key: "false_gate_origin", Name: "Первозданный клинок Системы", Rank: RankSSS, Slot: SlotWeapon, Passive: "echo", Value: 1.1, Source: "false_gate"},
+	{Key: "trophy_crypt", Name: "Знак затопленного хранителя", Rank: RankC, Slot: SlotAccessory, Passive: "negate", Value: .065, Source: "trophy", Dungeon: "crypt"},
+	{Key: "trophy_forge", Name: "Печать первого пламени", Rank: RankB, Slot: SlotAccessory, Passive: "damage", Value: .095, Source: "trophy", Dungeon: "forge"},
+	{Key: "trophy_void", Name: "Свидетель разлома", Rank: RankA, Slot: SlotAccessory, Passive: "crit", Value: .11, Source: "trophy", Dungeon: "void"},
+	{Key: "curse_fang", Name: "Клык голодной клятвы", Rank: RankB, Slot: SlotWeapon, Passive: "damage", Value: .22, Dungeon: "forge"},
+	{Key: "curse_eye", Name: "Око багрового договора", Rank: RankA, Slot: SlotAccessory, Passive: "crit", Value: .20, Dungeon: "void"},
+	{Key: "curse_codex", Name: "Кодекс иссохших имён", Rank: RankB, Slot: SlotArmor, Passive: "xp", Value: .20, Dungeon: "forge"},
+	{Key: "vow_unbroken", Name: "Обет безошибочного клинка", Rank: RankC, Slot: SlotWeapon, Passive: "echo", Value: .40, Source: "condition", Dungeon: "crypt"},
+	{Key: "vow_untouched", Name: "Плащ несгибаемого", Rank: RankB, Slot: SlotArmor, Passive: "negate", Value: .125, Source: "condition", Dungeon: "forge"},
+	{Key: "vow_execution", Name: "Руна последнего приговора", Rank: RankA, Slot: SlotAccessory, Passive: "execute", Value: .48, Source: "condition", Dungeon: "void"},
 }
 
 // relicByKey finds a relic in the catalog.
@@ -273,6 +291,9 @@ var abilities = map[HeroClass]struct {
 
 func scaledRelic(relic Relic, level int) Relic {
 	relic = relicMetadata(relic)
+	relic.NextValue = 0
+	relic.NextDescription = ""
+	baseValue := relic.Value
 	relic.Value *= 1 + float64(max(0, level-1))*.2
 	relic.UpgradeCost = 0
 	if level < 5 {
@@ -291,7 +312,16 @@ func scaledRelic(relic Relic, level int) Relic {
 	if relic.Dungeon == "void" {
 		material = "void"
 	}
-	if relic.Source != "dungeon" {
+	if relic.Source == "trophy" || relic.Source == "condition" {
+		switch relic.Dungeon {
+		case "crypt":
+			material = "bone"
+		case "forge":
+			material = "ember"
+		case "void":
+			material = "void"
+		}
+	} else if relic.Source != "dungeon" {
 		material = "seal"
 	}
 	relic.CraftCost = map[string]int{material: 6 * rank * rank}
@@ -303,6 +333,41 @@ func scaledRelic(relic Relic, level int) Relic {
 	if level >= 3 && level < 5 {
 		relic.UpgradeMaterials[material] = rank * (level - 2) * 2
 	}
+	relic = describeRelic(relic)
+	if level < 5 {
+		next := relic
+		next.Value = baseValue * (1 + float64(level)*.2)
+		next = describeRelic(next)
+		relic.NextValue = next.Value
+		relic.NextDescription = next.Description
+	}
+
+	return relic
+}
+
+func relicMetadata(relic Relic) Relic {
+	if relic.Source == "" {
+		relic.Source = "dungeon"
+		if atLeast(relic.Rank, RankSS) {
+			relic.Source = "false_gate"
+		}
+	}
+	if relic.Dungeon == "" && relic.Source == "dungeon" && relic.Rank == RankS {
+		relic.Dungeon = "void"
+	}
+	relic.Craftable = relic.Source == "dungeon" && !atLeast(relic.Rank, RankS)
+	relic = decorateRelic(relic)
+	return relic
+}
+func relicsCatalog() []Relic {
+	result := make([]Relic, 0, len(relicCatalog))
+	for _, relic := range relicCatalog {
+		result = append(result, scaledRelic(relic, 1))
+	}
+	return result
+}
+
+func describeRelic(relic Relic) Relic {
 	percent := relic.Value * 100
 	switch relic.Passive {
 	case "damage":
@@ -329,25 +394,4 @@ func scaledRelic(relic Relic, level int) Relic {
 		relic.Effect = "execute"
 	}
 	return relic
-}
-
-func relicMetadata(relic Relic) Relic {
-	if relic.Source == "" {
-		relic.Source = "dungeon"
-		if atLeast(relic.Rank, RankSS) {
-			relic.Source = "false_gate"
-		}
-	}
-	if relic.Dungeon == "" && relic.Source == "dungeon" && relic.Rank == RankS {
-		relic.Dungeon = "void"
-	}
-	relic.Craftable = relic.Source == "dungeon" && !atLeast(relic.Rank, RankS)
-	return relic
-}
-func relicsCatalog() []Relic {
-	result := make([]Relic, 0, len(relicCatalog))
-	for _, relic := range relicCatalog {
-		result = append(result, scaledRelic(relic, 1))
-	}
-	return result
 }

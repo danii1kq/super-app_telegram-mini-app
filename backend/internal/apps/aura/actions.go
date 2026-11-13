@@ -28,6 +28,7 @@ type Result struct {
 	Won           bool           `json:"won"`
 	HeroDamage    int            `json:"hero_damage"`
 	MaterialsGain map[string]int `json:"materials_gain,omitempty"`
+	BonusRelics   []Relic        `json:"bonus_relics,omitempty"`
 }
 
 // Meditation messages share the same System voice as the dungeon interface.
@@ -171,6 +172,7 @@ func (s *Service) StartDungeon(ctx context.Context, userID int64, kind SessionKi
 			return err
 		}
 		session := &Session{ID: id, Kind: kind, Room: 1, Rooms: 1, Phase: "combat", Dungeon: dungeon, Difficulty: difficulty, Round: 1, Rounds: CombatRounds, HeroStats: data.Stats, HeroPath: data.HeroClass, Worn: relics, HeroMaxHP: heroMaxHP(data.Stats), HeroHP: heroMaxHP(data.Stats)}
+		session.Sets = activeSetIDs(relics)
 		if kind == SessionGate {
 			session.Rooms = 3
 			planDungeonEvent(session, s.rnd)
@@ -237,10 +239,14 @@ func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestI
 				session.BestCombo = max(session.BestCombo, session.Combo)
 				session.Charge = min(3, session.Charge+1)
 				session.AbilityReady = session.Charge >= 3
+				empowered := session.Empowered
 				damage := calculateHit(session, s.rnd.Float64())
 				session.Damage += damage
 				session.BossHP = max(0, session.BossHP-damage)
 				result.Damage = damage
+				if session.Room == session.Rooms && session.BossHP <= 0 {
+					session.EmpoweredFinisher = empowered
+				}
 				if acceptedEvent(session) && session.Event.ID == "red_gate" {
 					result.HeroDamage = 2
 					session.HeroHP = max(0, session.HeroHP-2)
@@ -249,6 +255,7 @@ func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestI
 				session.Errors++
 				session.Combo = 0
 				eventMistake(session)
+				curseMistake(session)
 				if !acceptedEvent(session) && session.Dungeon == "void" && session.Room == session.Rooms {
 					session.BossHP = min(session.BossMaxHP, session.BossHP+8)
 					session.Charge = max(0, session.Charge-1)
@@ -286,7 +293,7 @@ func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestI
 					session.Phase = "choice"
 					session.AbilityReady = session.Charge >= 3
 					heal := int(float64(session.HeroMaxHP) * relicBonus(session.Worn, "heal"))
-					session.HeroHP = min(session.HeroMaxHP, session.HeroHP+heal)
+					applyHealing(session, heal)
 					session.ExpiresAt = now.Add(SessionTTL)
 					result.Message = "Комната зачищена. Материалы сохранены. Выбери путь"
 					if revealDungeonEvent(session, now) {
@@ -322,6 +329,15 @@ func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestI
 		}
 		if result.Relic != nil {
 			compensation, err := s.grantRelic(ctx, tx, userID, *result.Relic)
+			if err != nil {
+				return err
+			}
+			data.Aura += compensation
+			data.TotalAura += compensation
+			result.AuraGain += compensation
+		}
+		for _, item := range result.BonusRelics {
+			compensation, err := s.grantRelic(ctx, tx, userID, item)
 			if err != nil {
 				return err
 			}
@@ -383,6 +399,7 @@ func (s *Service) finishRun(data *row, session *Session, won bool, now time.Time
 	}
 	result.Message = fmt.Sprintf("Победа! +%d ауры, +%d опыта", gain, xp)
 	if session.Kind == SessionGate {
+		result.BonusRelics = bonusRelics(data, session)
 		data.Progress.Clears++
 		data.Progress.BossClears[session.Dungeon]++
 		if seals := eventSeals(session); seals > 0 {

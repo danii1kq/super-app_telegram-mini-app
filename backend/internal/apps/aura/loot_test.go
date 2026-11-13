@@ -23,8 +23,8 @@ func TestExclusiveGuaranteeCountsOnlyEligibleVictories(t *testing.T) {
 }
 
 func TestExpandedRelicsKeepLegacyAndHonestCraftMetadata(t *testing.T) {
-	if len(relicCatalog) != 64 {
-		t.Fatal("expected 64 relics", len(relicCatalog))
+	if len(relicCatalog) != 73 {
+		t.Fatal("expected 73 relics", len(relicCatalog))
 	}
 	events, craftable := 0, 0
 	for _, item := range relicsCatalog() {
@@ -46,7 +46,7 @@ func TestExpandedRelicsKeepLegacyAndHonestCraftMetadata(t *testing.T) {
 			t.Fatal("late awakening has no material cost", item.Key)
 		}
 	}
-	if events != 18 || craftable != 43 {
+	if events != 24 || craftable != 46 {
 		t.Fatal("exclusive or craftable counts drifted", events, craftable)
 	}
 	for _, key := range []string{"rusty_blade", "world_ender", "world_shell", "origin_crown", "echo_blade", "troll_heart", "hourglass", "executioner"} {

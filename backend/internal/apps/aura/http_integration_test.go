@@ -205,8 +205,8 @@ func TestAuraHTTPDungeonVictoryAndDefeat(t *testing.T) {
 		}
 	}
 	won := readRaidView(t, request("GET", "/api/v1/aura", nil, 1))
-	if won.Player.Session != nil || won.Player.Clears != 1 || len(won.Relics) > 1 {
-		t.Fatalf("boss victory failed to grant one clear and at most one relic: %+v", won)
+	if won.Player.Session != nil || won.Player.Clears != 1 || len(won.Relics) < 2 || len(won.Relics) > 3 {
+		t.Fatalf("boss victory failed to grant one clear, trophy and clean-run reward: %+v", won)
 	}
 	var weeklyClears int
 	if err := pool.QueryRow(context.Background(), `SELECT clears FROM aura_weekly_scores WHERE user_id=1`).Scan(&weeklyClears); err != nil || weeklyClears != 1 {

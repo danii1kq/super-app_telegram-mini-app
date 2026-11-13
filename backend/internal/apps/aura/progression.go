@@ -224,7 +224,8 @@ func (s *Service) Route(ctx context.Context, userID int64, route, requestID stri
 				session.Room++
 				if route == "shrine" {
 					data.Aura -= 40
-					session.HeroHP = min(session.HeroMaxHP, session.HeroHP+session.HeroMaxHP/3)
+					session.HealingUsed = true
+					applyHealing(session, session.HeroMaxHP/3)
 				}
 				if route == "chest" {
 					session.HeroHP -= 20
@@ -263,6 +264,10 @@ func (s *Service) Ability(ctx context.Context, userID int64, requestID string) (
 		if !now.Before(session.QuestionDeadline) || !now.Before(session.ExpiresAt) {
 			return bad("Время на этот пример уже вышло")
 		}
+		healthCost := curseAbilityCost(session)
+		if session.HeroHP <= healthCost {
+			return bad("Проклятие требует больше здоровья для способности")
+		}
 		switch session.HeroPath {
 		case ClassStrategist:
 			choices := []int{session.Question.Answer}
@@ -294,6 +299,8 @@ func (s *Service) Ability(ctx context.Context, userID int64, requestID string) (
 			return bad("Выбери путь охотника")
 		}
 		session.Charge = 0
+		session.HeroHP -= healthCost
+		result.HeroDamage = healthCost
 		session.AbilityReady = false
 		session.Ability = true
 		result.Message = "Способность активирована: " + abilities[session.HeroPath].Name

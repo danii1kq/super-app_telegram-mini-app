@@ -31,6 +31,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/aura/difficulty", h.auth.Middleware(http.HandlerFunc(h.extraAction)))
 	mux.Handle("POST /api/v1/aura/relics/upgrade", h.auth.Middleware(http.HandlerFunc(h.extraAction)))
 	mux.Handle("POST /api/v1/aura/relics/craft", h.auth.Middleware(http.HandlerFunc(h.extraAction)))
+	mux.Handle("POST /api/v1/aura/relics/favorite", h.auth.Middleware(http.HandlerFunc(h.extraAction)))
 	mux.Handle("POST /api/v1/aura/quests/claim", h.auth.Middleware(http.HandlerFunc(h.extraAction)))
 	mux.Handle("GET /api/v1/aura/top", h.auth.Middleware(http.HandlerFunc(h.top)))
 }
@@ -58,11 +59,26 @@ func (h *Handler) state(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, err)
 		return
 	}
+	worn := []Relic{}
+	for i := range relics {
+		for _, key := range data.Progress.Favorites {
+			if relics[i].Key == key {
+				relics[i].Favorite = true
+				break
+			}
+		}
+		if relics[i].Worn {
+			worn = append(worn, relics[i].Relic)
+		}
+	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
 		"player":      player,
 		"relics":      relics,
 		"classes":     classCatalog,
-		"catalog":     relicsCatalog(),
+		"catalog":     catalogFor(data.Progress),
+		"sets":        setsFor(worn),
+		"showcase":    favoriteOwned(relics, data.Progress.Favorites),
+		"journal":     journalFor(data.Progress),
 		"loot_rules":  lootRules(),
 		"event_pity":  map[string]int{"ss": data.Progress.SSEventPity, "sss": data.Progress.SSSEventPity},
 		"dungeons":    dungeons,
@@ -250,6 +266,8 @@ func (h *Handler) extraAction(w http.ResponseWriter, r *http.Request) {
 		result, err = h.service.RelicUpgrade(r.Context(), user.ID, body.Key)
 	case "/api/v1/aura/relics/craft":
 		result, err = h.service.RelicCraft(r.Context(), user.ID, body.Key)
+	case "/api/v1/aura/relics/favorite":
+		result, err = h.service.Favorite(r.Context(), user.ID, body.Key)
 	case "/api/v1/aura/quests/claim":
 		result, err = h.service.QuestClaim(r.Context(), user.ID, body.ID)
 	}

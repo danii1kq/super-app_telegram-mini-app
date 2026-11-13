@@ -12,6 +12,8 @@ import (
 )
 
 type Progress struct {
+	Favorites      []string        `json:"favorites"`
+	Discoveries    map[string]bool `json:"discoveries"`
 	SSEventPity    int             `json:"ss_event_pity"`
 	SSSEventPity   int             `json:"sss_event_pity"`
 	Difficulty     string          `json:"difficulty"`
@@ -54,6 +56,12 @@ func dungeonByID(id string) (Dungeon, bool) {
 }
 func normalizeProgress(data *row, now time.Time) {
 	p := &data.Progress
+	if p.Discoveries == nil {
+		p.Discoveries = map[string]bool{}
+	}
+	if p.Favorites == nil {
+		p.Favorites = []string{}
+	}
 	if p.Difficulty == "" {
 		p.Difficulty = "easy"
 	}
@@ -189,13 +197,20 @@ func (s *Service) enterRoom(session *Session, route string, now time.Time) error
 func calculateHit(session *Session, rndFloat float64) int {
 	damage := 18 + session.HeroStats.Str*3 + session.Combo*2
 	damage += int(float64(damage) * (relicBonus(session.Worn, "damage")))
+	if hasSet(session, "crypt") {
+		damage += damage / 10
+	}
 	if session.Kind == SessionArena {
 		damage += int(float64(damage) * bonusFor(session.HeroPath).ArenaDamage)
 	}
 	if session.Kind == SessionGate || session.Kind == SessionTower {
 		damage += int(float64(damage) * bonusFor(session.HeroPath).Raid)
 	}
-	if rndFloat < math.Min(.75, critChance(session.HeroStats, session.Worn)+bonusFor(session.HeroPath).Crit) {
+	crit := critChance(session.HeroStats, session.Worn) + bonusFor(session.HeroPath).Crit
+	if hasSet(session, "void") {
+		crit += .08
+	}
+	if rndFloat < math.Min(.75, crit) {
 		damage *= 2
 	}
 	if relicBonus(session.Worn, "echo") > 0 && session.Combo%3 == 0 {
@@ -239,6 +254,9 @@ func incomingHit(session *Session, evadeRoll float64) int {
 	}
 	damage = eventIncoming(session, damage)
 	reduction := math.Min(.6, relicBonus(session.Worn, "negate")+bonusFor(session.HeroPath).Negate+float64(session.HeroStats.Vit)*.005)
+	if hasSet(session, "forge") {
+		reduction = math.Min(.6, reduction+.10)
+	}
 	return max(1, int(float64(damage)*(1-reduction)))
 }
 func (s *Service) checkRequest(ctx context.Context, tx pgx.Tx, userID int64, requestID string) error {
