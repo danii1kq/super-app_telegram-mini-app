@@ -14,6 +14,7 @@ import (
 	"github.com/danii1kq/srunal/internal/apps/notes"
 	"github.com/danii1kq/srunal/internal/apps/pulse"
 	"github.com/danii1kq/srunal/internal/apps/split"
+	"github.com/danii1kq/srunal/internal/apps/aura"
 	"github.com/danii1kq/srunal/internal/apps/tinder"
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/core/chat"
@@ -94,6 +95,7 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	tinderService := tinder.NewService(pool, content)
 	tinderService.SetDelivery(delivery)
 	tinder.NewHandler(tinderService, authService).Register(mux)
+	aura.NewHandler(aura.NewService(pool), authService).Register(mux)
 	farmHandler := farm.NewHandler(pool, authService)
 	if cfg.DevInsecureKeys {
 		if err := farmHandler.SeedDevThemes(ctx); err != nil {

@@ -8,20 +8,23 @@ import { useT } from '@/shared/i18n';
  * The catalogue used to list SruFarm directly, which left no room for a second
  * game: adding one meant another top-level card next to the productivity apps.
  * The hub keeps the catalogue short and gives the games a place of their own.
+ *
+ * SruTinder is not here on purpose: it has its own card on the catalogue,
+ * because dating is a separate habit rather than a mode of the farm.
  */
-type GameId = 'farm' | 'tinder';
+type GameId = 'farm' | 'aura';
 
 interface GameEntry {
   id: GameId;
   path: string;
   title: string;
-  tagline: 'appFarmTagline' | 'appTinderTagline';
+  tagline: 'appFarmTagline' | 'appAuraTagline';
   icon: string;
 }
 
 const GAMES: readonly GameEntry[] = [
   { id: 'farm', path: '/apps/game/farm', title: 'SruFarm', tagline: 'appFarmTagline', icon: 'potted_plant' },
-  { id: 'tinder', path: '/apps/tinder', title: 'SruTinder', tagline: 'appTinderTagline', icon: 'favorite' },
+  { id: 'aura', path: '/apps/game/aura', title: 'SruAura', tagline: 'appAuraTagline', icon: 'auto_awesome' },
 ] as const;
 
 export function GameHomePage() {
