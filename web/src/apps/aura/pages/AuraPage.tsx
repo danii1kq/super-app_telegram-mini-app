@@ -1,361 +1,152 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  formatCooldown,
-  newRequestId,
-  secondsLeft,
-  useAuraAnswer,
-  useAuraClass,
-  useAuraEquip,
-  useAuraFarm,
-  useAuraStart,
-  useAuraState,
-  useAuraStat,
-  type AuraRelic,
-  type AuraSession,
-} from '../api';
-import {
-  AppHeader,
-  Banner,
-  Card,
-  Chip,
-  EmptyState,
-  Icon,
-  PrimaryButton,
-  Screen,
-  Skeleton,
-} from '@/shared/ui';
-import { useFeedback } from '@/shared/ui/toast';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { Icon } from '@/shared/ui';
 import { useSession } from '@/app/session';
-import { useT } from '@/shared/i18n';
+import { useFeedback } from '@/shared/ui/toast';
+import { actAura, auraKeys, newRequestId, useAuraState, useAuraTop, type AuraAction, type AuraResult, type AuraRelic, type Difficulty } from '../api';
+import { canCraft, cooldown, levelProgress, questionSeconds } from '../display';
+import { HunterArt, EnemyArt, RelicArt, DungeonArt } from '../art';
+import { EventEncounter, AnomalyGuide } from '../EventEncounter';
+import '../aura.css';
+import '../events.css';
 
-const STAT_LABELS: Record<string, string> = {
-  str: 'Сила',
-  agi: 'Ловкость',
-  int: 'Интеллект',
-  vit: 'Живучесть',
-  per: 'Восприятие',
-};
+type Tab = 'hunter'|'gates'|'relics'|'system'|'top';
+const tabs = [['hunter','person','Охотник'],['gates','explore','Врата'],['relics','auto_awesome','Реликвии'],['system','terminal','Система'],['top','leaderboard','Рейтинг']] as const;
+const stats = [['str','Сила','Урон каждого удара'],['agi','Ловкость','Уклонение от атак'],['int','Интеллект','Шанс критического удара'],['vit','Живучесть','Запас здоровья'],['per','Восприятие','Время на решение']] as const;
+const difficultyNames:Record<Difficulty,string> = {easy:'Арифметика',normal:'Выражения',hard:'Алгебра'};
+const slotNames:Record<string,string> = {weapon:'Оружие',armor:'Броня',accessory:'Артефакт'};
+const materialNames:Record<string,string> = {crypt:'Осколки склепа',forge:'Угли кузницы',void:'Эссенция пустоты',seal:'Печать аномалии',bone:'Костяные осколки',ember:'Угли кузницы',essence:'Эссенция пустоты'};
+const number = (value:number) => (value??0).toLocaleString('ru-RU');
+const materialName = (key:string) => materialNames[key]??key;
+const sourceNames:Record<string,string>={dungeon:'Добыча врат',false_gate:'Ложные врата S',red_gate:'Красные врата',hidden_shrine:'Скрытое святилище'};
+const helpSteps = [
+  ['ТЫ ВИДИШЬ СИСТЕМУ','Твоё пробуждение началось','Выбери путь охотника. Сила, живучесть и реликвии помогают в бою, а правильные ответы заряжают твои атаки.'],
+  ['ПРИМЕР СТАНОВИТСЯ УДАРОМ','Читай намерение врага','Решай примеры, чтобы наносить урон. Ошибки и просроченные ответы позволяют врагу атаковать. Серия верных решений заряжает способность класса.'],
+  ['ОДИН ПОХОД, ТРИ СТОЛКНОВЕНИЯ','Выбирай свой риск','Между комнатами можно выбрать безопасный путь, элиту, святилище или проклятый сундук. Береги здоровье для босса. Отступление завершает поход.'],
+  ['СОБЕРИ СВОЙ СТИЛЬ','Пробуди реликвии','Экипируй оружие, броню и артефакт. Повторы усиливают предметы. Материалы из подземелий и аура нужны для изготовления и улучшения.'],
+  ['ПЕРВЫЙ РАНГ, БОЛЬШАЯ ИСТОРИЯ','Система ждёт твоего решения','Выполняй задания, открывай новые врата и поднимай ранг охотника. Сложность математики выбирается отдельно от уровня героя.'],
+];
 
-const RANK_TONE: Record<string, 'success' | 'warning'> = {
-  E: 'warning',
-  D: 'warning',
-  C: 'warning',
-  B: 'success',
-  A: 'success',
-  S: 'success',
-  SS: 'success',
-  SSS: 'success',
-};
+function Meter({value,max,label,tone='violet'}:{value:number;max:number;label:string;tone?:string}) {
+  return <div className={`aura-meter ${tone}`}><div><span>{label}</span><strong>{number(value)} <small>/ {number(max)}</small></strong></div><span className="aura-meter-track" role="progressbar" aria-label={label} aria-valuenow={Math.max(0,value)} aria-valuemin={0} aria-valuemax={max}><i style={{width:`${Math.max(0,Math.min(100,value/Math.max(1,max)*100))}%`}}/></span></div>;
+}
+function Dialog({title,children,onClose}:{title:string;children:React.ReactNode;onClose:()=>void}) {
+  const ref=useRef<HTMLDialogElement>(null);
+  useEffect(()=>{const node=ref.current;node?.showModal();return()=>node?.close()},[]);
+  return <dialog className="aura-dialog" ref={ref} aria-label={title} onCancel={e=>{e.preventDefault();onClose()}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}><button className="aura-close" onClick={onClose} aria-label="Закрыть"><Icon name="close"/></button>{children}</dialog>;
+}
+function Materials({items}:{items:Record<string,number>}) { return <div className="aura-materials">{Object.entries(items).filter(([,count])=>count>0).map(([key,count])=><span key={key}><Icon name="diamond" size={14}/>{materialName(key)} <strong>{number(count)}</strong></span>)}</div>; }
 
-/**
- * SruAura: the math-driven RPG.
- *
- * The screen is one loop: farm aura on a cooldown, spend it on challenges, and
- * answer questions to win. The question is always rendered from server data and
- * the answer is checked on the server, so the client cannot shortcut a run.
- */
 export function AuraPage() {
-  const t = useT();
-  const navigate = useNavigate();
-  const feedback = useFeedback();
-  const { me } = useSession();
-  const state = useAuraState(Boolean(me));
-  const farm = useAuraFarm();
-  const start = useAuraStart();
-  const answer = useAuraAnswer();
-  const chooseClass = useAuraClass();
-  const equip = useAuraEquip();
-  const spendStat = useAuraStat();
-
-  const [requestId, setRequestId] = useState(newRequestId);
-  const [tick, setTick] = useState(Date.now());
-  const [showRelics, setShowRelics] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setTick(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const player = state.data?.player;
-  const session: AuraSession | null = player?.session ?? null;
-
-  // A new question means a new attempt id, so a retry of the previous answer
-  // cannot be mistaken for this one.
-  useEffect(() => {
-    setRequestId(newRequestId());
-  }, [session?.question.text]);
-
-  const pick = (choice: number) => {
-    if (answer.isPending) return;
-    answer.mutate(
-      { choice, requestId },
-      {
-        onSuccess: (result) => {
-          if (result.finished) {
-            const relic = result.relic ? ` ${t('auraRelic')}: ${result.relic.name}` : '';
-            feedback(`${result.message}${relic}`);
-          } else if (!result.correct) {
-            feedback(result.hint ?? t('auraWrong'), 'error');
-          }
-        },
-        onError: () => feedback(t('error'), 'error'),
-      },
-    );
+  const {me}=useSession();
+  const user=me?.id??'';
+  const cache=useQueryClient();
+  const feedback=useFeedback();
+  const state=useAuraState(user);
+  const [tab,setTab]=useState<Tab>('hunter');
+  const top=useAuraTop(user,tab==='top');
+  const [tick,setTick]=useState(Date.now());
+  const [loot,setLoot]=useState<AuraResult|null>(null);
+  const [help,setHelp]=useState<number|null>(null);
+  const tutorialChecked=useRef('');
+  const [hit,setHit]=useState<{id:string;damage:number;received:number;correct:boolean}|null>(null);
+  const [muted,setMuted]=useState(()=>{try{return localStorage.getItem('sruaura-muted')==='1'}catch{return false}});
+  const audio=useRef<AudioContext|null>(null);
+  const [relicFilter,setRelicFilter]=useState('all');
+  const [relicRank,setRelicRank]=useState('all');
+  const [request,setRequest]=useState({question:'',id:newRequestId()});
+  const play=useCallback((kind:'hit'|'hurt'|'loot'|'tap')=>{
+    if(muted||typeof AudioContext==='undefined')return;
+    try {
+      const ctx=audio.current??new AudioContext(); audio.current=ctx;
+      void ctx.resume();
+      const notes=kind==='loot'?[523,659,784,1046]:kind==='hit'?[392,587]:kind==='hurt'?[146,110]:[440];
+      notes.forEach((frequency,index)=>{const oscillator=ctx.createOscillator(),gain=ctx.createGain(),at=ctx.currentTime+index*.065;oscillator.type=kind==='hurt'?'triangle':'sine';oscillator.frequency.setValueAtTime(frequency,at);gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(.055,at+.012);gain.gain.exponentialRampToValueAtTime(.001,at+.18);oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start(at);oscillator.stop(at+.2);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect()}});
+    } catch { /* Sound is optional when the browser blocks audio. */ }
+  },[muted]);
+  useEffect(()=>()=>{void audio.current?.close()},[]);
+  useEffect(()=>{const timer=window.setInterval(()=>setTick(Date.now()),250);return()=>window.clearInterval(timer)},[]);
+  useEffect(()=>{if(!hit)return;const timer=window.setTimeout(()=>setHit(null),850);return()=>window.clearTimeout(timer)},[hit]);
+  const command=useMutation({
+    mutationFn:({action,body}:{action:AuraAction;body:Record<string,unknown>})=>actAura(action,body),
+    onSuccess:async(result,variables)=>{
+      if(result.finished){setLoot(result);play(result.won===false?'hurt':'loot')}
+      else if(variables.action==='answer'){setHit({id:variables.body.request_id as string,damage:result.damage,received:result.hero_damage??0,correct:result.correct});play(result.correct?'hit':'hurt');if(!result.correct&&result.hint)feedback(result.hint,'error')}
+      else {play('tap');if(result.message)feedback(result.message)}
+      await Promise.all([cache.invalidateQueries({queryKey:auraKeys.state(user)}),cache.invalidateQueries({queryKey:auraKeys.top(user)})]);
+    },
+    onError:async(error:Error)=>{feedback(error.message,'error');await cache.invalidateQueries({queryKey:auraKeys.state(user)})},
+  });
+  const act=(action:AuraAction,body:Record<string,unknown>={})=>{if(!command.isPending)command.mutate({action,body})};
+  const data=state.data;
+  const player=data?.player;
+  const session=player?.session;
+  useEffect(()=>{if(session?.question_id&&request.question!==session.question_id)setRequest({question:session.question_id,id:newRequestId()})},[session?.question_id,request.question]);
+  useEffect(()=>{
+    if(!user||!data||tutorialChecked.current===user)return;
+    tutorialChecked.current=user;
+    try{if(!localStorage.getItem(`sruaura-tutorial-${user}`)&&!data.player.session)setHelp(0)}catch{ /* Manual help remains available. */ }
+  },[user,data]);
+  const closeHelp=()=>{setHelp(null);try{localStorage.setItem(`sruaura-tutorial-${user}`,'1')}catch{ /* Private browsing. */ }};
+  const toggleSound=()=>{const next=!muted;setMuted(next);try{localStorage.setItem('sruaura-muted',next?'1':'0')}catch{ /* Private browsing. */ }};
+  const now=Date.parse(data?.server_time??'')+Math.max(0,tick-state.dataUpdatedAt);
+  const time=Number.isFinite(now)?now:tick;
+  const busy=command.isPending;
+  if(!player||!data)return <div className="aura-app"><div className="aura-loading"><span className="aura-loading-rune">✧</span><span className="aura-overline">ПОДКЛЮЧЕНИЕ К СИСТЕМЕ</span><h1>SruAura</h1><p>{state.isError?'Система временно недоступна':'Пробуждаем твоего охотника…'}</p>{state.isError&&<button className="aura-primary" onClick={()=>void state.refetch()}>Попробовать снова</button>}<Link to="/apps/game">Вернуться к играм</Link></div></div>;
+  const materials=player.materials??{};
+  const quests=data.quests??[];
+  const dungeons=data.dungeons??[];
+  const catalog=data.catalog??[];
+  const equipped=data.relics.filter(relic=>relic.worn);
+  const xp=levelProgress(player.xp,player.level,player.xp_to_next);
+  const selectedDungeon=dungeons.find(dungeon=>dungeon.id===session?.dungeon);
+  const remaining=session?questionSeconds(session.question_deadline||session.expires_at,time):0;
+  const nextQuest=quests.find(quest=>!quest.claimed);
+  const startDungeon=(dungeon:string)=>act('start',{kind:'gate',dungeon,difficulty:player.difficulty});
+  const title={hunter:['ПРОБУЖДЕНИЕ','Твоя история начинается здесь.'],gates:['ПО ТУ СТОРОНУ','Каждые врата хранят свою тайну.'],relics:['СИЛА В ТВОИХ РУКАХ','Собери свою легенду.'],system:['СИСТЕМА НАБЛЮДАЕТ','Следующая цель уже ждёт.'],top:['ИМЕНА ПРОБУЖДЁННЫХ','Оставь след в истории.']}[tab];
+  const relicCard=(relic:AuraRelic,owned:boolean)=>{
+    const craftable=relic.craftable;
+    const affordable=canCraft(player.aura,materials,relic.craft_aura??0,relic.craft_cost??{});
+    return <article className={`aura-relic-card rank-${relic.rank} ${relic.worn?'equipped':''}`} key={relic.key}>
+      <div className="aura-relic-top"><span className="aura-rank-tag">{relic.rank}</span><span>{owned?`ПРОБУЖДЕНИЕ ${relic.level}/5`:slotNames[relic.slot]}</span>{relic.worn&&<b>НАДЕТО</b>}</div>
+      <div className="aura-relic-visual"><RelicArt relicKey={relic.key} slot={relic.slot} rank={relic.rank}/></div><small>{slotNames[relic.slot]}</small><h3>{relic.name}</h3><p>{relic.description||relic.effect||`Бонус ${Math.round(relic.value*100)}%`}</p><span className="aura-relic-origin">{sourceNames[relic.source]??'Добыча врат'}{relic.dungeon?` · ${dungeons.find(d=>d.id===relic.dungeon)?.name??relic.dungeon}`:''}</span>
+      {owned?<><button className="aura-secondary" disabled={busy||!!session} onClick={()=>act('relics/equip',{key:relic.key,slot:relic.worn?'':relic.slot})}>{relic.worn?'Снять реликвию':'Экипировать'}<Icon name={relic.worn?'remove':'check'} size={16}/></button><Materials items={relic.upgrade_materials??{}}/><button className="aura-relic-upgrade" disabled={busy||relic.level>=5||!canCraft(player.aura,materials,relic.upgrade_cost??0,relic.upgrade_materials??{})||!!session} onClick={()=>act('relics/upgrade',{key:relic.key})}>{relic.level>=5?'Полностью пробуждена':<>Пробудить <span>✦ {number(relic.upgrade_cost)}</span></>}</button></>:<>{craftable?<><Materials items={relic.craft_cost??{}}/><button className="aura-secondary" disabled={busy||!affordable||!!session} onClick={()=>act('relics/craft',{key:relic.key})}>Создать <span>✦ {number(relic.craft_aura)}</span></button></>:<span className="aura-find-label"><Icon name="explore" size={15}/>{relic.source==='dungeon'?'Редкая добыча босса':'Только победа в событии'}</span>}</>}
+    </article>;
   };
-
-  const begin = (kind: string) => {
-    start.mutate(kind, {
-      onError: () => feedback(t('auraNotReady'), 'error'),
-    });
-  };
-
-  if (state.isLoading) {
-    return (
-      <Screen header={<AppHeader title="SruAura" onBack={() => navigate('/apps/game')} leadingIcon="auto_awesome" />}>
-        <Skeleton className="mt-3 h-40 w-full" />
-      </Screen>
-    );
-  }
-
-  if (state.isError || !player) {
-    return (
-      <Screen header={<AppHeader title="SruAura" onBack={() => navigate('/apps/game')} leadingIcon="auto_awesome" />}>
-        <Banner tone="danger" icon="error" title={t('error')}>
-          {t('retryConnection')}
-        </Banner>
-      </Screen>
-    );
-  }
-
-  // Reading tick keeps the countdown live: the interval above re-renders once a
-  // second, so the remaining time actually decreases.
-  const now = tick;
-  const farmLeft = formatCooldown(secondsLeft(player.farm_ready_at, now));
-  const arenaLeft = formatCooldown(secondsLeft(player.arena_ready_at, now));
-  const gateLeft = formatCooldown(secondsLeft(player.gate_ready_at, now));
-  const towerLeft = formatCooldown(secondsLeft(player.tower_ready_at, now));
-
-  return (
-    <Screen header={<AppHeader title="SruAura" onBack={() => navigate('/apps/game')} leadingIcon="auto_awesome" />}>
-      <Card className="mt-2 p-4">
-        <div className="flex items-center gap-3">
-          <span className="flex size-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
-            <Icon name="auto_awesome" size={28} />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-title-3 text-ink">
-              {player.class_name || t('auraNoClass')}
-            </span>
-            <span className="text-caption text-ink-2">
-              {t('auraLevel')} {player.level} · {player.xp} / {player.xp_to_next} XP
-            </span>
-          </div>
-          <Chip tone="success" icon="bolt">
-            {player.aura}
-          </Chip>
-        </div>
-
-        {player.ability ? (
-          <div className="mt-3 flex items-start gap-2 rounded-xl bg-neutral-soft/60 p-3">
-            <Icon name={player.ability.icon} size={18} className="pt-0.5 text-accent" />
-            <div className="flex flex-col">
-              <span className="text-body-secondary-strong text-ink">{player.ability.name}</span>
-              <span className="text-caption text-ink-2">{player.ability.text}</span>
-            </div>
-          </div>
-        ) : null}
-
-        {player.stat_points > 0 ? (
-          <div className="mt-3">
-            <div className="pb-1 text-caption text-ink-2">
-              {t('auraPoints')}: {player.stat_points}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(STAT_LABELS).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  disabled={spendStat.isPending}
-                  onClick={() => spendStat.mutate(key)}
-                  className="h-8 rounded-full bg-neutral-soft px-3 text-caption text-ink-2"
-                >
-                  {label} {player.stats[key as keyof typeof player.stats]}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="pt-3">
-          <PrimaryButton onClick={() => farm.mutate()} disabled={Boolean(farmLeft)} progress={farm.isPending}>
-            {farmLeft ? `${t('auraFarmIn')} ${farmLeft}` : t('auraFarm')}
-          </PrimaryButton>
-        </div>
-      </Card>
-
-      {session ? (
-        <Card className="mt-3 p-4">
-          <div className="flex items-center justify-between pb-2">
-            <span className="text-body-secondary text-ink-2">
-              {session.kind === 'arena' ? t('auraArena') : session.kind === 'gate' ? t('auraGate') : session.kind === 'tower' ? t('auraTower') : t('auraGrind')}
-            </span>
-            {session.boss_max_hp > 0 ? (
-              <span className="text-caption text-ink-2">
-                {session.boss_name} · {session.boss_hp} / {session.boss_max_hp}
-              </span>
-            ) : null}
-          </div>
-
-          {session.boss_max_hp > 0 ? (
-            <div className="h-2 overflow-hidden rounded-full bg-neutral-soft">
-              <div
-                className="h-full rounded-full bg-accent"
-                style={{ width: `${Math.max(0, (session.boss_hp / session.boss_max_hp) * 100)}%` }}
-              />
-            </div>
-          ) : null}
-
-          <div className="flex items-center gap-2 pt-3 text-caption text-ink-2">
-            <Chip tone="success" icon="local_fire_department">
-              {t('auraCombo')} {session.combo}
-            </Chip>
-            <span>{t('auraRound')} {session.round} / {session.rounds}</span>
-          </div>
-
-          <p className="pt-3 text-title-3 text-ink">{session.question.text}</p>
-          <div className="grid grid-cols-2 gap-2 pt-3">
-            {session.question.options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                disabled={answer.isPending}
-                onClick={() => pick(option)}
-                className="h-12 rounded-xl bg-neutral-soft text-body-strong text-ink transition active:scale-[0.98]"
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <div className="pt-2 text-center text-caption text-hint">{session.question.topic_name}</div>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-2 pt-3">
-          <button
-            type="button"
-            disabled={start.isPending || Boolean(arenaLeft)}
-            onClick={() => begin('arena')}
-            className="flex items-center justify-between rounded-[18px] bg-surface p-4 text-left disabled:opacity-60"
-          >
-            <span className="flex flex-col">
-              <span className="text-body-strong text-ink">{t('auraArena')}</span>
-              <span className="text-caption text-ink-2">{t('auraArenaHint')}</span>
-            </span>
-            <span className="text-caption text-accent">{arenaLeft || '→'}</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={start.isPending || Boolean(gateLeft)}
-            onClick={() => begin('gate')}
-            className="flex items-center justify-between rounded-[18px] bg-surface p-4 text-left disabled:opacity-60"
-          >
-            <span className="flex flex-col">
-              <span className="text-body-strong text-ink">{t('auraGate')}</span>
-              <span className="text-caption text-ink-2">{t('auraGateHint')}</span>
-            </span>
-            <span className="text-caption text-accent">{gateLeft || '→'}</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={start.isPending || Boolean(towerLeft)}
-            onClick={() => begin('tower')}
-            className="flex items-center justify-between rounded-[18px] bg-surface p-4 text-left disabled:opacity-60"
-          >
-            <span className="flex flex-col">
-              <span className="text-body-strong text-ink">{t('auraTower')}</span>
-              <span className="text-caption text-ink-2">{t('auraTowerHint')}</span>
-            </span>
-            <span className="text-caption text-accent">{towerLeft || '→'}</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={start.isPending || player.grind_today >= player.grind_cap}
-            onClick={() => begin('grind')}
-            className="flex items-center justify-between rounded-[18px] bg-surface p-4 text-left disabled:opacity-60"
-          >
-            <span className="flex flex-col">
-              <span className="text-body-strong text-ink">{t('auraGrind')}</span>
-              <span className="text-caption text-ink-2">
-                {t('auraGrindHint')} · {player.grind_today} / {player.grind_cap}
-              </span>
-            </span>
-            <span className="text-caption text-accent">→</span>
-          </button>
-        </div>
-      )}
-
-      {!player.hero_class ? (
-        <Card className="mt-3 p-4">
-          <div className="pb-2 text-body-secondary-strong text-ink">{t('auraChooseClass')}</div>
-          <div className="flex flex-col gap-1.5">
-            {state.data?.classes.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                disabled={chooseClass.isPending}
-                onClick={() => chooseClass.mutate(entry.id)}
-                className="rounded-xl bg-neutral-soft px-3 py-2 text-left"
-              >
-                <span className="block text-body-secondary-strong text-ink">{entry.name}</span>
-                <span className="block text-caption text-ink-2">{entry.description}</span>
-              </button>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      <div className="pt-3">
-        <button
-          type="button"
-          onClick={() => setShowRelics((value) => !value)}
-          className="flex items-center gap-1 text-body-secondary text-accent"
-        >
-          <Icon name={showRelics ? 'expand_less' : 'expand_more'} size={18} />
-          {t('auraRelics')} {state.data?.relics.length ?? 0}
-        </button>
-
-        {showRelics ? (
-          <div className="flex flex-col gap-1.5 pt-2">
-            {state.data && state.data.relics.length === 0 ? (
-              <EmptyState icon="auto_awesome" title={t('auraNoRelics')} text={t('auraNoRelicsHint')} />
-            ) : null}
-            {state.data?.relics.map((relic: AuraRelic) => (
-              <div key={relic.key} className="flex items-center gap-2 rounded-xl bg-neutral-soft/60 px-3 py-2">
-                <Chip tone={RANK_TONE[relic.rank] ?? 'warning'}>{relic.rank}</Chip>
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-body-secondary-strong text-ink">{relic.name}</span>
-                  <span className="text-caption text-ink-2">
-                    {relic.slot} · {t('auraRelicLevel')} {relic.level}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  disabled={equip.isPending}
-                  onClick={() => equip.mutate({ key: relic.key, slot: relic.worn ? '' : relic.slot })}
-                  className="h-8 rounded-lg bg-accent-soft px-3 text-caption font-semibold text-accent"
-                >
-                  {relic.worn ? t('auraUnequip') : t('auraEquip')}
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="px-1 pt-4 text-caption text-ink-2">{t('auraNote')}</div>
-    </Screen>
-  );
+  return <div className="aura-app">
+    <header className="aura-header"><Link className="aura-back" to="/apps/game" aria-label="К играм"><Icon name="arrow_back" size={20}/></Link><Link to="/apps/game/aura" onClick={()=>setTab('hunter')} className="aura-logo"><span>✧</span> SRU<span>AURA</span><small>AWAKENING</small></Link><div className="aura-header-right"><button className="aura-icon-button" onClick={toggleSound} aria-label={muted?'Включить звук':'Выключить звук'} aria-pressed={!muted}><Icon name={muted?'volume_off':'volume_up'} size={19}/></button><span className="aura-wallet">✦ <b>{number(player.aura)}</b><small>АУРА</small></span><span className="aura-user-rank">{player.rank||'E'}</span></div></header>
+    <div className="aura-layout"><nav className="aura-nav" aria-label="Разделы SruAura">{tabs.map(([key,icon,label])=><button key={key} onClick={()=>setTab(key)} aria-current={tab===key?'page':undefined} className={tab===key?'active':''}><Icon name={icon} size={18}/><span>{label}</span>{key==='system'&&quests.some(quest=>!quest.claimed&&quest.progress>=quest.goal)&&<i/>}</button>)}</nav>
+      <main>
+        {session?<section className={`aura-battle ${hit?hit.correct?'striking':'wounded':''}`}>
+          <header className="aura-battle-header"><div><span className="aura-overline">{session.kind==='gate'?'ЗАЧИСТКА ВРАТ':session.kind==='tower'?'БАШНЯ ИСПЫТАНИЙ':session.kind==='arena'?'АРЕНА':'ВЫЛАЗКА'}</span><h1>{session.event?.accepted?session.event.name:selectedDungeon?.name??'Испытание охотника'}</h1></div><span className="aura-room-count">{session.kind==='gate'?`КОМНАТА ${session.room} / ${session.rooms}`:`РАУНД ${session.round} / ${session.rounds}`}</span></header>
+          {session.phase!=='event'&&<><div className="aura-battle-scene"><DungeonArt dungeon={session.dungeon}/><div className="aura-combatant hunter"><HunterArt heroClass={player.hero_class} rank={player.rank}/><div className="aura-combatant-name"><small>ПРОБУЖДЁННЫЙ</small><strong>{player.class_name||'Охотник'}</strong></div>{hit&&hit.received>0&&<b key={hit.id} className="aura-floating-damage hurt">−{hit.received}</b>}</div><span className="aura-battle-versus">VS</span><div className="aura-combatant enemy"><EnemyArt dungeon={session.dungeon} event={session.event?.accepted?session.event.id:undefined} boss={session.room===session.rooms}/><div className="aura-combatant-name"><small>{session.room===session.rooms?'ВЛАДЫКА ВРАТ':'ПРОТИВНИК'}</small><strong>{session.boss_name}</strong></div>{hit&&hit.damage>0&&<b key={hit.id} className="aura-floating-damage">{hit.damage}<small>УРОН</small></b>}</div></div>
+          <div className="aura-battle-health"><Meter value={session.hero_hp} max={session.hero_max_hp} label="Твоё здоровье" tone="green"/><Meter value={Math.max(0,session.boss_hp)} max={session.boss_max_hp} label={session.boss_name} tone="red"/></div></>}
+          {session.phase==='event'&&session.event?<EventEncounter event={session.event} busy={busy} onChoose={route=>act('route',{route,request_id:newRequestId()})}/>:session.phase==='choice'?<div className="aura-route-choice"><span className="aura-overline">КОМНАТА ЗАЧИЩЕНА</span><h2>Что ждёт за следующей дверью?</h2><p>Здоровье сохраняется до конца похода. Выбери риск, который готов принять.</p><div className="aura-route-grid">{(session.event?.accepted&&session.event.id==='red_gate'?[['normal','swords','Продолжить испытание','Следующий бой Красных врат']]:[['normal','swords','Тихий коридор','Обычный противник'],['elite','local_fire_department','Элитная стража','Больше риска и материалов'],['shrine','favorite','Святилище','40 ауры: восстановление трети здоровья'],['chest','inventory_2','Проклятый сундук','−20 здоровья: материалы и элитный враг']]).map(([route,icon,name,description])=><button key={route} disabled={busy||(route==='shrine'&&player.aura<40)||(route==='chest'&&session.hero_hp<=20)} onClick={()=>act('route',{route,request_id:newRequestId()})}><Icon name={icon!} size={24}/><strong>{name}</strong><span>{description}</span><Icon name="arrow_forward" size={16}/></button>)}</div>{!(session.event?.accepted&&session.event.id==='red_gate')&&<button className="aura-text-button" disabled={busy} onClick={()=>act('route',{route:'retreat',request_id:newRequestId()})}>Отступить и завершить поход<Icon name="logout" size={16}/></button>}</div>:<div className="aura-question-panel">
+            <div className={`aura-intent ${session.intent?.includes('мощ')?'danger':''}`}><Icon name="warning_amber" size={18}/><span>{session.intent||'Противник готовится к атаке'}</span><span className={remaining<=5?'aura-question-clock urgent':'aura-question-clock'}><Icon name="timer" size={17}/>{remaining} с</span></div>
+            <div className="aura-question-heading"><span className="aura-overline">{session.question.topic_name} · {difficultyNames[player.difficulty]??'ИСПЫТАНИЕ'}</span><span className="aura-combo">✧ КОМБО {session.combo}</span></div><h2 className="aura-question">{session.question.text}<span> = ?</span></h2>
+            {remaining===0&&<p className="aura-deadline-note" role="status">Время решения вышло. Следующий ответ завершит этот ход.</p>}
+            <div className="aura-answer-grid">{session.question.options.map((option,index)=><button key={option} disabled={busy||request.question!==session.question_id} onClick={()=>act('answer',{choice:option,request_id:request.id,question_id:session.question_id})}><span>{String(index+1).padStart(2,'0')}</span><strong>{number(option)}</strong><Icon name="arrow_forward" size={18}/></button>)}</div>
+            <div className="aura-skill-row"><div><span className="aura-overline">{player.ability?.name??'СПОСОБНОСТЬ КЛАССА'}</span><div className="aura-charges" aria-label={`Заряд способности ${session.charge} из 3`}>{[1,2,3].map(charge=><i key={charge} className={session.charge>=charge?'charged':''}/>)}</div><small>{player.ability?.text??'Выбери класс на экране охотника'}</small></div><button className="aura-primary" disabled={busy||!session.ability_ready||!player.hero_class} onClick={()=>act('ability',{request_id:newRequestId()})}><Icon name="bolt" size={20}/>{session.ability_ready?'Применить':'Нужен заряд'}</button></div>
+          </div>}
+        </section>:<>
+          <div className="aura-page-heading"><div><span className="aura-overline">{title[0]}</span><h1>{title[1]}</h1></div><button className="aura-icon-button" aria-label="Как играть" onClick={()=>setHelp(0)}><Icon name="help_outline" size={22}/></button></div>
+          {tab==='hunter'&&<>
+            <section className="aura-hero-panel"><div className="aura-hero-copy"><span className="aura-system-label"><i/>СИСТЕМА АКТИВНА</span><h2>Пробуди<br/>свою <em>силу.</em></h2><p>За гранью привычного мира открылись врата. Только ты можешь прочитать их руны.</p><button className="aura-primary" onClick={()=>setTab('gates')}>Войти в подземелье<Icon name="arrow_forward" size={20}/></button><div className="aura-hero-meta"><span><strong>{player.clears??0}</strong>Зачисток</span><span><strong>{player.tower_floor??0}</strong>Этаж башни</span><span><strong>{data.relics.length}<small>/{catalog.length}</small></strong>Реликвий</span></div></div><div className="aura-hero-illustration"><span className="aura-hero-orbit"/><HunterArt heroClass={player.hero_class} rank={player.rank}/><span className="aura-hero-rank">РАНГ <strong>{player.rank||'E'}</strong></span><span className="aura-hero-class">{player.class_name||'Путь ещё не выбран'}</span></div></section>
+            <div className="aura-dashboard-grid"><section className="aura-panel aura-profile"><header><span className="aura-overline">ДОСЬЕ ОХОТНИКА</span><span className="aura-level">LV. {player.level}</span></header><h2>{me?.public_name||'Пробуждённый'}</h2><Meter value={xp} max={player.xp_to_next} label="Опыт до следующего уровня"/><div className="aura-profile-numbers"><span><Icon name="swords" size={21}/><strong>{player.power}</strong><small>Сила удара</small></span><span><Icon name="favorite" size={21}/><strong>{player.max_hp}</strong><small>Здоровье</small></span></div><div className="aura-equipped">{['weapon','armor','accessory'].map(slot=>{const relic=equipped.find(item=>item.slot===slot);return <button key={slot} onClick={()=>setTab('relics')}><RelicArt relicKey={relic?.key} slot={slot} rank={relic?.rank}/><span>{slotNames[slot]}<strong>{relic?.name??'Пустой слот'}</strong></span><Icon name="chevron_right" size={18}/></button>})}</div></section>
+              <div className="aura-dashboard-side"><section className="aura-panel aura-passive"><span className="aura-overline">ЭНЕРГИЯ ПРОБУЖДЕНИЯ</span><span className="aura-energy-mark">✦</span><h2>Собери свою ауру</h2><p>Энергия помогает пробуждать реликвии. Серия ежедневных входов усиливает награду.</p><button className="aura-secondary" disabled={busy||!!cooldown(player.farm_ready_at,time)} onClick={()=>act('farm')}>{cooldown(player.farm_ready_at,time)?`Через ${cooldown(player.farm_ready_at,time)}`:'Забрать ауру'}<Icon name="bolt" size={18}/></button></section><section className="aura-panel aura-next-quest"><span className="aura-overline">СООБЩЕНИЕ СИСТЕМЫ</span><h3>{nextQuest?.name??'Все задания выполнены'}</h3><p>{nextQuest?.description??'Продолжай зачистки и поднимайся в рейтинге.'}</p><button className="aura-text-button" onClick={()=>setTab('system')}>Открыть задания<Icon name="arrow_forward" size={16}/></button></section></div></div>
+            <section className="aura-panel aura-stats-panel"><header><div><span className="aura-overline">РАЗВИТИЕ ПЕРСОНАЖА</span><h2>Каждое очко имеет значение</h2></div><span className="aura-point-badge">{player.stat_points} очков</span></header><div className="aura-stats-grid">{stats.map(([key,name,description])=><button key={key} disabled={busy||player.stat_points<1} onClick={()=>act('stats',{stat:key})}><span>{name}<small>{description}</small></span><strong>{player.stats[key]}</strong><b>+</b></button>)}</div></section>
+            <section className="aura-class-section"><div className="aura-section-title"><div><span className="aura-overline">ПЯТЬ ПУТЕЙ, ОДНА СИСТЕМА</span><h2>Выбери своё призвание</h2></div><span>{player.hero_class?'Смена пути: 300 ауры':'Первый выбор бесплатно'}</span></div><div className="aura-class-grid">{data.classes.map((entry,index)=><button key={entry.id} className={player.hero_class===entry.id?'chosen':''} disabled={busy||player.hero_class===entry.id||!!player.hero_class&&player.aura<300} onClick={()=>act('class',{class:entry.id})}><span className="aura-class-symbol">{['◈','ϟ','✧','⬡','⌖'][index]}</span><strong>{entry.name}</strong><p>{entry.description}</p><span className="aura-class-status">{player.hero_class===entry.id?'ТВОЙ ПУТЬ':'ВЫБРАТЬ ПУТЬ'}<Icon name={player.hero_class===entry.id?'check':'arrow_forward'} size={15}/></span></button>)}</div></section>
+          </>}
+          {tab==='gates'&&<><section className="aura-difficulty-bar"><div><Icon name="calculate" size={25}/><span><strong>Твои руны, твоя сложность</strong><small>Уровень математики выбирается отдельно от уровня героя</small></span></div><div>{(['easy','normal','hard'] as Difficulty[]).map(difficulty=><button key={difficulty} aria-pressed={player.difficulty===difficulty} className={player.difficulty===difficulty?'active':''} disabled={busy} onClick={()=>act('difficulty',{difficulty})}>{difficultyNames[difficulty]}</button>)}</div></section><div className="aura-dungeon-grid">{dungeons.map((dungeon,index)=><article key={dungeon.id} className={`aura-dungeon-card ${dungeon.theme??dungeon.id} ${player.level<dungeon.level?'locked':''}`}><div className="aura-dungeon-image"><DungeonArt dungeon={dungeon.id}/><EnemyArt dungeon={dungeon.id} boss/><span className="aura-dungeon-number">0{index+1}</span><span className="aura-dungeon-level">{player.level<dungeon.level?<><Icon name="lock" size={13}/>С {dungeon.level} уровня</>:'3 КОМНАТЫ · БОСС'}</span></div><div className="aura-dungeon-copy"><span className="aura-overline">ВРАТА {['ТЕНЕЙ','ПЛАМЕНИ','ПУСТОТЫ'][index]??'ИСПЫТАНИЯ'}</span><h2>{dungeon.name}</h2><p>{dungeon.description}</p><div className="aura-dungeon-reward"><Icon name="diamond" size={17}/><span>{materialName(dungeon.material)}</span><span>ШАНС ПРЕДМЕТА {data.loot_rules?.dungeons[dungeon.id]?.chance_percent??0}% · ДО {data.loot_rules?.dungeons[dungeon.id]?.max_rank??'?'}</span></div><button className="aura-primary" disabled={busy||player.level<dungeon.level||!!cooldown(player.gate_ready_at,time)} onClick={()=>startDungeon(dungeon.id)}>{player.level<dungeon.level?'Врата запечатаны':cooldown(player.gate_ready_at,time)?`Восстановление ${cooldown(player.gate_ready_at,time)}`:'Начать зачистку'}<Icon name="arrow_forward" size={18}/></button></div></article>)}</div><AnomalyGuide/><p className="aura-loot-explainer">Шанс указан за победу. На {data.loot_rules?.pity_after??10}-й победе подряд без предмета выпадение гарантировано, его ранг остаётся случайным. SS и SSS встречаются только в событиях разлома после {data.loot_rules?.ss_min_clears??20} и {data.loot_rules?.sss_min_clears??80} зачисток.</p><div className="aura-event-pity">Гарантия за победы в Ложных вратах разлома: <strong>SS {data.event_pity?.ss??0} / {data.loot_rules?.ss_event_pity??5}</strong> · <strong>SSS {data.event_pity?.sss??0} / {data.loot_rules?.sss_event_pity??20}</strong>. Счётчики начинают расти после достижения нужного числа зачисток. Выпадение соответствующего ранга сбрасывает его счётчик.</div><div className="aura-section-title"><div><span className="aura-overline">ОТТОЧИ СВОИ НАВЫКИ</span><h2>Другие испытания</h2></div></div><div className="aura-modes-grid">{[['arena','swords','Арена','Сразись с противником за ауру и добычу.',player.arena_ready_at],['tower','fort','Башня','Победи стража и открой следующий этаж.',player.tower_ready_at],['grind','explore','Вылазка',`${player.grind_today} / ${player.grind_cap} попыток сегодня. Короткая тренировка.`,null]].map(([kind,icon,name,description,ready])=><button className="aura-panel" key={kind} disabled={busy||!!cooldown(ready,time)||kind==='grind'&&player.grind_today>=player.grind_cap} onClick={()=>act('start',{kind,difficulty:player.difficulty})}><Icon name={icon!} size={28}/><div><h3>{name}</h3><p>{description}</p></div><span>{cooldown(ready,time)||'→'}</span></button>)}</div></>}
+          {tab==='relics'&&<><div className="aura-inventory-header"><div className="aura-inventory-summary"><strong>{data.relics.length}<span> / {catalog.length}</span></strong><div>РЕЛИКВИЙ ОТКРЫТО<small>Три слота. Бесконечно много сочетаний.</small></div></div><Materials items={materials}/></div><div className="aura-filter-row">{[['all','Твои реликвии'],['weapon','Оружие'],['armor','Броня'],['accessory','Артефакты'],['catalog','Коллекция'],['events','Реликвии событий'],['craft','Изготовление']].map(([key,label])=><button key={key} aria-pressed={relicFilter===key} onClick={()=>setRelicFilter(key!)} className={relicFilter===key?'active':''}>{label}</button>)}</div><div className="aura-rank-filters" aria-label="Ранг реликвии">{['all','E','D','C','B','A','S','SS','SSS'].map(rank=><button key={rank} aria-pressed={relicRank===rank} onClick={()=>setRelicRank(rank)} className={relicRank===rank?'active':''}>{rank==='all'?'Все ранги':rank}</button>)}</div><div className="aura-relic-grid">{(['craft','catalog','events'].includes(relicFilter)?catalog.filter(relic=>(relicFilter!=='craft'||relic.craftable&&!data.relics.some(owned=>owned.key===relic.key))&&(relicFilter!=='events'||relic.source!=='dungeon')).map(relic=>data.relics.find(owned=>owned.key===relic.key)??relic):data.relics.filter(relic=>relicFilter==='all'||relic.slot===relicFilter)).filter(relic=>relicRank==='all'||relic.rank===relicRank).map(relic=>relicCard(relic,data.relics.some(owned=>owned.key===relic.key)))}</div>{!['craft','catalog','events'].includes(relicFilter)&&!data.relics.some(relic=>relicFilter==='all'||relic.slot===relicFilter)&&<div className="aura-empty"><RelicArt slot={relicFilter==='all'?'weapon':relicFilter} rank="S"/><h2>Первая реликвия ждёт за вратами</h2><p>Победи босса или собери материалы для изготовления.</p><button className="aura-primary" onClick={()=>setTab('gates')}>К подземельям<Icon name="arrow_forward" size={18}/></button></div>}</>}
+          {tab==='system'&&<><section className="aura-system-banner"><span className="aura-system-rank">{player.rank||'E'}</span><div><span className="aura-overline">ДОСЬЕ ПРОБУЖДЁННОГО</span><h2>Следующая ступень твоей истории</h2><p>Ранг растёт за выполненные испытания. Награды каждого задания выдаются один раз.</p></div><Icon name="auto_awesome" size={44}/></section><div className="aura-quest-grid">{quests.map(quest=><article className={`aura-panel aura-quest ${quest.claimed?'claimed':''}`} key={quest.id}><header><span className="aura-overline">{quest.claimed?'ВЫПОЛНЕНО':'ЗАДАНИЕ СИСТЕМЫ'}</span><Icon name={quest.claimed?'check_circle':'terminal'} size={22}/></header><h2>{quest.name}</h2><p>{quest.description}</p><Meter value={Math.min(quest.progress,quest.goal)} max={quest.goal} label="Прогресс задания"/><div className="aura-quest-rewards"><span>✦ {number(quest.reward_aura)} ауры</span><Materials items={quest.reward_materials??{}}/></div><button className="aura-secondary" disabled={busy||quest.claimed||quest.progress<quest.goal} onClick={()=>act('quests/claim',{id:quest.id})}>{quest.claimed?'Награда получена':quest.progress>=quest.goal?'Забрать награду':'Испытание продолжается'}<Icon name="arrow_forward" size={16}/></button></article>)}</div><div className="aura-help-note"><Icon name="info" size={22}/><p>Реликвии, опыт и аура сохраняются между походами. Сложность примеров можно изменить во вкладке «Врата» перед новым испытанием.</p><button className="aura-text-button" onClick={()=>setHelp(0)}>Обучение</button></div></>}
+          {tab==='top'&&<section className="aura-panel aura-leaderboard"><header><div><span className="aura-overline">ЗАЛ ПРОБУЖДЁННЫХ</span><h2>Охотники, которые идут дальше</h2><p>Недельный топ: глубина врат, сложность рун и число ошибок. Обновление по понедельникам UTC.</p></div><Icon name="military_tech" size={38}/></header>{top.isPending?<p className="aura-empty-text">Система загружает рейтинг…</p>:top.isError?<div className="aura-empty-text"><p>Не удалось загрузить рейтинг</p><button className="aura-secondary" onClick={()=>void top.refetch()}>Повторить</button></div>:!top.data?.entries.length?<p className="aura-empty-text">Здесь появятся первые пробуждённые. Начни свою историю.</p>:<><div className="aura-ranking-labels"><span>РАНГ</span><span>ОХОТНИК</span><span>РЕЗУЛЬТАТ</span></div>{top.data.entries.map(entry=><div className={`aura-ranking-row ${entry.mine?'mine':''}`} key={entry.user_id}><strong>{String(entry.rank).padStart(2,'0')}</strong><span><b>{entry.name}{entry.mine&&<small>ЭТО ТЫ</small>}</b><small>Уровень {entry.level}</small></span><span><b>{entry.depth===10?'Разлом':entry.depth===5?'Кузница':'Склеп'}</b><small>{entry.difficulty===3?'Алгебра':entry.difficulty===2?'Выражения':'Арифметика'} · ошибок {entry.errors??0} · зачисток {entry.clears??0}</small></span></div>)}</>}</section>}
+        </>}
+        {command.isError&&<p className="aura-inline-error" role="alert">{command.error.message}</p>}
+      </main><footer className="aura-footer"><span>✧ SRUAURA · ПРОБУЖДЕНИЕ</span><button onClick={()=>setHelp(0)}>Правила Системы<Icon name="help_outline" size={14}/></button></footer>
+    </div>
+    {help!==null&&<Dialog title="Путеводитель Системы" onClose={closeHelp}><div className="aura-tutorial"><span className="aura-tutorial-symbol">✧</span><span className="aura-overline">{helpSteps[help]![0]}</span><h2>{helpSteps[help]![1]}</h2><p>{helpSteps[help]![2]}</p><div className="aura-tutorial-dots">{helpSteps.map((_,index)=><button key={index} aria-label={`Шаг ${index+1}`} aria-pressed={help===index} className={help===index?'active':''} onClick={()=>setHelp(index)}/>)}</div><div className="aura-tutorial-actions"><button className="aura-text-button" onClick={closeHelp}>Пропустить</button><button className="aura-primary" onClick={()=>help===helpSteps.length-1?closeHelp():setHelp(help+1)}>{help===helpSteps.length-1?'Начать историю':'Дальше'}<Icon name="arrow_forward" size={17}/></button></div></div></Dialog>}
+    {loot&&<Dialog title="Итоги испытания" onClose={()=>setLoot(null)}><div className={`aura-loot ${loot.won===false?'defeat':''}`}><span className="aura-overline">{loot.won===false?'СИСТЕМА СОХРАНИЛА ТВОЙ ПРОГРЕСС':'ИСПЫТАНИЕ ЗАВЕРШЕНО'}</span><div className="aura-loot-art">{loot.relic?<RelicArt relicKey={loot.relic.key} slot={loot.relic.slot} rank={loot.relic.rank}/>:<span>{loot.won===false?'◇':'✧'}</span>}</div><h2>{loot.relic?loot.relic.name:loot.won===false?'Ты вернёшься сильнее':'Ещё один шаг к пробуждению'}</h2>{loot.relic&&<span className={`aura-loot-rank rank-${loot.relic.rank}`}>РЕЛИКВИЯ РАНГА {loot.relic.rank}</span>}<p>{loot.message}</p><div className="aura-loot-rewards"><span><strong>+{number(loot.aura_gain)}</strong>АУРА</span><span><strong>+{number(loot.xp_gain)}</strong>ОПЫТ</span>{loot.level_up>0&&<span><strong>+{loot.level_up}</strong>УРОВЕНЬ</span>}</div><Materials items={loot.materials_gain??{}}/><button className="aura-primary" onClick={()=>setLoot(null)}>Продолжить историю<Icon name="arrow_forward" size={18}/></button></div></Dialog>}
+  </div>;
 }

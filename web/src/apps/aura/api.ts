@@ -1,209 +1,41 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '@/shared/api/client';
 
-export interface AuraStats {
-  str: number;
-  agi: number;
-  int: number;
-  vit: number;
-  per: number;
-}
-
-export interface AuraQuestion {
-  text: string;
-  options: number[];
-  topic: string;
-  topic_name: string;
-}
-
+export type Difficulty = 'easy' | 'normal' | 'hard';
+export interface AuraStats { str:number; agi:number; int:number; vit:number; per:number }
+export interface AuraQuestion { text:string; options:number[]; topic:string; topic_name:string }
+export interface DungeonEvent { id:string; name:string; rank:string; description:string; warning:string; accepted:boolean; phase:number }
 export interface AuraSession {
-  kind: 'arena' | 'gate' | 'grind' | 'tower';
-  question: AuraQuestion;
-  round: number;
-  rounds: number;
-  correct: number;
-  combo: number;
-  best_combo: number;
-  damage: number;
-  boss_hp: number;
-  boss_max_hp: number;
-  boss_name: string;
-  floor: number;
-  seconds: number;
+  id:string; question_id:string; kind:'arena'|'gate'|'grind'|'tower'; question:AuraQuestion;
+  round:number; rounds:number; correct:number; combo:number; best_combo:number; damage:number;
+  boss_hp:number; boss_max_hp:number; boss_name:string; floor:number; seconds:number;
+  hero_hp:number; hero_max_hp:number; room:number; rooms:number; phase:'combat'|'choice'|'event'; event?:DungeonEvent;
+  dungeon:string; intent:string; charge:number; ability_ready:boolean;
+  asked_at:string; expires_at:string; question_deadline:string;
 }
-
-export interface AuraAbility {
-  name: string;
-  icon: string;
-  text: string;
-  cooldown_seconds: number;
-}
-
+export interface AuraAbility { name:string; icon:string; text:string; cooldown_seconds:number }
 export interface AuraPlayer {
-  aura: number;
-  total_aura: number;
-  level: number;
-  xp: number;
-  xp_to_next: number;
-  stat_points: number;
-  stats: AuraStats;
-  hero_class: string;
-  class_name: string;
-  ability: AuraAbility | null;
-  farm_ready_at: string | null;
-  arena_ready_at: string | null;
-  gate_ready_at: string | null;
-  tower_ready_at: string | null;
-  grind_today: number;
-  grind_cap: number;
-  streak: number;
-  session: AuraSession | null;
+  aura:number; total_aura:number; level:number; xp:number; xp_to_next:number; stat_points:number;
+  stats:AuraStats; hero_class:string; class_name:string; ability:AuraAbility|null;
+  farm_ready_at:string|null; arena_ready_at:string|null; gate_ready_at:string|null; tower_ready_at:string|null;
+  grind_today:number; grind_cap:number; streak:number; session:AuraSession|null;
+  max_hp:number; power:number; rank:string; difficulty:Difficulty; materials:Record<string,number>; clears:number; tower_floor:number;
 }
-
 export interface AuraRelic {
-  key: string;
-  name: string;
-  rank: string;
-  slot: string;
-  passive: string;
-  value: number;
-  level: number;
-  worn: boolean;
+  key:string; name:string; rank:string; slot:string; passive:string; value:number; level:number; worn:boolean;
+  description:string; effect:string; upgrade_cost:number; upgrade_materials:Record<string,number>; craft_cost:Record<string,number>; craft_aura:number;
+  source:string; dungeon:string; craftable:boolean;
 }
-
-export interface AuraClass {
-  id: string;
-  name: string;
-  description: string;
-}
-
-export interface AuraResult {
-  message: string;
-  correct: boolean;
-  answer?: number;
-  hint?: string;
-  aura_gain: number;
-  xp_gain: number;
-  damage: number;
-  level_up: number;
-  relic: AuraRelic | null;
-  finished: boolean;
-  player: AuraPlayer;
-}
-
-export interface AuraState {
-  player: AuraPlayer;
-  relics: AuraRelic[];
-  classes: AuraClass[];
-  catalog: AuraRelic[];
-}
-
-export const auraKeys = {
-  state: ['aura', 'state'] as const,
-  top: ['aura', 'top'] as const,
-};
-
-export function useAuraState(enabled = true) {
-  return useQuery({
-    queryKey: auraKeys.state,
-    queryFn: () => api<AuraState>('/aura'),
-    enabled,
-  });
-}
-
-export interface AuraTopEntry {
-  user_id: string;
-  name: string;
-  level: number;
-  total_aura: number;
-  rank: number;
-  mine: boolean;
-}
-
-export function useAuraTop(enabled = true) {
-  return useQuery({
-    queryKey: auraKeys.top,
-    queryFn: () => api<{ entries: AuraTopEntry[] }>('/aura/top'),
-    select: (data) => data.entries,
-    enabled,
-  });
-}
-
-/** One answer needs a stable id so a retry is a no-op rather than a second hit. */
-export function newRequestId(): string {
-  return crypto.randomUUID();
-}
-
-export function useAuraFarm() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api<AuraResult>('/aura/farm', { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: auraKeys.state }),
-  });
-}
-
-export function useAuraStart() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (kind: string) => api<AuraResult>('/aura/start', { method: 'POST', body: { kind } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: auraKeys.state }),
-  });
-}
-
-export function useAuraAnswer() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { choice: number; requestId: string }) =>
-      api<AuraResult>('/aura/answer', {
-        method: 'POST',
-        body: { choice: input.choice, request_id: input.requestId },
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: auraKeys.state });
-      void queryClient.invalidateQueries({ queryKey: auraKeys.top });
-    },
-  });
-}
-
-export function useAuraClass() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (value: string) =>
-      api<{ player: AuraPlayer }>('/aura/class', { method: 'POST', body: { class: value } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: auraKeys.state }),
-  });
-}
-
-export function useAuraEquip() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { key: string; slot: string }) =>
-      api<{ relics: AuraRelic[] }>('/aura/relics/equip', { method: 'POST', body: input }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: auraKeys.state }),
-  });
-}
-
-export function useAuraStat() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (stat: string) =>
-      api<{ player: AuraPlayer }>('/aura/stats', { method: 'POST', body: { stat } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: auraKeys.state }),
-  });
-}
-
-/** Seconds left on a cooldown, floored at zero. now is injectable so the caller
- * can drive it from a ticking clock instead of freezing at first render. */
-export function secondsLeft(readyAt: string | null, now = Date.now()): number {
-  if (!readyAt) return 0;
-  return Math.max(0, Math.floor((new Date(readyAt).getTime() - now) / 1000));
-}
-
-/** A cooldown as "2 ч 15 мин", or an empty string when it is ready. */
-export function formatCooldown(seconds: number): string {
-  if (seconds <= 0) return '';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.ceil((seconds % 3600) / 60);
-  if (hours > 0) return `${hours} ч ${minutes} мин`;
-  return `${minutes} мин`;
-}
+export interface AuraClass { id:string; name:string; description:string }
+export interface Dungeon { id:string; name:string; description:string; level:number; material:string; boss:string; theme:string }
+export interface Quest { id:string; name:string; description:string; progress:number; goal:number; claimed:boolean; reward_aura:number; reward_materials:Record<string,number> }
+export interface AuraResult { message:string; correct:boolean; answer?:number; hint?:string; aura_gain:number; xp_gain:number; damage:number; hero_damage?:number; level_up:number; relic:AuraRelic|null; finished:boolean; won?:boolean; materials_gain?:Record<string,number>; player:AuraPlayer }
+export interface LootRules { pity_after:number; dungeons:Record<string,{chance_percent:number;max_rank:string;rank_percent:Record<string,number>}>; ss_min_clears:number; sss_min_clears:number; top_rank_dungeon:string; ss_event_pity:number;sss_event_pity:number }
+export interface AuraState { player:AuraPlayer; relics:AuraRelic[]; classes:AuraClass[]; catalog:AuraRelic[]; dungeons:Dungeon[]; quests:Quest[]; server_time:string; loot_rules:LootRules; event_pity:{ss:number;sss:number} }
+export interface AuraTopEntry { user_id:string; name:string; level:number; total_aura:number; rank:number; mine:boolean; clears?:number; depth?:number; difficulty?:number; errors?:number }
+export type AuraAction = 'farm'|'start'|'answer'|'class'|'stats'|'route'|'ability'|'difficulty'|'relics/equip'|'relics/upgrade'|'relics/craft'|'quests/claim';
+export const auraKeys = { state:(user:string)=>['aura','state',user] as const, top:(user:string)=>['aura','top',user] as const };
+export function useAuraState(user:string) { return useQuery({queryKey:auraKeys.state(user),queryFn:()=>api<AuraState>('/aura'),enabled:!!user,refetchInterval:30000}); }
+export function useAuraTop(user:string,enabled:boolean) { return useQuery({queryKey:auraKeys.top(user),queryFn:()=>api<{entries:AuraTopEntry[]}>('/aura/top'),enabled:!!user&&enabled,refetchInterval:60000}); }
+export const actAura = (action:AuraAction,body:Record<string,unknown>={}) => api<AuraResult>(`/aura/${action}`,{method:'POST',body});
+export const newRequestId = () => crypto.randomUUID();

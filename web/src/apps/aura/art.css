@@ -1,0 +1,15 @@
+.aura-hunter-art,.aura-enemy-art{position:relative;isolation:isolate;overflow:hidden;aspect-ratio:1;background:#10101d;border-radius:inherit}
+.aura-character-portrait{position:absolute;inset:0;background-image:url('/aura/hunters-atlas.png');background-size:200% 200%;background-repeat:no-repeat;transform:scale(1.015)}
+.aura-portrait-hunter{background-position:0 0}.aura-portrait-crypt{background-position:100% 0}.aura-portrait-forge{background-position:0 100%}.aura-portrait-void{background-position:100% 100%}
+.aura-character-vignette{position:absolute;inset:0;background:linear-gradient(0deg,#0b0b15 0%,transparent 34%,transparent 80%,#0b0b1522);pointer-events:none}
+.aura-hunter-sigil{position:absolute;width:65%;aspect-ratio:1;border:1px solid #c2a6ff1a;border-radius:50%;left:17.5%;top:17%;box-shadow:0 0 40px #b68cff08;pointer-events:none}
+.aura-hunter-art[data-class=berserker] .aura-hunter-sigil{border-color:#ee77774d;box-shadow:0 0 55px #ef565620}
+.aura-hunter-art[data-class=keeper] .aura-hunter-sigil{border-color:#7ed9ee4d;box-shadow:0 0 55px #7ed9ee20}
+.aura-hunter-art[data-class=hunter] .aura-hunter-sigil{border-color:#8ee8b34d;box-shadow:0 0 55px #8ee8b320}
+.aura-hunter-art:is([data-rank=A],[data-rank=S]) .aura-hunter-sigil{border-color:#edc27a80;box-shadow:0 0 65px #edc27a40,inset 0 0 35px #edc27a20}
+.aura-hunter-sparks{position:absolute;inset:0;background:radial-gradient(circle at 21% 40%,#ceb7ff 0 1px,transparent 2px),radial-gradient(circle at 76% 68%,#b8baff 0 1px,transparent 2px),radial-gradient(circle at 64% 22%,#dacaff 0 1px,transparent 2px),radial-gradient(circle at 36% 78%,#ae83ff 0 1px,transparent 2px);animation:aura-art-breathe 5s ease-in-out infinite;pointer-events:none}
+.aura-enemy-art.is-guard .aura-character-portrait{filter:saturate(.65) brightness(.78);transform:scale(.95)}
+.aura-dungeon-art{display:block;width:100%;height:auto;aspect-ratio:28/15;overflow:hidden;border-radius:inherit}
+.aura-relic-art{display:block;width:100%;height:100%;max-width:100%;aspect-ratio:1;flex-shrink:0}
+@keyframes aura-art-breathe{0%,100%{opacity:.2;translate:0 4px}50%{opacity:.85;translate:0 -3px}}
+@media(prefers-reduced-motion:reduce){.aura-hunter-sparks{animation:none}}
