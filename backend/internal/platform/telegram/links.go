@@ -28,6 +28,9 @@ func NotificationLink(base, route string) string {
 	if base == "" {
 		return ""
 	}
+	if route == "/apps/tinder" {
+		return DeepLink(base, "tinder")
+	}
 	if strings.HasPrefix(route, base+"?startapp=") {
 		payload := strings.TrimPrefix(route, base+"?startapp=")
 		return DeepLink(base, payload)

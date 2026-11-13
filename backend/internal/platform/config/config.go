@@ -29,6 +29,7 @@ type Config struct {
 	InitDataMaxAge   time.Duration
 	SessionTTL       time.Duration
 	MiniAppShortName string
+	FarmStarsEnabled bool
 
 	// Existing services SruNal adapts to.
 	DocAPIURL   string
@@ -76,6 +77,7 @@ func load(worker bool) (Config, error) {
 		InitDataMaxAge:   envDuration("SRUNAL_INITDATA_MAX_AGE", 24*time.Hour),
 		SessionTTL:       envDuration("SRUNAL_SESSION_TTL", 30*24*time.Hour),
 		MiniAppShortName: env("SRUNAL_MINIAPP_NAME", ""),
+		FarmStarsEnabled: envBool("SRUNAL_FARM_STARS_ENABLED", false),
 		DocAPIURL:        env("SRUNAL_DOC_API_URL", ""),
 		DocAPIToken:      env("SRUNAL_DOC_API_TOKEN", ""),
 		DayAPIURL:        env("SRUNAL_DAY_API_URL", ""),

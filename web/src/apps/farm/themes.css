@@ -1,0 +1,70 @@
+.farm-themes-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px; }
+.farm-theme-card { border:1px solid #e2e8d8;background:white;border-radius:19px;overflow:hidden; }
+.farm-theme-card.active { border-color:#9bb27b;box-shadow:0 0 0 3px #a8ba7f15; }
+.farm-theme-preview { height:205px;position:relative;overflow:hidden;background:#dfeac9; }
+.farm-theme-island { position:absolute;width:90%;height:140px;left:5%;bottom:-32px;background:#c0d39d;border-radius:50% 50% 0 0;box-shadow:0 -3px 0 #eff5d750; }
+.farm-theme-sky { position:absolute;right:33px;top:26px;background:#faf5ce;width:30px;height:30px;border-radius:50%;box-shadow:0 0 25px #f8edb977; }
+.farm-theme-tree { position:absolute;width:66px;height:90px;left:-15px;top:25px;border-radius:50%;background:#a0bf7e;box-shadow:inset -10px -3px #8caa6b; }
+.farm-theme-mini-plots { display:flex;gap:13px;position:absolute;bottom:32px;left:50%;transform:translateX(-50%); }
+.farm-theme-mini-plots .farm-crop-art { width:80px;height:80px;background:#c4ac83;border:3px solid #acbd8c;border-bottom-width:6px;border-radius:15px;padding:2px; }
+.farm-theme-preview-label { position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#74865c;font-size:10px;letter-spacing:2px;font-weight:600; }
+.farm-theme-preview.tropical { background:#bce4df; }
+.tropical .farm-theme-island { background:#e6d9ab;box-shadow:0 -6px #f2e8c5,0 -16px #a1d5cd; }
+.tropical .farm-theme-sky { background:#fff0b7;box-shadow:0 0 30px #fff0b799; }
+.tropical .farm-theme-tree { top:12px;left:7px;width:90px;height:82px;background:#589a71;box-shadow:none;clip-path:polygon(50% 40%,24% 0,22% 27%,0 20%,20% 47%,0 65%,40% 59%,42% 100%,53% 100%,56% 54%,89% 77%,82% 53%,100% 42%,70% 39%,87% 13%,64% 26%,63% 0);border-radius:0;transform:rotate(-8deg); }
+.tropical .farm-theme-mini-plots .farm-crop-art { background:#c5ac7c;border-color:#d9c998; }
+.farm-theme-preview.lunar { background:#293653; }
+.lunar .farm-theme-island { background:#505a7b;box-shadow:0 -3px #70779a; }
+.lunar .farm-theme-sky { background:#ece8cd;box-shadow:0 0 0 8px #d5d2f00b,0 0 38px #d5d2f03b; }
+.lunar .farm-theme-tree { background:#596189;box-shadow:inset -10px -3px #474e74; }
+.lunar .farm-theme-mini-plots .farm-crop-art { background:#656887;border-color:#8984a6; }
+.lunar .farm-theme-preview-label { color:#bcc2de; }
+.farm-theme-info { padding:23px; }
+.farm-theme-info h2 { font-size:19px;font-weight:550;letter-spacing:-.5px;margin-top:10px; }
+.farm-theme-info > p { color:#8f9b81;font-size:13px;line-height:1.85;margin:10px 0 21px;min-height:42px; }
+.farm-theme-info > small { display:block;color:#a1aa94;font-size:11px;line-height:1.8;margin-top:12px; }
+.farm-promo { display:flex;align-items:center;justify-content:space-between;gap:28px;margin-top:24px;border:1px dashed #d8e0cb;border-radius:17px;padding:25px;background:#f2f5e8; }
+.farm-promo > div:first-child { position:relative;padding-left:49px; }
+.farm-promo-icon { position:absolute;left:0;top:5px;color:#9aad76; }
+.farm-promo h3 { font-size:15px;font-weight:550; }
+.farm-promo p { font-size:12px;color:#95a181;margin-top:5px; }
+.farm-promo-field { display:flex;gap:8px; }
+.farm-promo input { min-width:0;width:180px;background:#fff;border:1px solid #dce4ce;border-radius:10px;padding:11px 13px;color:#425a3a;font-size:13px;text-transform:uppercase; }
+.farm-promo .farm-primary svg { transform:rotate(180deg); }
+.farm-theme-note { display:flex;align-items:center;gap:8px;color:#a0aa91;font-size:12px;margin-top:19px !important; }
+.theme-tropical { --farm-bg:#f0f8f2;--farm-ink:#294c43;--farm-muted:#7b9588;--farm-line:#dfebe0; }
+.theme-tropical .farm-topbar { background:#fafff8; }
+.theme-tropical .farm-garden { background:#cce8ce; }
+.theme-tropical .farm-garden::after { content:'';position:absolute;right:-100px;bottom:-80px;width:260px;height:270px;border-radius:50%;background:#89cdc3;border:12px solid #c0e2d5;box-shadow:0 0 0 9px #e4ddba;z-index:0; }
+.theme-tropical .farm-tree { top:0;left:-13px;background:none;box-shadow:none;border-radius:0; }
+.theme-tropical .tree-two { left:auto;right:-12px;top:-10px; }
+.theme-tropical .tree-three { left:auto;right:-20px;top:auto;bottom:15px; }
+.theme-tropical .farm-tree::before { content:'';position:absolute;top:-9px;left:-10px;width:107px;height:85px;background:#609d71;clip-path:polygon(50% 40%,24% 0,22% 27%,0 20%,20% 47%,0 65%,40% 59%,42% 100%,53% 100%,56% 54%,89% 77%,82% 53%,100% 42%,70% 39%,87% 13%,64% 26%,63% 0); }
+.theme-tropical .farm-tree::after { background:#b8a97b;height:50px;bottom:-5px;transform:rotate(10deg); }
+.theme-tropical .farm-garden-sign { background:#f5e9bc;border-color:#ccba86;color:#968756; }
+.theme-tropical .farm-plot-soil { background:#c8b385;border-color:#bac99b; }
+.theme-tropical .farm-plot.empty .farm-plot-soil { background:#e1d8b2; }
+.theme-lunar { --farm-bg:#eff0f9;--farm-ink:#404760;--farm-muted:#9196ae;--farm-line:#e0e3f0; }
+.theme-lunar .farm-topbar { background:#fcfcff; }
+.theme-lunar .farm-intro h1 em { color:#9690b8; }
+.theme-lunar .farm-garden { background:#293653; }
+.theme-lunar .farm-garden::before { background-image:radial-gradient(#c3c9e2 1px,transparent 1px);opacity:.12;background-size:32px 37px; }
+.theme-lunar .farm-garden-scenery::before { content:'';position:absolute;right:28px;top:15px;width:29px;height:29px;border-radius:50%;background:#efedce;box-shadow:0 0 28px #ddd8f666; }
+.theme-lunar .farm-tree { background:#525c82;box-shadow:inset -10px -5px #454d74; }
+.theme-lunar .farm-tree::after { background:#646886; }
+.theme-lunar .farm-fence { border-color:#6e779e;background:repeating-linear-gradient(90deg,transparent 0 19px,#677293 19px 26px,transparent 26px 47px);opacity:.5; }
+.theme-lunar .farm-garden-sign { color:#b8bfd8;background:#4c5675;border-color:#3d4767; }
+.theme-lunar .farm-plot-soil { background:#726c8b;border-color:#626b8b;box-shadow:inset 0 4px #655e7b,0 4px #26324a; }
+.theme-lunar .farm-plot-soil::after { background:repeating-linear-gradient(0deg,transparent 0 16px,#524d70 16px 18px,transparent 18px 24px); }
+.theme-lunar .farm-plot.empty .farm-plot-soil { background:#454e70;border-color:#596381;box-shadow:inset 0 3px #3e4667,0 4px #26324a; }
+.theme-lunar .farm-plot.empty .farm-plot-name { color:#b4bbd6; }
+.theme-lunar .farm-empty-caption { color:#8995b6; }
+.theme-lunar .farm-plot-plus { border-color:#737d9f;color:#94a3c6; }
+.theme-lunar .farm-plot-status { color:#c4c9e2;background:#4c5479; }
+.theme-lunar .farm-plot-status.mature { color:#5c5778;background:#e9e4fa; }
+.theme-lunar .farm-plot-care { background:#a1a2bb55;color:#dad6ed; }
+.theme-lunar .farm-growth-track { background:#434565; }
+.theme-lunar .farm-growth-track > span { background:#a3a1ce; }
+.theme-lunar .farm-flower { background:#c4b6ee;box-shadow:7px 1px #c4b6ee,4px -5px #c4b6ee,4px 5px #c4b6ee;opacity:.5; }
+@media(max-width:900px) { .farm-themes-grid{gap:14px}.farm-theme-info{padding:19px}.farm-theme-info h2{font-size:17px}.farm-theme-mini-plots{gap:5px}.farm-theme-mini-plots .farm-crop-art{width:65px;height:65px}.farm-promo{flex-direction:column;align-items:stretch;gap:22px}.farm-promo-field input{flex:1;width:auto} }
+@media(max-width:650px) { .farm-themes-grid{grid-template-columns:1fr}.farm-theme-preview{height:195px}.farm-theme-mini-plots .farm-crop-art{width:95px;height:95px}.farm-theme-mini-plots{gap:20px;bottom:24px}.farm-theme-info{padding:23px}.farm-theme-info>p{min-height:0}.farm-promo{padding:22px 18px}.farm-promo>div:first-child{padding-left:38px}.farm-promo-field{gap:7px}.farm-promo input{font-size:13px;padding:11px}.farm-promo h3{font-size:14px}.farm-theme-note{font-size:11px;align-items:flex-start} }

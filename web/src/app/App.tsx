@@ -15,6 +15,10 @@ const DayApp = lazy(() => import('@/apps/day/routes'));
 const PulseApp = lazy(() => import('@/apps/pulse/routes'));
 const NotesApp = lazy(() => import('@/apps/notes/routes'));
 const SplitApp = lazy(() => import('@/apps/split/routes'));
+const GameApp = lazy(() => import('@/apps/game/routes'));
+const FarmApp = lazy(() => import('@/apps/farm/routes'));
+const AuraApp = lazy(() => import('@/apps/aura/routes'));
+const TinderApp = lazy(() => import('@/apps/tinder/routes'));
 
 function AppFallback() {
   return (
@@ -29,7 +33,7 @@ function AppFallback() {
 
 export function App() {
   const {status}=useSession();const navigate=useNavigate();const launched=useRef(false);
-  useEffect(()=>{if(status!=='ready'||launched.current)return;launched.current=true;const value=startParam();if(/^split_join_[A-Za-z0-9_-]{32,64}$/.test(value))navigate(`/apps/split/join/${value.slice(11)}`,{replace:true});else if(/^split_receipt_\d+$/.test(value))navigate(`/apps/split/open/${value.slice(14)}`,{replace:true});else if(/^split_debts_\d+$/.test(value))navigate(`/apps/split/${value.slice(12)}/debts`,{replace:true});},[status,navigate]);
+  useEffect(()=>{if(status!=='ready'||launched.current)return;launched.current=true;const value=startParam();if(value==='tinder')navigate('/apps/tinder',{replace:true});else if(/^split_join_[A-Za-z0-9_-]{32,64}$/.test(value))navigate(`/apps/split/join/${value.slice(11)}`,{replace:true});else if(/^split_receipt_\d+$/.test(value))navigate(`/apps/split/open/${value.slice(14)}`,{replace:true});else if(/^split_debts_\d+$/.test(value))navigate(`/apps/split/${value.slice(12)}/debts`,{replace:true});},[status,navigate]);
   return (
     <Suspense fallback={<AppFallback />}>
       <Routes>
@@ -45,6 +49,13 @@ export function App() {
           <Route path="/apps/pulse/*" element={<PulseApp />} />
           <Route path="/apps/notes/*" element={<NotesApp />} />
           <Route path="/apps/split/*" element={<SplitApp />} />
+          <Route path="/apps/game/*" element={<GameApp />} />
+          <Route path="/apps/game/farm/*" element={<FarmApp />} />
+          <Route path="/apps/game/aura/*" element={<AuraApp />} />
+          <Route path="/apps/game/tinder/*" element={<TinderApp />} />
+          <Route path="/apps/tinder/*" element={<TinderApp />} />
+          <Route path="/apps/farm/*" element={<Navigate to="/apps/game/farm" replace />} />
+          <Route path="/apps/aura/*" element={<Navigate to="/apps/game/aura" replace />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/feed" replace />} />
         </Route>

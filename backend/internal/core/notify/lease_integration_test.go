@@ -57,7 +57,7 @@ func leaseFixture(t *testing.T) (*Worker, *leasedBot, func(string) int64) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	for _, name := range []string{"000001_core_identity.up.sql", "000004_session_initdata.up.sql", "000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000018_split_payment_confirmation.up.sql", "000020_split_reminders.up.sql"} {
+	for _, name := range []string{"000001_core_identity.up.sql", "000004_session_initdata.up.sql", "000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000018_split_payment_confirmation.up.sql", "000020_split_reminders.up.sql", "000030_tinder_notifications.up.sql"} {
 		raw, err := os.ReadFile("../../../../db/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
@@ -232,5 +232,43 @@ func TestIdentityMigrationAndLoginKeepContentKeyAwayFromWorker(t *testing.T) {
 	w.deliver(ctx, jobs[0])
 	if len(bot.messages) != 1 || bot.messages[0].ChatID != 12345 {
 		t.Fatal("worker could not deliver migrated identity", bot.messages)
+	}
+}
+
+func TestTinderDeliveryUsesItsOwnCipherContextAndPreferences(t *testing.T) {
+	w, bot, _ := leaseFixture(t)
+	ctx := context.Background()
+	if _, err := w.pool.Exec(ctx, `UPDATE user_settings SET split_debt_notifications=false,split_debt_show_amounts=false WHERE user_id=1`); err != nil {
+		t.Fatal(err)
+	}
+	enqueue := func(key string) {
+		plain, err := json.Marshal(payload{Text: "SruTinder: match with Tester", ButtonURL: "/apps/tinder", ButtonText: "Open Tinder"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sealed, err := w.delivery.Seal(plain, "tinder_notice:1:"+key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = w.pool.Exec(ctx, `INSERT INTO notification_delivery(user_id,kind,payload_sealed,payload_key_id,dedupe_key)VALUES(1,'tinder.matched',$1,$2,$3)`, sealed.Ciphertext, sealed.KeyID, key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	enqueue("match:first")
+	if err := w.tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(bot.messages) != 1 || bot.messages[0].Text != "SruTinder: match with Tester" || bot.messages[0].ReplyMarkup.InlineKeyboard[0][0].URL != "https://t.me/srunal_test_bot?startapp=tinder" {
+		t.Fatal(bot.messages)
+	}
+	enqueue("match:second")
+	if _, err := w.pool.Exec(ctx, `UPDATE user_settings SET tinder_match_notifications=false WHERE user_id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(bot.messages) != 1 {
+		t.Fatal("ignored Tinder notification preference")
 	}
 }

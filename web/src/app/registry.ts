@@ -1,5 +1,5 @@
 /**
- * App registry: four catalogue apps; the calendar is a core section.
+ * App registry: catalogue apps and the games hub; the calendar is a core section.
  *
  * Each app owns its route and its lazy-loaded module. Adding an app means adding
  * one entry here and its folder under src/apps/<id>.
@@ -10,7 +10,7 @@
 
 import type { DictKey } from '@/shared/i18n';
 
-export type AppId = 'doc' | 'pulse' | 'notes' | 'split';
+export type AppId = 'doc' | 'pulse' | 'notes' | 'split' | 'game' | 'tinder';
 
 export interface AppMeta {
   id: AppId;
@@ -25,6 +25,8 @@ export interface AppMeta {
 }
 
 export const APPS: readonly AppMeta[] = [
+  {id:'game',path:'/apps/game',title:'SruGame',tagline:'appGameTagline',icon:'sports_esports',ready:true},
+  {id:'tinder',path:'/apps/tinder',title:'SruTinder',tagline:'appTinderTagline',icon:'favorite',ready:true},
   {
     id: 'doc',
     path: '/apps/doc',

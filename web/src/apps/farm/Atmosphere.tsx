@@ -1,0 +1,1 @@
+export function Atmosphere(){return <div className="farm-atmosphere" aria-hidden="true">{Array.from({length:18},(_,i)=><i key={i} style={{left:`${(i*37+9)%100}%`,top:`${(i*23+5)%100}%`,animationDelay:`-${i*1.7}s`,animationDuration:`${13+i%5*4}s`}}/>)}</div>}
