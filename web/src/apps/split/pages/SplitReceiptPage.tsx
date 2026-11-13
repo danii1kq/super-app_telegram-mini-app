@@ -98,7 +98,6 @@ export function SplitReceiptPage() {
   const [photoUrl, setPhotoUrl] = useState('');
   const [consent, setConsent] = useState(false);
   const [reviewedSignature, setReviewedSignature] = useState('');
-  const [savedImageBytes, setSavedImageBytes] = useState(0);
   const [uncertainSave, setUncertainSave] = useState(false);
   const uploading = useRef(false);
   const submitting = useRef(false);
@@ -147,7 +146,6 @@ export function SplitReceiptPage() {
     items: { name: string; quantity: number; amount_minor: string; unclear: boolean; units: Record<string, number> }[];
   }) => {
     setReceiptId(receipt.id);
-    setSavedImageBytes(receipt.image_bytes ?? 0);
     setTotal(receipt.total_minor === '0' ? '' : formatMinor(receipt.total_minor));
     setDiscount(receipt.discount_minor === '0' ? '' : formatMinor(receipt.discount_minor));
     setService(receipt.service_minor === '0' ? '' : formatMinor(receipt.service_minor));
@@ -167,7 +165,7 @@ export function SplitReceiptPage() {
 
   const onPickFile = (file: File | undefined) => {
     if (!file || upload.isPending) return;
-    if (!file.size || file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    if (!file.size || file.size > 20 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       feedback(t('receiptImageLimit'), 'error'); return;
     }
     setSelectedPhoto(file); setConsent(false);
@@ -313,7 +311,7 @@ export function SplitReceiptPage() {
     >
       {photoUrl ? <Card className="mt-2 gap-2 p-3">
         <img src={photoUrl} alt={t('receiptPhotoPreview')} className="max-h-64 w-full rounded-xl object-contain" />
-        {savedImageBytes > 0 ? <p className="text-caption text-ink-2">{t('receiptSavedImageInfo')}: {Math.max(1, Math.ceil(savedImageBytes / 1024))} KB</p> : <p className="text-caption text-ink-2">{t('receiptLocalPreview')}</p>}
+        <p className="text-caption text-ink-2">{t(receiptId ? 'receiptServerPhotoDeleted' : 'receiptLocalPreview')}</p>
       </Card> : null}
       {!receiptId && !manual ? (
         <Card className="mt-2 p-4">

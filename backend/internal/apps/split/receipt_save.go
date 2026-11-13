@@ -131,7 +131,7 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 				return err
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE split_receipts SET status='saved',saved_expense_id=$2,image_expires_at=now()+$3::interval,updated_at=now() WHERE id=$1`, receiptID, expenseID, savedImageTTL)
+		_, err = tx.Exec(ctx, `UPDATE split_receipts SET status='saved',saved_expense_id=$2,image_expires_at=CASE WHEN image_state='stored' THEN now()+$3::interval ELSE NULL END,updated_at=now() WHERE id=$1`, receiptID, expenseID, savedImageTTL)
 		return err
 	})
 	if err != nil {

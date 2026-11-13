@@ -16,6 +16,7 @@ import (
 	"github.com/danii1kq/srunal/internal/platform/media"
 	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/secure"
+	"github.com/danii1kq/srunal/internal/platform/vision"
 )
 
 // Receipt is a photographed check, from draft to saved expense.
@@ -78,19 +79,10 @@ type DebtPayment struct {
 	AuthorID    int64
 }
 
-// maxImageBytes bounds a receipt photo. A phone photo is well under this.
-const maxImageBytes = 5 << 20
+const maxImageBytes = 20 << 20
 
-// Retention of the photo, separate from the data it belongs to.
-//
-// Deleting a photo never deletes the receipt, its items, shares, expenses or
-// debts: those keep working in the report.
-const (
-	// draftImageTTL applies to a draft that never became an expense.
-	draftImageTTL = 24 * time.Hour
-	// savedImageTTL applies after the receipt is confirmed as an expense.
-	savedImageTTL = 30 * 24 * time.Hour
-)
+// Retention applies only to photos stored by earlier versions.
+const savedImageTTL = 30 * 24 * time.Hour
 
 // allowedImageMime is the accepted set. The bytes are sniffed, not trusted from
 // the client's content type.
@@ -133,10 +125,9 @@ func (s *Service) CreateManualReceipt(ctx context.Context, authorID, groupID int
 	return receipt, nil
 }
 
-// CreateReceipt stores the photo, asks the recognizer for a draft and returns it.
+// CreateReceipt reads a photo in memory and stores only the extracted draft.
 //
-// Recognition failure is not a request failure: the draft is stored with a
-// stable error code so the user can retry or type the receipt by hand.
+// Recognition failure leaves a draft for manual entry, never a stored photo.
 func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, image []byte, mime string) (Receipt, error) {
 	if err := s.requireMember(ctx, authorID, groupID); err != nil {
 		return Receipt{}, err
@@ -145,7 +136,7 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		return Receipt{}, httpapi.Validation(map[string]string{"image": "Файл пустой"}, "Проверьте поля")
 	}
 	if len(image) > maxImageBytes {
-		return Receipt{}, httpapi.Validation(map[string]string{"image": "Файл больше 5 МБ"}, "Проверьте поля")
+		return Receipt{}, httpapi.Validation(map[string]string{"image": "Файл больше 20 МБ"}, "Проверьте поля")
 	}
 	if media.DetectMime(image) == "" {
 		return Receipt{}, httpapi.Validation(map[string]string{"image": "Поддерживаются JPEG, PNG и WebP"}, "Проверьте поля")
@@ -155,8 +146,7 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		return Receipt{}, err
 	}
 
-	// Normalize before encrypting: compressing ciphertext would be pointless,
-	// and the stored bytes must already be the small, metadata-free version.
+	// Normalize in memory: photos must not enter PostgreSQL or its backups.
 	normalized, err := media.Normalize(image)
 	if err != nil {
 		switch {
@@ -167,8 +157,8 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		}
 	}
 
-	if normalized.StoredBytes > maxImageBytes {
-		return Receipt{}, httpapi.Validation(map[string]string{"image": "Подготовленное фото больше 5 МБ: уменьшите размер изображения"}, "Проверьте фото")
+	if normalized.StoredBytes > vision.MaxImageBytes {
+		return Receipt{}, httpapi.Validation(map[string]string{"image": "После сжатия фото больше 10 МБ: уменьшите разрешение"}, "Проверьте фото")
 	}
 
 	var receipt Receipt
@@ -181,27 +171,14 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 			return err
 		}
 
-		// The photo is scheduled for deletion from the start: a draft that never
-		// becomes an expense must not keep its image for long.
+		// Keep the attempt for quotas, without persisting any image bytes.
 		if err := tx.QueryRow(ctx,
 			`INSERT INTO split_receipts (group_id, author_id, image_sealed, image_key_id, image_mime, image_bytes,
-			                             image_state, image_width, image_height, image_expires_at)
-			 VALUES ($1, $2, ''::bytea, 'pending', $3, $4, 'processing', $5, $6, now() + $7::interval)
+			                             image_state, image_width, image_height)
+			 VALUES ($1, $2, ''::bytea, 'purged', $3, 0, 'processing', $4, $5)
 			 RETURNING id, created_at`,
-			groupID, authorID, normalized.Mime, normalized.StoredBytes,
-			normalized.Width, normalized.Height, draftImageTTL,
+			groupID, authorID, normalized.Mime, normalized.Width, normalized.Height,
 		).Scan(&receipt.ID, &receipt.CreatedAt); err != nil {
-			return err
-		}
-
-		sealed, err := s.content.Seal(normalized.Data, receiptImageAAD(receipt.ID))
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx,
-			`UPDATE split_receipts SET image_sealed = $2, image_key_id = $3, image_state = 'stored' WHERE id = $1`,
-			receipt.ID, sealed.Ciphertext, sealed.KeyID,
-		); err != nil {
 			return err
 		}
 		return nil
@@ -213,10 +190,8 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 	receipt.GroupID = groupID
 	receipt.AuthorID = authorID
 	receipt.Status = "draft"
-	receipt.ImageState = "stored"
-	receipt.ImageWidth, receipt.ImageHeight, receipt.ImageBytes = normalized.Width, normalized.Height, normalized.StoredBytes
-	expires := receipt.CreatedAt.Add(draftImageTTL)
-	receipt.ImageExpiresAt = &expires
+	receipt.ImageState = "purged"
+	receipt.ImageWidth, receipt.ImageHeight = normalized.Width, normalized.Height
 
 	// Recognition reads the normalized image, not the original: the text is the
 	// same and the payload is a fraction of the size.
@@ -228,7 +203,7 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		}
 		receipt.OCRError = code
 		if _, err := s.pool.Exec(ctx,
-			`UPDATE split_receipts SET ocr_error = $2, updated_at = now() WHERE id = $1`,
+			`UPDATE split_receipts SET ocr_error = $2, image_state = 'purged', updated_at = now() WHERE id = $1`,
 			receipt.ID, code,
 		); err != nil {
 			return Receipt{}, err
@@ -252,7 +227,7 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 func (s *Service) checkReceiptBudget(ctx context.Context, q receiptQuerier, authorID int64) error {
 	var attempts int
 	var latest *time.Time
-	if err := q.QueryRow(ctx, `SELECT count(*), max(created_at) FROM split_receipts WHERE author_id=$1 AND image_bytes>0 AND created_at>now()-interval '24 hours'`, authorID).Scan(&attempts, &latest); err != nil {
+	if err := q.QueryRow(ctx, `SELECT count(*), max(created_at) FROM split_receipts WHERE author_id=$1 AND image_state<>'none' AND created_at>now()-interval '24 hours'`, authorID).Scan(&attempts, &latest); err != nil {
 		return err
 	}
 	if attempts >= 50 || (latest != nil && time.Since(*latest) < 30*time.Second) {
@@ -310,7 +285,7 @@ func (s *Service) storeRecognized(ctx context.Context, receiptID int64, result o
 			    SET total_sealed = $2, total_key_id = $3,
 			        discount_sealed = $4, discount_key_id = $5,
 			        service_sealed = $6, service_key_id = $7,
-			        ocr_error = NULL, updated_at = now()
+		        ocr_error = NULL, image_state = 'purged', updated_at = now()
 			  WHERE id = $1`,
 			receiptID, totalSealed, totalKey, discountSealed, discountKey, serviceSealed, serviceKey,
 		)
@@ -638,7 +613,8 @@ func (s *Service) ReceiptImage(ctx context.Context, viewerID, receiptID int64) (
 		`SELECT r.image_sealed, r.image_key_id, r.image_mime
 		   FROM split_receipts r
 		   JOIN split_members m ON m.group_id = r.group_id
-		  WHERE r.id = $1 AND m.user_id = $2 AND m.state = 'active'`,
+		  WHERE r.id = $1 AND m.user_id = $2 AND m.state = 'active'
+		    AND r.image_state = 'stored' AND octet_length(r.image_sealed) > 0`,
 		receiptID, viewerID,
 	).Scan(&sealed, &keyID, &mime)
 	if err != nil {
