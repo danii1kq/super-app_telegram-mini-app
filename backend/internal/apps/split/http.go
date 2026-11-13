@@ -30,6 +30,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	h.RegisterReport(mux)
 	h.registerCollaboration(mux)
 	h.registerSettlements(mux)
+	h.registerReminders(mux)
 }
 
 func (h *Handler) listGroups(w http.ResponseWriter, r *http.Request) {

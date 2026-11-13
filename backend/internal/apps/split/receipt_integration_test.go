@@ -68,13 +68,13 @@ func receiptTestService(t *testing.T) (*Service, *receiptTestReader) {
 	}
 	t.Cleanup(pool.Close)
 	_, err = pool.Exec(ctx, `CREATE TABLE users(id bigint PRIMARY KEY, public_name text NOT NULL, username text, status text NOT NULL DEFAULT 'active');
- CREATE TABLE user_settings(user_id bigint PRIMARY KEY);
+ CREATE TABLE user_settings(user_id bigint PRIMARY KEY,lang text NOT NULL DEFAULT 'ru',timezone text NOT NULL DEFAULT 'Asia/Almaty');
  CREATE TABLE sessions(token_hash text PRIMARY KEY,user_id bigint,revoked_at timestamptz,expires_at timestamptz);
  INSERT INTO users(id,public_name) VALUES(1,'Alice'),(2,'Bob'),(3,'Eve');`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql", "000015_split_memory_only_photos.up.sql", "000016_split_receipt_items.up.sql", "000017_split_collaboration.up.sql", "000018_split_payment_confirmation.up.sql", "000019_split_settlements.up.sql"} {
+	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql", "000015_split_memory_only_photos.up.sql", "000016_split_receipt_items.up.sql", "000017_split_collaboration.up.sql", "000018_split_payment_confirmation.up.sql", "000019_split_settlements.up.sql", "000020_split_reminders.up.sql"} {
 		raw, err := os.ReadFile("../../../../db/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)

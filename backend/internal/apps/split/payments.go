@@ -96,6 +96,11 @@ func (s *Service) addPaymentTx(ctx context.Context, tx pgx.Tx, d Debt, authorID,
 		return false, err
 	}
 	d.Version++
+	if status == "confirmed" && paid+amount == d.AmountMinor {
+		if _, err = tx.Exec(ctx, `UPDATE split_reminder_agreements SET status='disabled' WHERE debt_id=$1`, d.ID); err != nil {
+			return false, err
+		}
+	}
 	if len(silent) > 0 && silent[0] {
 		return true, nil
 	}
@@ -180,6 +185,11 @@ func (s *Service) RespondPayment(ctx context.Context, userID, debtID, paymentID 
 		d.Version++
 		if accept {
 			d.Outstanding = d.AmountMinor - paid - payment.AmountMinor
+			if d.Outstanding == 0 {
+				if _, err = tx.Exec(ctx, `UPDATE split_reminder_agreements SET status='disabled' WHERE debt_id=$1`, debtID); err != nil {
+					return err
+				}
+			}
 			return s.notifyPayment(ctx, tx, d, payment.AmountMinor, userID)
 		}
 		return s.enqueueNotice(ctx, tx, d.DebtorID, "split.payment_rejected", "rejected-payment:"+strconv.FormatInt(paymentID, 10), "debt:"+strconv.FormatInt(debtID, 10), d.Version, DebtNotice{Text: "SruSplit: получатель не подтвердил перевод. Уточните детали друг у друга.", ButtonURL: "/apps/split/" + strconv.FormatInt(d.GroupID, 10) + "/debts", ButtonText: "Открыть"})

@@ -16,6 +16,7 @@ import (
 // other people's expenses, no group content. The worker seals and sends it; it
 // never reads the expense tables.
 type DebtNotice struct {
+	ReminderVersion int `json:"-"`
 	// Text is the message body, already localized to Russian for v1.
 	Text string `json:"text"`
 	// ButtonURL opens the debt in the Mini App.
@@ -45,9 +46,10 @@ func (s *Service) enqueueNotice(ctx context.Context, tx pgx.Tx, userID int64, ki
 	if !showAmounts {
 		// Without amounts the message still says a debt changed, but not how much.
 		notice = DebtNotice{
-			Text:       "SruSplit: изменилась сумма долга. Откройте приложение, чтобы посмотреть детали.",
-			ButtonURL:  notice.ButtonURL,
-			ButtonText: "Открыть",
+			ReminderVersion: notice.ReminderVersion,
+			Text:            "SruSplit: изменилась сумма долга. Откройте приложение, чтобы посмотреть детали.",
+			ButtonURL:       notice.ButtonURL,
+			ButtonText:      "Открыть",
 		}
 	}
 
@@ -61,10 +63,10 @@ func (s *Service) enqueueNotice(ctx context.Context, tx pgx.Tx, userID int64, ki
 	}
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO notification_delivery (user_id, kind, payload_sealed, payload_key_id, dedupe_key, subject, subject_version)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO notification_delivery (user_id, kind, payload_sealed, payload_key_id, dedupe_key, subject, subject_version,reminder_version)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7,nullif($8,0))
 		 ON CONFLICT (user_id, dedupe_key) DO NOTHING`,
-		userID, kind, sealed.Ciphertext, sealed.KeyID, dedupeKey, subject, version,
+		userID, kind, sealed.Ciphertext, sealed.KeyID, dedupeKey, subject, version, notice.ReminderVersion,
 	)
 	return err
 }

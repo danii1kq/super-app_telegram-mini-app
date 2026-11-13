@@ -89,6 +89,7 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	splitService := split.NewService(pool, content, receiptReader(visionClient), delivery)
 	splitService.MiniAppURL = telegram.MiniAppURL(cfg.BotUsername, cfg.MiniAppShortName)
 	split.NewHandler(splitService, authService, pool).Register(mux)
+	go splitService.RunReminders(ctx)
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 

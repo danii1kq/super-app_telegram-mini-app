@@ -59,6 +59,7 @@ interface TelegramWebApp {
     removeItem(key: string): void;
   };
   isVersionAtLeast?(version: string): boolean;
+  requestWriteAccess?(callback: (allowed: boolean) => void): void;
   onEvent(event: string, handler: () => void): void;
   offEvent(event: string, handler: () => void): void;
   setHeaderColor(color: string): void;

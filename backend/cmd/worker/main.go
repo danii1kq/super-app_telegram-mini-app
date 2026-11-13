@@ -53,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	worker := notify.NewWorker(pool, telegram.NewClient(cfg.BotToken), deliveryCipher, identityCipher)
+	worker := notify.NewWorker(pool, telegram.NewClient(cfg.BotToken), deliveryCipher, identityCipher, telegram.MiniAppURL(cfg.BotUsername, cfg.MiniAppShortName))
 	slog.Info("worker started")
 	worker.Run(ctx, 2*time.Second)
 	slog.Info("worker stopped")

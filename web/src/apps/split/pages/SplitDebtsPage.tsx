@@ -19,6 +19,7 @@ import { useSession } from '@/app/session';
 import { ApiError } from '@/shared/api/client';
 import { useT, useI18n } from '@/shared/i18n';
 import { formatDayMonth } from '@/shared/i18n/date';
+import { BotNotificationSettings, DebtReminder } from '../DebtReminder';
 
 /**
  * Debts of one group: who owes whom, with repayments.
@@ -47,6 +48,7 @@ export function SplitDebtsPage() {
   const [note, setNote] = useState('');
   const [requestKey, setRequestKey] = useState(newRequestId);
   const [payingId, setPayingId] = useState('');
+  const [remindingId,setRemindingId]=useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentKey, setPaymentKey] = useState(newRequestId);
 
@@ -124,6 +126,7 @@ export function SplitDebtsPage() {
     <Screen
       header={<AppHeader title={t('debts')} onBack={() => navigate(`/apps/split/${groupId}`)} />}
     >
+      <BotNotificationSettings />
       {composing ? (
         <Card className="mt-2 p-3">
           <div className="text-caption text-ink-2">{t('debtCreditor')}</div>
@@ -249,6 +252,7 @@ export function SplitDebtsPage() {
                   </div>
                 ) : null}
 
+                {!settled&&canPay?<><SecondaryButton onClick={()=>setRemindingId(v=>v===debt.id?'':debt.id)}>{t('splitReminderSettings')}</SecondaryButton>{remindingId===debt.id?<DebtReminder debtId={debt.id}/>:null}</>:null}
                 {!settled && canPay ? (
                   payingId === debt.id ? (
                     <div className="pt-3">
