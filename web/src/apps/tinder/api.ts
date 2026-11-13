@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/shared/api/client';
+import { api, apiBlobUrl, apiUpload } from '@/shared/api/client';
 
 export interface TinderProfile {
   user_id: string;
   bio: string;
   photo_url: string;
+  has_photo: boolean;
   university: string;
   age: number;
   active: boolean;
@@ -16,6 +17,7 @@ export interface TinderCard {
   username: string;
   bio: string;
   photo_url: string;
+  has_photo: boolean;
   university: string;
   age: number;
   likes_you: boolean;
@@ -28,7 +30,29 @@ export interface TinderMatch {
   name: string;
   username: string;
   photo_url: string;
+  has_photo: boolean;
   created_at: string;
+}
+
+export function useUploadPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => apiUpload<{ ok: boolean; mime: string }>('/tinder/photo', file, file.type),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tinderKeys.profile });
+      void queryClient.invalidateQueries({ queryKey: tinderKeys.deck });
+    },
+  });
+}
+
+/** The photo is behind auth, so it is fetched as a blob and shown from memory. */
+export function useProfilePhoto(userId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['tinder', 'photo', userId] as const,
+    queryFn: () => apiBlobUrl(`/tinder/photo/${userId}`),
+    enabled: Boolean(userId) && enabled,
+    staleTime: 5 * 60_000,
+  });
 }
 
 export const tinderKeys = {

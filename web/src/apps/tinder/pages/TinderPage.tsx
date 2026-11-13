@@ -7,6 +7,8 @@ import {
   useTinderDeck,
   useTinderMatches,
   useTinderProfile,
+  useUploadPhoto,
+  useProfilePhoto,
   type TinderCard,
 } from '../api';
 import { useOpenDirect } from '@/core/chat/mutations';
@@ -26,6 +28,22 @@ import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
 import { useT } from '@/shared/i18n';
 
+/**
+ * CardPhoto loads the stored photo through the authenticated route and shows it
+ * from a blob URL. The image is never public, so a plain <img src> cannot work.
+ */
+function CardPhoto({ userId, name }: { userId: string; name: string }) {
+  const photo = useProfilePhoto(userId);
+  if (photo.data) {
+    return <img src={photo.data} alt={name} className="h-72 w-full object-cover" />;
+  }
+  return (
+    <div className="flex h-72 w-full items-center justify-center bg-neutral-soft">
+      <Avatar name={name} size={96} />
+    </div>
+  );
+}
+
 /** SruTinder: a profile, a deck, a like, a match, a chat. */
 export function TinderPage() {
   const t = useT();
@@ -39,12 +57,14 @@ export function TinderPage() {
   const like = useLike();
   const pass = usePass();
   const openDirect = useOpenDirect();
+  const uploadPhoto = useUploadPhoto();
 
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState('');
   const [university, setUniversity] = useState('');
   const [age, setAge] = useState('');
   const [photo, setPhoto] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [showMatches, setShowMatches] = useState(false);
 
   const own = profile.data?.profile ?? null;
@@ -61,6 +81,12 @@ export function TinderPage() {
   };
 
   const submitProfile = () => {
+    if (photoFile) {
+      uploadPhoto.mutate(photoFile, {
+        onSuccess: () => setPhotoFile(null),
+        onError: () => feedback(t('tinderPhotoFailed'), 'error'),
+      });
+    }
     saveProfile.mutate(
       {
         bio: bio.trim(),
@@ -111,12 +137,16 @@ export function TinderPage() {
       {editing ? (
         <Card className="mt-2 p-3">
           <div className="flex flex-col gap-2">
-            <input
-              value={photo}
-              onChange={(event) => setPhoto(event.target.value)}
-              placeholder={t('tinderPhoto')}
-              className="w-full rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-lg text-ink outline-none placeholder:text-hint"
-            />
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-neutral-soft/60 px-3 py-3 text-body-lg text-ink-2">
+              <Icon name="photo_camera" size={20} />
+              {photoFile ? photoFile.name : t('tinderChoosePhoto')}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
             <textarea
               value={bio}
               onChange={(event) => setBio(event.target.value)}
@@ -209,7 +239,9 @@ export function TinderPage() {
 
           {card ? (
             <Card className="overflow-hidden p-0">
-              {card.photo_url ? (
+              {card.has_photo ? (
+                <CardPhoto userId={card.user_id} name={card.name} />
+              ) : card.photo_url ? (
                 <img src={card.photo_url} alt={card.name} className="h-72 w-full object-cover" />
               ) : (
                 <div className="flex h-72 w-full items-center justify-center bg-neutral-soft">

@@ -70,6 +70,28 @@ export async function apiUpload<T>(path: string, file: Blob, mime: string): Prom
   return readResponse<T>(response);
 }
 
+/**
+ * Fetches a binary resource with the session token and returns a blob URL.
+ *
+ * The token is module-private, so an authenticated image cannot be a plain
+ * <img src>: the browser would send no Authorization header and the request
+ * would come back 401. The caller owns the URL and should revoke it.
+ */
+export async function apiBlobUrl(path: string): Promise<string> {
+  const headers: Record<string, string> = {};
+  if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
+
+  const response = await fetch(`/api/v1${path}`, { headers });
+  if (response.status === 401) {
+    clearSessionToken();
+    onUnauthorized?.();
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, 'blob_failed', `Запрос не выполнен (${response.status})`);
+  }
+  return URL.createObjectURL(await response.blob());
+}
+
 async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     clearSessionToken();

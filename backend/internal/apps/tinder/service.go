@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/media"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
 )
@@ -48,6 +49,7 @@ type Card struct {
 	University string
 	Age       int
 	LikesYou  bool
+	HasPhoto  bool
 	CreatedAt time.Time
 }
 
@@ -63,6 +65,99 @@ type Match struct {
 
 func profileAAD(userID int64) string {
 	return "tinder_profile:" + itoa(userID)
+}
+
+func photoAAD(userID int64) string {
+	return "tinder_photo:" + itoa(userID)
+}
+
+// maxPhotoBytes bounds a profile photo. A phone photo is well under this.
+const maxPhotoBytes = 5 << 20
+
+// SavePhoto normalizes and seals the profile photo.
+//
+// The bytes are sniffed, never trusted from the request header: a caller can
+// claim any content type. The stored image is re-encoded by media.Normalize, so
+// an oversized or exotic file cannot reach the database as-is.
+func (s *Service) SavePhoto(ctx context.Context, userID int64, raw []byte) (string, error) {
+	if len(raw) == 0 {
+		return "", httpapi.Validation(map[string]string{"photo": "Файл не выбран"}, "Проверьте поля")
+	}
+	if len(raw) > maxPhotoBytes {
+		return "", httpapi.Validation(map[string]string{"photo": "Файл больше 5 МБ"}, "Проверьте поля")
+	}
+	if media.DetectMime(raw) == "" {
+		return "", httpapi.Validation(map[string]string{"photo": "Это не изображение"}, "Проверьте поля")
+	}
+	normalized, err := media.Normalize(raw)
+	if err != nil {
+		return "", httpapi.Validation(map[string]string{"photo": "Не удалось обработать изображение"}, "Проверьте поля")
+	}
+	sealed, err := s.content.Seal(normalized.Data, photoAAD(userID))
+	if err != nil {
+		return "", err
+	}
+	_, err = s.pool.Exec(ctx,
+		`UPDATE tinder_profiles
+		    SET photo_sealed = $2, photo_key_id = $3, photo_mime = $4, updated_at = now()
+		  WHERE user_id = $1`,
+		userID, sealed.Ciphertext, sealed.KeyID, normalized.Mime)
+	if err != nil {
+		return "", err
+	}
+	return normalized.Mime, nil
+}
+
+// Photo returns the decrypted photo for a profile the viewer is allowed to see.
+//
+// Visibility follows the deck rules: the owner always sees their own, and
+// anyone else must not be blocked in either direction. The photo is not public.
+func (s *Service) Photo(ctx context.Context, viewerID, ownerID int64) ([]byte, string, error) {
+	if viewerID != ownerID {
+		var allowed bool
+		if err := s.pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM tinder_profiles WHERE user_id = $1 AND active)
+			    AND NOT EXISTS (SELECT 1 FROM social_blocks b
+			                     WHERE (b.blocker_id = $1 AND b.blocked_id = $2)
+			                        OR (b.blocker_id = $2 AND b.blocked_id = $1))`,
+			ownerID, viewerID,
+		).Scan(&allowed); err != nil {
+			return nil, "", err
+		}
+		if !allowed {
+			return nil, "", httpapi.NotFound("Фото не найдено")
+		}
+	}
+
+	var sealed []byte
+	var keyID, mime string
+	err := s.pool.QueryRow(ctx,
+		`SELECT photo_sealed, photo_key_id, photo_mime FROM tinder_profiles WHERE user_id = $1`,
+		ownerID,
+	).Scan(&sealed, &keyID, &mime)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && keyID == "") {
+		return nil, "", httpapi.NotFound("Фото не найдено")
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	data, err := s.content.Open(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, photoAAD(ownerID))
+	if err != nil {
+		return nil, "", err
+	}
+	return data, mime, nil
+}
+
+// HasPhoto reports whether a profile has a stored photo, for the card flag.
+func (s *Service) HasPhoto(ctx context.Context, userID int64) (bool, error) {
+	var has bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT coalesce(photo_key_id <> '', false) FROM tinder_profiles WHERE user_id = $1`,
+		userID).Scan(&has)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return has, err
 }
 
 // SaveProfile creates or replaces the viewer's card. Bio is sealed like every
@@ -136,7 +231,7 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 	}
 	rows, err := s.pool.Query(ctx,
 		`SELECT p.user_id, u.public_name, coalesce(u.username, ''),
-		        p.bio_sealed, p.key_id, p.photo_url, p.university, coalesce(p.age, 0),
+		        p.bio_sealed, p.key_id, p.photo_url, p.university, coalesce(p.age, 0), coalesce(p.photo_key_id <> '', false),
 		        EXISTS (SELECT 1 FROM tinder_likes l WHERE l.from_id = p.user_id AND l.to_id = $1) AS likes_you,
 		        p.updated_at
 		   FROM tinder_profiles p
@@ -162,7 +257,7 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 		var sealed []byte
 		var keyID string
 		if err := rows.Scan(&card.UserID, &card.Name, &card.Username, &sealed, &keyID,
-			&card.PhotoURL, &card.University, &card.Age, &card.LikesYou, &card.CreatedAt); err != nil {
+			&card.PhotoURL, &card.University, &card.Age, &card.HasPhoto, &card.LikesYou, &card.CreatedAt); err != nil {
 			return nil, err
 		}
 		bio, err := s.content.OpenString(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, profileAAD(card.UserID))

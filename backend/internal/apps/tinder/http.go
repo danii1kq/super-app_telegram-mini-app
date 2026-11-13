@@ -1,6 +1,7 @@
 package tinder
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -25,6 +26,50 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/tinder/likes", h.auth.Middleware(http.HandlerFunc(h.like)))
 	mux.Handle("POST /api/v1/tinder/passes", h.auth.Middleware(http.HandlerFunc(h.pass)))
 	mux.Handle("GET /api/v1/tinder/matches", h.auth.Middleware(http.HandlerFunc(h.matches)))
+	mux.Handle("POST /api/v1/tinder/photo", h.auth.Middleware(http.HandlerFunc(h.uploadPhoto)))
+	mux.Handle("GET /api/v1/tinder/photo/{id}", h.auth.Middleware(http.HandlerFunc(h.photo)))
+}
+
+// uploadPhoto takes a raw image body, the same shape split uses for receipts:
+// one binary body keeps the size limit exact and the handler small.
+func (h *Handler) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFrom(r.Context())
+	if !ok {
+		httpapi.WriteError(w, httpapi.Unauthorized("Требуется вход"))
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxPhotoBytes+1))
+	if err != nil {
+		httpapi.WriteError(w, httpapi.BadRequest("unreadable_body", "Не удалось прочитать файл"))
+		return
+	}
+	mime, err := h.service.SavePhoto(r.Context(), user.ID, raw)
+	if err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "mime": mime})
+}
+
+func (h *Handler) photo(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFrom(r.Context())
+	if !ok {
+		httpapi.WriteError(w, httpapi.Unauthorized("Требуется вход"))
+		return
+	}
+	ownerID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
+		return
+	}
+	data, mime, err := h.service.Photo(r.Context(), user.ID, ownerID)
+	if err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	_, _ = w.Write(data)
 }
 
 func cardJSON(card Card) map[string]any {
@@ -37,6 +82,7 @@ func cardJSON(card Card) map[string]any {
 		"university": card.University,
 		"age":        card.Age,
 		"likes_you":  card.LikesYou,
+		"has_photo":  card.HasPhoto,
 		"created_at": card.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
