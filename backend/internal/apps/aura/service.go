@@ -2,8 +2,10 @@ package aura
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,13 +25,23 @@ type Service struct {
 func NewService(pool *postgres.Pool) *Service {
 	return &Service{
 		pool: pool,
-		rnd:  rand.New(rand.NewSource(time.Now().UnixNano())),
+		rnd:  rand.New(&lockedSource{source: rand.NewSource(time.Now().UnixNano())}),
 		now:  func() time.Time { return time.Now().UTC() },
 	}
 }
 
+// The source serializes access across different player transactions.
+type lockedSource struct {
+	mu     sync.Mutex
+	source rand.Source
+}
+
+func (s *lockedSource) Int63() int64    { s.mu.Lock(); defer s.mu.Unlock(); return s.source.Int63() }
+func (s *lockedSource) Seed(seed int64) { s.mu.Lock(); defer s.mu.Unlock(); s.source.Seed(seed) }
+
 // row is the database shape of a hero.
 type row struct {
+	Progress     Progress
 	Aura         int64
 	TotalAura    int64
 	Level        int
@@ -60,18 +72,18 @@ func (s *Service) load(ctx context.Context, userID int64) (row, error) {
 	}
 
 	var out row
-	var rawSession []byte
+	var rawSession, rawProgress []byte
 	var grindDay, lastSeen *time.Time
 	err := s.pool.QueryRow(ctx,
 		`SELECT aura, total_aura, level, xp, stat_points,
 		        stat_str, stat_agi, stat_int, stat_vit, stat_per,
 		        hero_class, farm_ready_at, arena_ready_at, gate_ready_at, tower_ready_at,
-		        grind_day, grind_today, session, streak, last_seen_day
+		        grind_day, grind_today, session, streak, last_seen_day, progress
 		   FROM aura_players WHERE user_id = $1`, userID,
 	).Scan(&out.Aura, &out.TotalAura, &out.Level, &out.XP, &out.StatPoints,
 		&out.Stats.Str, &out.Stats.Agi, &out.Stats.Int, &out.Stats.Vit, &out.Stats.Per,
 		&out.HeroClass, &out.FarmReadyAt, &out.ArenaReadyAt, &out.GateReadyAt, &out.TowerReadyAt,
-		&grindDay, &out.GrindToday, &rawSession, &out.Streak, &lastSeen)
+		&grindDay, &out.GrindToday, &rawSession, &out.Streak, &lastSeen, &rawProgress)
 	if err != nil {
 		return row{}, err
 	}
@@ -82,12 +94,21 @@ func (s *Service) load(ctx context.Context, userID int64) (row, error) {
 		return row{}, err
 	}
 	out.Session = session
+	if err := json.Unmarshal(rawProgress, &out.Progress); err != nil {
+		return row{}, err
+	}
+	normalizeProgress(&out, s.now())
+	normalizeLegacySession(&out, userID)
 	return out, nil
 }
 
 // save writes the hero back. Every mutation goes through here so the updated_at
 // stamp is never forgotten.
 func (s *Service) save(ctx context.Context, tx pgx.Tx, userID int64, data row) error {
+	rawProgress, err := json.Marshal(data.Progress)
+	if err != nil {
+		return err
+	}
 	raw, err := sessionJSON(data.Session)
 	if err != nil {
 		return err
@@ -98,37 +119,14 @@ func (s *Service) save(ctx context.Context, tx pgx.Tx, userID int64, data row) e
 		        stat_str = $7, stat_agi = $8, stat_int = $9, stat_vit = $10, stat_per = $11,
 		        hero_class = $12, farm_ready_at = $13, arena_ready_at = $14,
 		        gate_ready_at = $15, tower_ready_at = $16, grind_day = $17, grind_today = $18,
-		        session = $19, streak = $20, last_seen_day = $21, updated_at = now()
+		        session = $19, streak = $20, last_seen_day = $21, progress = $22, updated_at = now()
 		  WHERE user_id = $1`,
 		userID, data.Aura, data.TotalAura, data.Level, data.XP, data.StatPoints,
 		data.Stats.Str, data.Stats.Agi, data.Stats.Int, data.Stats.Vit, data.Stats.Per,
 		data.HeroClass, data.FarmReadyAt, data.ArenaReadyAt,
 		data.GateReadyAt, data.TowerReadyAt, data.GrindDay, data.GrindToday,
-		raw, data.Streak, data.LastSeenDay)
+		raw, data.Streak, data.LastSeenDay, rawProgress)
 	return err
-}
-
-// wornRelics returns only the equipped relics, because an unworn relic does
-// nothing by design.
-func (s *Service) wornRelics(ctx context.Context, userID int64) ([]Relic, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT relic_key FROM aura_relics WHERE user_id = $1 AND slot <> ''`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	out := make([]Relic, 0, 3)
-	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, err
-		}
-		if relic, ok := relicByKey(key); ok {
-			out = append(out, relic)
-		}
-	}
-	return out, rows.Err()
 }
 
 // snapshot builds the client view.
@@ -148,10 +146,13 @@ func (s *Service) snapshot(ctx context.Context, userID int64) (Player, error) {
 	if data.Session != nil {
 		view := *data.Session
 		view.Question.Answer = 0
+		view.Worn = nil
+
 		data.Session = &view
 	}
 
 	player := Player{
+		MaxHP: heroMaxHP(data.Stats), Power: 18 + data.Stats.Str*3, Rank: data.Progress.Rank, Difficulty: data.Progress.Difficulty, Materials: data.Progress.Materials, Clears: data.Progress.Clears, TowerFloor: data.Progress.TowerFloor,
 		Aura:         data.Aura,
 		TotalAura:    data.TotalAura,
 		Level:        data.Level,
@@ -209,13 +210,3 @@ func grantXP(data *row, amount int) (int, int) {
 
 // errNoSession is returned when a submit arrives with nothing open.
 var errNoSession = errors.New("aura: no open session")
-
-// rollRequestID is the idempotency key for one submit. The client sends it, and
-// a repeat is a no-op rather than a second reward.
-func (s *Service) seenRequest(ctx context.Context, userID int64, requestID string) (bool, error) {
-	var exists bool
-	err := s.pool.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM aura_runs WHERE user_id = $1 AND request_id = $2)`,
-		userID, requestID).Scan(&exists)
-	return exists, err
-}

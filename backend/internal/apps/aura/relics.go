@@ -1,6 +1,9 @@
 package aura
 
-import "math/rand"
+import (
+	"fmt"
+	"math/rand"
+)
 
 // Rank is the relic tier. The order matters: it drives the roll weights and the
 // guarantee that a long dry streak ends.
@@ -45,12 +48,18 @@ const (
 
 // Relic is one collectible. Passive is the numeric bonus the engine applies.
 type Relic struct {
-	Key     string  `json:"key"`
-	Name    string  `json:"name"`
-	Rank    Rank    `json:"rank"`
-	Slot    Slot    `json:"slot"`
-	Passive string  `json:"passive"`
-	Value   float64 `json:"value"`
+	UpgradeMaterials map[string]int `json:"upgrade_materials"`
+	Description      string         `json:"description"`
+	Effect           string         `json:"effect,omitempty"`
+	UpgradeCost      int            `json:"upgrade_cost"`
+	CraftCost        map[string]int `json:"craft_cost"`
+	CraftAura        int            `json:"craft_aura"`
+	Key              string         `json:"key"`
+	Name             string         `json:"name"`
+	Rank             Rank           `json:"rank"`
+	Slot             Slot           `json:"slot"`
+	Passive          string         `json:"passive"`
+	Value            float64        `json:"value"`
 }
 
 // relicCatalog is the deck. Names are manga-flavoured on purpose: the original
@@ -86,6 +95,10 @@ var relicCatalog = []Relic{
 	{Key: "guild_signet", Name: "Знак гильдии", Rank: RankS, Slot: SlotAccessory, Passive: "farm", Value: 0.25},
 	{Key: "fate_coin", Name: "Монета судьбы", Rank: RankSS, Slot: SlotAccessory, Passive: "farm", Value: 0.35},
 	{Key: "origin_crown", Name: "Венец начала", Rank: RankSSS, Slot: SlotAccessory, Passive: "farm", Value: 0.50},
+	{Key: "echo_blade", Name: "Клинок эха", Rank: RankB, Slot: SlotWeapon, Passive: "echo", Value: .65},
+	{Key: "troll_heart", Name: "Сердце тролля", Rank: RankB, Slot: SlotArmor, Passive: "heal", Value: .12},
+	{Key: "hourglass", Name: "Песочные часы", Rank: RankA, Slot: SlotAccessory, Passive: "time", Value: 5},
+	{Key: "executioner", Name: "Печать палача", Rank: RankA, Slot: SlotAccessory, Passive: "execute", Value: .45},
 }
 
 // relicByKey finds a relic in the catalog.
@@ -206,17 +219,87 @@ var classCatalog = []struct {
 	{ClassHunter, "Охотник", "+10% урона по боссам и вратам"},
 }
 
-// abilities gives each path one active skill on a cooldown. The effect is
-// applied by the engine, not described here: the client only shows the label.
+// Three correct answers charge the path ability. Cooldown stays zero for the original API field.
 var abilities = map[HeroClass]struct {
 	Name     string `json:"name"`
 	Icon     string `json:"icon"`
 	Text     string `json:"text"`
 	Cooldown int    `json:"cooldown_seconds"`
 }{
-	ClassStrategist: {"Прозрение", "visibility", "Следующий пример: +10 секунд и два неверных варианта исчезают", 1800},
-	ClassBerserker:  {"Ярость", "local_fire_department", "Следующий удар наносит двойной урон", 3600},
-	ClassSage:       {"Анализ", "psychology", "Следующая награда даёт двойную ауру и опыт", 1800},
-	ClassKeeper:     {"Барьер", "shield", "Следующая ошибка не отнимает прогресс", 3600},
-	ClassHunter:     {"Метка", "gps_fixed", "Следующий удар по боссу усилен в полтора раза", 3600},
+	ClassStrategist: {"Прозрение", "visibility", "Текущий пример: +10 секунд, остаются два варианта", 0},
+	ClassBerserker:  {"Ярость", "local_fire_department", "Следующий удар наносит двойной урон", 0},
+	ClassSage:       {"Анализ", "psychology", "Победная награда даёт двойную ауру и опыт", 0},
+	ClassKeeper:     {"Барьер", "shield", "Следующая ошибка не наносит урона", 0},
+	ClassHunter:     {"Метка", "gps_fixed", "Следующий удар по боссу наносит двойной урон", 0},
+}
+
+func scaledRelic(relic Relic, level int) Relic {
+	relic.Value *= 1 + float64(max(0, level-1))*.2
+	relic.UpgradeCost = 0
+	if level < 5 {
+		relic.UpgradeCost = 100 * (rankIndex(relic.Rank) + 1) * (level + 1) * (level + 1)
+	}
+	rank := rankIndex(relic.Rank) + 1
+	relic.CraftAura = 150 * rank * rank
+	material := "bone"
+	if rankIndex(relic.Rank) >= 4 {
+		material = "ember"
+	}
+	if rankIndex(relic.Rank) >= 6 {
+		material = "void"
+	}
+	relic.CraftCost = map[string]int{material: 6 * rank * rank}
+	switch relic.Key {
+	case "echo_blade":
+		relic.CraftAura = 150 * rank
+		relic.CraftCost = map[string]int{"bone": 18}
+	case "troll_heart":
+		relic.CraftAura = 150 * rank
+		relic.CraftCost = map[string]int{"bone": 18}
+	case "hourglass":
+		relic.CraftAura = 150 * rank
+		relic.CraftCost = map[string]int{"ember": 20}
+	case "executioner":
+		relic.CraftAura = 150 * rank
+		relic.CraftCost = map[string]int{"void": 20}
+	}
+	relic.UpgradeMaterials = map[string]int{}
+	if level >= 3 && level < 5 {
+		for material := range relic.CraftCost {
+			relic.UpgradeMaterials[material] = rank * (level - 2) * 2
+		}
+	}
+	percent := relic.Value * 100
+	switch relic.Passive {
+	case "damage":
+		relic.Description = fmt.Sprintf("Урон +%.0f%%", percent)
+	case "crit":
+		relic.Description = fmt.Sprintf("Шанс критического удара +%.0f п.п.", percent)
+	case "negate":
+		relic.Description = fmt.Sprintf("Снижение получаемого урона %.0f%%", percent)
+	case "farm":
+		relic.Description = fmt.Sprintf("Аура медитации +%.0f%%", percent)
+	case "xp":
+		relic.Description = fmt.Sprintf("Опыт победных походов +%.0f%%", percent)
+	case "echo":
+		relic.Description = fmt.Sprintf("Каждый третий верный удар повторяет %.0f%% урона", percent)
+		relic.Effect = "echo"
+	case "heal":
+		relic.Description = fmt.Sprintf("Лечит %.0f%% здоровья после комнаты", percent)
+		relic.Effect = "heal"
+	case "time":
+		relic.Description = fmt.Sprintf("Первый пример похода: +%.0f секунд", relic.Value)
+		relic.Effect = "time"
+	case "execute":
+		relic.Description = fmt.Sprintf("Урон +%.0f%%, когда у врага не больше 35%% здоровья", percent)
+		relic.Effect = "execute"
+	}
+	return relic
+}
+func relicsCatalog() []Relic {
+	result := make([]Relic, 0, len(relicCatalog))
+	for _, relic := range relicCatalog {
+		result = append(result, scaledRelic(relic, 1))
+	}
+	return result
 }

@@ -2,6 +2,7 @@ package aura
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,17 +14,20 @@ import (
 // Result is what one action returns. The client renders it as a line of
 // feedback plus the refreshed hero.
 type Result struct {
-	Message  string `json:"message"`
-	Correct  bool   `json:"correct"`
-	Answer   int    `json:"answer,omitempty"`
-	Hint     string `json:"hint,omitempty"`
-	AuraGain int64  `json:"aura_gain"`
-	XPGain   int    `json:"xp_gain"`
-	Damage   int    `json:"damage"`
-	LevelUp  int    `json:"level_up"`
-	Relic    *Relic `json:"relic,omitempty"`
-	Finished bool   `json:"finished"`
-	Player   Player `json:"player"`
+	Message       string         `json:"message"`
+	Correct       bool           `json:"correct"`
+	Answer        int            `json:"answer,omitempty"`
+	Hint          string         `json:"hint,omitempty"`
+	AuraGain      int64          `json:"aura_gain"`
+	XPGain        int            `json:"xp_gain"`
+	Damage        int            `json:"damage"`
+	LevelUp       int            `json:"level_up"`
+	Relic         *Relic         `json:"relic,omitempty"`
+	Finished      bool           `json:"finished"`
+	Player        Player         `json:"player"`
+	Won           bool           `json:"won"`
+	HeroDamage    int            `json:"hero_damage"`
+	MaterialsGain map[string]int `json:"materials_gain,omitempty"`
 }
 
 // farmEvents are the flavour lines. They are the reason the loop feels like a
@@ -109,258 +113,318 @@ func (s *Service) Farm(ctx context.Context, userID int64) (Result, error) {
 	return result, nil
 }
 
-// Start opens a challenge. Only one may be open at a time, which is why the
-// session lives in the row: a second start would otherwise overwrite a live run.
+// Start preserves the original service entry point.
 func (s *Service) Start(ctx context.Context, userID int64, kind SessionKind) (Result, error) {
-	var result Result
+	return s.StartDungeon(ctx, userID, kind, "", "")
+}
+func (s *Service) StartDungeon(ctx context.Context, userID int64, kind SessionKind, dungeon, difficulty string) (Result, error) {
+	result := Result{}
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
 		data, err := s.locked(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
 		now := s.now()
-
 		if data.Session != nil && now.Before(data.Session.ExpiresAt) {
-			return bad("Сначала закончи текущее испытание")
+			return bad("Сначала заверши текущее испытание")
 		}
-		data.Session = nil
-
-		relics, err := s.wornRelicsTx(ctx, tx, userID)
-		if err != nil {
-			return err
+		if difficulty != "" && !validDifficulty(difficulty) {
+			return bad("Выбери сложность примеров")
 		}
-		_ = relics
-
-		session := &Session{
-			Kind:      kind,
-			AskedAt:   now,
-			ExpiresAt: now.Add(SessionTTL),
-			Pity:      data.GrindToday,
+		if difficulty == "" {
+			difficulty = data.Progress.Difficulty
 		}
-
+		if kind == SessionGate {
+			if dungeon == "" {
+				dungeon = "crypt"
+			}
+			d, ok := dungeonByID(dungeon)
+			if !ok {
+				return bad("Такого подземелья нет")
+			}
+			if data.Level < d.Level {
+				return bad(fmt.Sprintf("Нужен %d уровень охотника", d.Level))
+			}
+		}
 		switch kind {
-		case SessionArena:
-			if err := requireReady(data.ArenaReadyAt, now, "Арена"); err != nil {
-				return err
-			}
-			boss, hp := arenaBoss(s.rnd, data.Level)
-			session.Rounds = ArenaRounds
-			session.Round = 1
-			session.BossName = boss
-			session.BossHP = hp
-			session.BossMaxHP = hp
-			session.Seconds = secondsForQuestion(data.Level, data.HeroClass)
 		case SessionGate:
-			if err := requireReady(data.GateReadyAt, now, "Подземелье"); err != nil {
-				return err
-			}
-			boss, hp := arenaBoss(s.rnd, data.Level+5)
-			session.BossName = boss
-			session.BossHP = hp
-			session.BossMaxHP = hp
-			session.Rounds = 5
-			session.Round = 1
-			session.Seconds = secondsForQuestion(data.Level, data.HeroClass)
+			err = requireReady(data.GateReadyAt, now, "Врата")
+		case SessionArena:
+			err = requireReady(data.ArenaReadyAt, now, "Арена")
 		case SessionTower:
-			if err := requireReady(data.TowerReadyAt, now, "Башня"); err != nil {
-				return err
-			}
-			floor := data.Level/5 + 1
-			session.Floor = floor
-			session.BossName = fmt.Sprintf("Страж этажа %d", floor)
-			session.BossHP = 50 + floor*30
-			session.BossMaxHP = session.BossHP
-			session.Rounds = 3
-			session.Round = 1
-			session.Seconds = secondsForQuestion(data.Level, data.HeroClass)
+			err = requireReady(data.TowerReadyAt, now, "Башня")
 		case SessionGrind:
 			if data.GrindToday >= GrindDailyCap {
-				return bad("На сегодня вылазок хватит, возвращайся завтра")
+				return bad("Награды вылазок обновятся завтра")
 			}
-			session.Rounds = 1
-			session.Round = 1
-			session.Seconds = 15
 		default:
 			return bad("Неизвестное испытание")
 		}
-
-		session.Question = Generate(s.rnd, data.Level, "")
-		data.Session = session
-		result = Result{Message: describeSession(session)}
-		if err := s.save(ctx, tx, userID, data); err != nil {
+		if err != nil {
 			return err
 		}
-		return nil
+		relics, err := s.wornRelicsTx(ctx, tx, userID)
+		if err != nil {
+			return err
+		}
+		id, err := newID()
+		if err != nil {
+			return err
+		}
+		session := &Session{ID: id, Kind: kind, Room: 1, Rooms: 1, Phase: "combat", Dungeon: dungeon, Difficulty: difficulty, Round: 1, Rounds: CombatRounds, HeroStats: data.Stats, HeroPath: data.HeroClass, Worn: relics, HeroMaxHP: heroMaxHP(data.Stats), HeroHP: heroMaxHP(data.Stats)}
+		if kind == SessionGate {
+			session.Rooms = 3
+		}
+		if kind == SessionTower {
+			session.Floor = data.Progress.TowerFloor + 1
+		}
+		if err := s.enterRoom(session, "normal", now); err != nil {
+			return err
+		}
+		if kind == SessionGrind {
+			session.Rounds = 1
+			session.BossHP = 1
+			session.BossMaxHP = 1
+			session.BossName = "Рунный осколок"
+		}
+		data.Session = session
+		result.Message = "Система: испытание началось"
+		return s.save(ctx, tx, userID, data)
 	})
-	if err != nil {
-		return Result{}, err
-	}
-	player, err := s.snapshot(ctx, userID)
-	if err != nil {
-		return Result{}, err
-	}
-	result.Player = player
-	return result, nil
+	return s.resultPlayer(ctx, userID, result, err)
 }
 
-// Answer resolves the open question. The answer is checked on the server: the
-// client never sends whether it was right.
-func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestID string) (Result, error) {
-	if requestID == "" {
-		return Result{}, bad("Не хватает номера запроса")
-	}
-	var result Result
+func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestID string, questionIDs ...string) (Result, error) {
+	result := Result{}
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
 		data, err := s.locked(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
-		now := s.now()
-
+		if err = s.checkRequest(ctx, tx, userID, requestID); err != nil {
+			return err
+		}
 		session := data.Session
 		if session == nil {
-			return errNoSession
+			return bad("Нет открытого испытания")
 		}
-		if now.After(session.ExpiresAt) {
-			data.Session = nil
-			if err := s.save(ctx, tx, userID, data); err != nil {
-				return err
-			}
-			return bad("Время вышло, начни заново")
+		if session.Phase != "combat" {
+			return bad("Сначала выбери следующий путь")
 		}
-
-		relics, err := s.wornRelicsTx(ctx, tx, userID)
-		if err != nil {
-			return err
+		if len(questionIDs) == 0 || questionIDs[0] != session.QuestionID {
+			return bad("Этот пример уже сменился. Обнови состояние")
 		}
-
-		correct := choice == session.Question.Answer
-		result.Correct = correct
-		result.Answer = session.Question.Answer
-
-		if correct {
-			session.Correct++
-			session.Combo++
-			if session.Combo > session.BestCombo {
-				session.BestCombo = session.Combo
-			}
-			damage := 10 + data.Stats.Str*2 + session.Combo*2
-			damage += int(float64(damage) * relicBonus(relics, "damage"))
-			damage += int(float64(damage) * bonusFor(data.HeroClass).ArenaDamage)
-			if s.rnd.Float64() < critChance(data.Stats, relics) {
-				damage *= 2
-			}
-			session.Damage += damage
-			session.BossHP -= damage
-			result.Damage = damage
+		now := s.now()
+		if !now.Before(session.ExpiresAt) {
+			result = s.finishRun(&data, session, false, now)
 		} else {
-			session.Combo = 0
-			result.Hint = hint(session.Question.Topic)
+			timely := !now.After(session.QuestionDeadline)
+			valid := false
+			for _, option := range session.Question.Options {
+				if option == choice {
+					valid = true
+				}
+			}
+			if timely && !valid {
+				return bad("Выбери один из вариантов ответа")
+			}
+			result.Correct = timely && choice == session.Question.Answer
+			result.Answer = session.Question.Answer
+			if result.Correct {
+				session.Correct++
+				session.Combo++
+				data.Progress.Correct++
+				session.BestCombo = max(session.BestCombo, session.Combo)
+				session.Charge = min(3, session.Charge+1)
+				session.AbilityReady = session.Charge >= 3
+				damage := calculateHit(session, s.rnd.Float64())
+				session.Damage += damage
+				session.BossHP = max(0, session.BossHP-damage)
+				result.Damage = damage
+			} else {
+				session.Errors++
+				session.Combo = 0
+				if session.Dungeon == "void" && session.Room == session.Rooms {
+					session.BossHP = min(session.BossMaxHP, session.BossHP+8)
+					session.Charge = max(0, session.Charge-1)
+					session.AbilityReady = session.Charge >= 3
+				}
+				result.HeroDamage = incomingHit(session, s.rnd.Float64())
+				session.HeroHP = max(0, session.HeroHP-result.HeroDamage)
+				result.Hint = hint(session.Question.Topic)
+				if !timely {
+					result.Hint = "Время на пример вышло. Противник успел атаковать"
+				}
+			}
+			session.Round++
+			switch {
+			case session.HeroHP <= 0 || (session.Round > session.Rounds && session.BossHP > 0):
+				completed := s.finishRun(&data, session, false, now)
+				completed.Correct = result.Correct
+				completed.Answer = result.Answer
+				completed.Damage = result.Damage
+				completed.HeroDamage = result.HeroDamage
+				completed.Hint = result.Hint
+				result = completed
+			case session.BossHP <= 0:
+				if session.Kind == SessionGate {
+					d, _ := dungeonByID(session.Dungeon)
+					amount := 2 + session.Room
+					if session.Elite {
+						amount += 2
+					}
+					amount += session.HeroStats.Per / 5
+					data.Progress.Materials[d.Material] += amount
+					result.MaterialsGain = map[string]int{d.Material: amount}
+				}
+				if session.Room < session.Rooms {
+					session.Phase = "choice"
+					session.AbilityReady = session.Charge >= 3
+					heal := int(float64(session.HeroMaxHP) * relicBonus(session.Worn, "heal"))
+					session.HeroHP = min(session.HeroMaxHP, session.HeroHP+heal)
+					session.ExpiresAt = now.Add(SessionTTL)
+					result.Message = "Комната зачищена. Материалы сохранены. Выбери путь"
+				} else {
+					completed := s.finishRun(&data, session, true, now)
+					completed.Correct = result.Correct
+					completed.Answer = result.Answer
+					completed.Damage = result.Damage
+					completed.MaterialsGain = result.MaterialsGain
+					result = completed
+				}
+			default:
+				if err = s.nextQuestion(session, now); err != nil {
+					return err
+				}
+				result.Message = "Верный удар"
+				if !result.Correct {
+					result.Message = "Противник атакует"
+				}
+			}
 		}
-
-		session.Round++
-		finished := session.Round > session.Rounds || session.BossHP <= 0
-
-		if !finished {
-			session.Question = Generate(s.rnd, data.Level, "")
-			session.AskedAt = now
-			session.ExpiresAt = now.Add(SessionTTL)
-			data.Session = session
-			result.Message = describeSession(session)
-			if err := s.save(ctx, tx, userID, data); err != nil {
+		if result.Won && session.Kind == SessionGate {
+			if err = s.recordWeekly(ctx, tx, userID, session, now); err != nil {
 				return err
 			}
-			return s.record(ctx, tx, userID, kindOf(session.Kind), requestID, 0, 0, result.Damage, boolInt(correct))
 		}
-
-		// The run is over: pay out, clear the session and set the cooldown.
-		data.Session = nil
-		gain, xp, relic := s.reward(&data, session, now)
-		data.Aura += gain
-		data.TotalAura += gain
-		level, gained := grantXP(&data, xp)
-		_ = level
-		result.AuraGain = gain
-		result.XPGain = xp
-		result.LevelUp = gained
-		result.Finished = true
-		result.Relic = relic
-		result.Message = fmt.Sprintf("%s завершено: +%d ауры", kindLabel(session.Kind), gain)
-
-		if relic != nil {
-			if err := s.grantRelic(ctx, tx, userID, *relic); err != nil {
+		if result.Relic != nil {
+			compensation, err := s.grantRelic(ctx, tx, userID, *result.Relic)
+			if err != nil {
 				return err
 			}
+			data.Aura += compensation
+			data.TotalAura += compensation
+			result.AuraGain += compensation
 		}
-		if err := s.save(ctx, tx, userID, data); err != nil {
+		if err = s.save(ctx, tx, userID, data); err != nil {
 			return err
 		}
-		return s.record(ctx, tx, userID, kindOf(session.Kind), requestID, gain, xp, result.Damage, boolInt(correct))
+		return s.record(ctx, tx, userID, string(session.Kind), requestID, result.AuraGain, result.XPGain, result.Damage, boolInt(result.Correct))
 	})
-	if err != nil {
-		if err == errNoSession {
-			return Result{}, bad("Нет открытого испытания")
-		}
-		return Result{}, err
-	}
-	player, err := s.snapshot(ctx, userID)
-	if err != nil {
-		return Result{}, err
-	}
-	result.Player = player
-	return result, nil
+	return s.resultPlayer(ctx, userID, result, err)
 }
-
-// reward computes the payout for a finished run.
-func (s *Service) reward(data *row, session *Session, now time.Time) (int64, int, *Relic) {
-	switch session.Kind {
-	case SessionArena:
-		ready := now.Add(ArenaCooldown)
-		data.ArenaReadyAt = &ready
-		gain := int64(40 + session.Correct*25 + session.BestCombo*10)
-		xp := 20 + session.Correct*5
-		var relic *Relic
-		// A clean run is every question answered. The boss can die before the
-		// last round, so comparing against Rounds would almost never hold.
-		if session.Correct >= session.Round-1 {
-			picked := rollRelic(s.rnd, rollRank(s.rnd, RankD))
-			relic = &picked
+func (s *Service) finishRun(data *row, session *Session, won bool, now time.Time) Result {
+	won = won && session.BossHP <= 0
+	result := Result{Finished: true, Won: won, Message: "Поход завершён поражением. Собранные материалы сохранены"}
+	data.Session = nil
+	wait := 2 * time.Minute
+	if won {
+		switch session.Kind {
+		case SessionArena:
+			wait = ArenaCooldown
+		case SessionGate:
+			wait = GateCooldown
+		default:
+			wait = TowerCooldown
 		}
-		return gain, xp, relic
-	case SessionGate:
-		ready := now.Add(GateCooldown)
-		data.GateReadyAt = &ready
-		gain := int64(80 + session.Correct*30)
-		xp := 30 + session.Correct*6
-		picked := rollRelic(s.rnd, rollRank(s.rnd, RankC))
-		return gain, xp, &picked
-	case SessionTower:
-		ready := now.Add(TowerCooldown)
-		data.TowerReadyAt = &ready
-		gain := int64(30 + session.Floor*15)
-		xp := 15 + session.Floor*3
-		var relic *Relic
-		// Every fifth floor is a guaranteed relic, which gives the tower a
-		// reason to be climbed rather than ground.
-		if session.Floor%5 == 0 {
-			picked := rollRelic(s.rnd, rollRank(s.rnd, RankB))
-			relic = &picked
-		}
-		return gain, xp, relic
-	case SessionGrind:
-		multiplier := grindMultiplier(data.GrindToday)
-		data.GrindToday++
-		gain := int64(float64(15+session.Correct*10) * multiplier)
-		xp := int(float64(5+session.Correct*2) * multiplier)
-		return gain, xp, nil
 	}
-	return 0, 0, nil
+	ready := now.Add(wait)
+	switch session.Kind {
+	case SessionGate:
+		data.GateReadyAt = &ready
+	case SessionArena:
+		data.ArenaReadyAt = &ready
+	case SessionTower:
+		data.TowerReadyAt = &ready
+	case SessionGrind:
+		data.GrindToday++
+	}
+	if !won {
+		return result
+	}
+	gain, xp, relic := s.reward(data, session, now)
+	if session.DoubleReward {
+		gain *= 2
+		xp *= 2
+	}
+	xp += int(float64(xp) * relicBonus(session.Worn, "xp"))
+	data.Aura += gain
+	data.TotalAura += gain
+	_, levels := grantXP(data, xp)
+	result.AuraGain = gain
+	result.XPGain = xp
+	result.LevelUp = levels
+	if relic != nil {
+		view := scaledRelic(*relic, 1)
+		result.Relic = &view
+	}
+	result.Message = fmt.Sprintf("Победа! +%d ауры, +%d опыта", gain, xp)
+	if session.Kind == SessionGate {
+		data.Progress.Clears++
+		data.Progress.BossClears[session.Dungeon]++
+		d, _ := dungeonByID(session.Dungeon)
+		dr := difficultyRank(session.Difficulty)
+		if d.Level > data.Progress.BestDungeon || (d.Level == data.Progress.BestDungeon && (dr > data.Progress.BestDifficulty || (dr == data.Progress.BestDifficulty && session.Errors < data.Progress.BestErrors))) {
+			data.Progress.BestDungeon = d.Level
+			data.Progress.BestDifficulty = dr
+			data.Progress.BestErrors = session.Errors
+		}
+	}
+	if session.Kind == SessionTower {
+		data.Progress.TowerFloor = max(data.Progress.TowerFloor, session.Floor)
+	}
+	return result
+}
+func (s *Service) reward(data *row, session *Session, now time.Time) (int64, int, *Relic) {
+	if session.BossHP > 0 {
+		return 0, 0, nil
+	}
+	if session.Kind == SessionGrind {
+		m := grindMultiplier(max(0, data.GrindToday-1))
+		return int64(25 * m), int(7 * m), nil
+	}
+	gain := int64(60 + session.Correct*12)
+	xp := 25 + session.Correct*5
+	floor := RankD
+	if session.Kind == SessionGate {
+		d, _ := dungeonByID(session.Dungeon)
+		gain += int64(d.Level * 20)
+		xp += d.Level * 4
+		floor = RankC
+	}
+	if session.Kind == SessionTower {
+		gain += int64(session.Floor * 15)
+		xp += session.Floor * 3
+		if session.Floor%5 != 0 {
+			return gain, xp, nil
+		}
+		floor = RankB
+	}
+	data.Progress.Pity++
+	if data.Progress.Pity >= RelicPity {
+		floor = RankA
+	}
+	relic := rollRelic(s.rnd, rollRank(s.rnd, floor))
+	if atLeast(relic.Rank, RankA) {
+		data.Progress.Pity = 0
+	}
+	return gain, xp, &relic
 }
 
 // grantRelic stores a relic, awakening it instead when the player already owns
 // it. A duplicate is never wasted: it raises the level, and past level five it
 // pays aura.
-func (s *Service) grantRelic(ctx context.Context, tx pgx.Tx, userID int64, relic Relic) error {
+func (s *Service) grantRelic(ctx context.Context, tx pgx.Tx, userID int64, relic Relic) (int64, error) {
 	var level int
 	err := tx.QueryRow(ctx,
 		`SELECT level FROM aura_relics WHERE user_id = $1 AND relic_key = $2 FOR UPDATE`,
@@ -369,25 +433,21 @@ func (s *Service) grantRelic(ctx context.Context, tx pgx.Tx, userID int64, relic
 		_, err = tx.Exec(ctx,
 			`INSERT INTO aura_relics (user_id, relic_key, rank) VALUES ($1, $2, $3)`,
 			userID, relic.Key, relic.Rank)
-		return err
+		return 0, err
 	}
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if level < 5 {
 		_, err = tx.Exec(ctx,
 			`UPDATE aura_relics SET level = level + 1 WHERE user_id = $1 AND relic_key = $2`,
 			userID, relic.Key)
-		return err
+		return 0, err
 	}
-	// Maxed: pay compensation so the pull is not a dead result.
-	_, err = tx.Exec(ctx,
-		`UPDATE aura_players SET aura = aura + 200, total_aura = total_aura + 200 WHERE user_id = $1`,
-		userID)
-	return err
+	return 200, nil
 }
 
-// record writes the run row. The unique request id makes a retry a no-op.
+// checkRequest rejects retries under the player lock before this record is written.
 func (s *Service) record(ctx context.Context, tx pgx.Tx, userID int64, kind, requestID string, auraGain int64, xpGain, damage, correct int) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO aura_runs (user_id, kind, request_id, aura_gain, xp_gain, damage, correct)
@@ -405,18 +465,18 @@ func (s *Service) locked(ctx context.Context, tx pgx.Tx, userID int64) (row, err
 		return row{}, err
 	}
 	var out row
-	var rawSession []byte
+	var rawSession, rawProgress []byte
 	var grindDay, lastSeen *time.Time
 	err := tx.QueryRow(ctx,
 		`SELECT aura, total_aura, level, xp, stat_points,
 		        stat_str, stat_agi, stat_int, stat_vit, stat_per,
 		        hero_class, farm_ready_at, arena_ready_at, gate_ready_at, tower_ready_at,
-		        grind_day, grind_today, session, streak, last_seen_day
+		        grind_day, grind_today, session, streak, last_seen_day, progress
 		   FROM aura_players WHERE user_id = $1 FOR UPDATE`, userID,
 	).Scan(&out.Aura, &out.TotalAura, &out.Level, &out.XP, &out.StatPoints,
 		&out.Stats.Str, &out.Stats.Agi, &out.Stats.Int, &out.Stats.Vit, &out.Stats.Per,
 		&out.HeroClass, &out.FarmReadyAt, &out.ArenaReadyAt, &out.GateReadyAt, &out.TowerReadyAt,
-		&grindDay, &out.GrindToday, &rawSession, &out.Streak, &lastSeen)
+		&grindDay, &out.GrindToday, &rawSession, &out.Streak, &lastSeen, &rawProgress)
 	if err != nil {
 		return row{}, err
 	}
@@ -427,13 +487,18 @@ func (s *Service) locked(ctx context.Context, tx pgx.Tx, userID int64) (row, err
 		return row{}, err
 	}
 	out.Session = session
+	if err := json.Unmarshal(rawProgress, &out.Progress); err != nil {
+		return row{}, err
+	}
+	normalizeProgress(&out, s.now())
+	normalizeLegacySession(&out, userID)
 	return out, nil
 }
 
 // wornRelicsTx is wornRelics inside a transaction.
 func (s *Service) wornRelicsTx(ctx context.Context, tx pgx.Tx, userID int64) ([]Relic, error) {
 	rows, err := tx.Query(ctx,
-		`SELECT relic_key FROM aura_relics WHERE user_id = $1 AND slot <> ''`, userID)
+		`SELECT relic_key, level FROM aura_relics WHERE user_id = $1 AND slot <> ''`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -441,32 +506,15 @@ func (s *Service) wornRelicsTx(ctx context.Context, tx pgx.Tx, userID int64) ([]
 	out := make([]Relic, 0, 3)
 	for rows.Next() {
 		var key string
-		if err := rows.Scan(&key); err != nil {
+		var level int
+		if err := rows.Scan(&key, &level); err != nil {
 			return nil, err
 		}
 		if relic, ok := relicByKey(key); ok {
-			out = append(out, relic)
+			out = append(out, scaledRelic(relic, level))
 		}
 	}
 	return out, rows.Err()
-}
-
-func kindOf(kind SessionKind) string {
-	return string(kind)
-}
-
-func kindLabel(kind SessionKind) string {
-	switch kind {
-	case SessionArena:
-		return "Арена"
-	case SessionGate:
-		return "Подземелье"
-	case SessionTower:
-		return "Башня"
-	case SessionGrind:
-		return "Вылазка"
-	}
-	return "Испытание"
 }
 
 func boolInt(value bool) int {

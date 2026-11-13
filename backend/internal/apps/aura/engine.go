@@ -10,25 +10,23 @@ import (
 // Tuning. Every number here is a design decision, so they live together rather
 // than scattered through the handlers.
 const (
-	// Cooldowns. The farm is the slow loop, the arena the hourly one.
+	// Meditation is the slow loop; successful combat has a short recovery.
 	FarmCooldown  = 4 * time.Hour
-	ArenaCooldown = time.Hour
-	GateCooldown  = 2 * time.Hour
+	ArenaCooldown = 10 * time.Minute
+	GateCooldown  = 10 * time.Minute
 	TowerCooldown = 10 * time.Minute
 
 	// A session expires if the player walks away mid-run. Without this the row
 	// would hold a dead challenge forever.
 	SessionTTL = 10 * time.Minute
 
-	// Arena: seven questions, each worth one hit.
-	ArenaRounds = 7
+	// A generous hard limit keeps any stalled run bounded.
+	CombatRounds = 80
 
 	// Grind: unlimited starts, but the reward decays across the day.
 	GrindDailyCap = 50
 
-	// A relic is guaranteed at least this often. Ten pulls without an A or
-	// better and the eleventh is forced, which is what stops a bad streak from
-	// feeling like the game is broken.
+	// The tenth rewarded relic is at least A after nine lower-rank drops.
 	RelicPity = 10
 
 	// Cost of rerolling the hero path.
@@ -47,46 +45,75 @@ const (
 
 // Session is the open challenge, stored in the player row.
 type Session struct {
-	Kind       SessionKind `json:"kind"`
-	Question   Question    `json:"question"`
-	AskedAt    time.Time   `json:"asked_at"`
-	ExpiresAt  time.Time   `json:"expires_at"`
-	Round      int         `json:"round"`
-	Rounds     int         `json:"rounds"`
-	Correct    int         `json:"correct"`
-	Combo      int         `json:"combo"`
-	BestCombo  int         `json:"best_combo"`
-	Damage     int         `json:"damage"`
-	BossHP     int         `json:"boss_hp"`
-	BossMaxHP  int         `json:"boss_max_hp"`
-	BossName   string      `json:"boss_name"`
-	Floor      int         `json:"floor"`
-	Pity       int         `json:"pity"`
-	Ability    bool        `json:"ability_used"`
-	Seconds    int         `json:"seconds"`
-	RequestIDs []string    `json:"request_ids"`
+	ID               string      `json:"id"`
+	QuestionID       string      `json:"question_id"`
+	QuestionDeadline time.Time   `json:"question_deadline"`
+	HeroHP           int         `json:"hero_hp"`
+	HeroMaxHP        int         `json:"hero_max_hp"`
+	Room             int         `json:"room"`
+	Rooms            int         `json:"rooms"`
+	Phase            string      `json:"phase"`
+	Dungeon          string      `json:"dungeon"`
+	Intent           string      `json:"intent"`
+	Charge           int         `json:"charge"`
+	AbilityReady     bool        `json:"ability_ready"`
+	Difficulty       string      `json:"difficulty"`
+	Errors           int         `json:"errors"`
+	Elite            bool        `json:"elite"`
+	Shield           bool        `json:"shield"`
+	Empowered        bool        `json:"empowered"`
+	DoubleReward     bool        `json:"double_reward"`
+	TimeUsed         bool        `json:"time_used"`
+	Worn             []Relic     `json:"worn_snapshot,omitempty"`
+	HeroStats        Stats       `json:"hero_stats"`
+	HeroPath         HeroClass   `json:"hero_path"`
+	Kind             SessionKind `json:"kind"`
+	Question         Question    `json:"question"`
+	AskedAt          time.Time   `json:"asked_at"`
+	ExpiresAt        time.Time   `json:"expires_at"`
+	Round            int         `json:"round"`
+	Rounds           int         `json:"rounds"`
+	Correct          int         `json:"correct"`
+	Combo            int         `json:"combo"`
+	BestCombo        int         `json:"best_combo"`
+	Damage           int         `json:"damage"`
+	BossHP           int         `json:"boss_hp"`
+	BossMaxHP        int         `json:"boss_max_hp"`
+	BossName         string      `json:"boss_name"`
+	Floor            int         `json:"floor"`
+	Pity             int         `json:"pity"`
+	Ability          bool        `json:"ability_used"`
+	Seconds          int         `json:"seconds"`
+	RequestIDs       []string    `json:"request_ids"`
 }
 
 // Player is the hero as the client sees it.
 type Player struct {
-	Aura        int64      `json:"aura"`
-	TotalAura   int64      `json:"total_aura"`
-	Level       int        `json:"level"`
-	XP          int        `json:"xp"`
-	XPToNext    int        `json:"xp_to_next"`
-	StatPoints  int        `json:"stat_points"`
-	Stats       Stats      `json:"stats"`
-	HeroClass   HeroClass  `json:"hero_class"`
-	ClassName   string     `json:"class_name"`
-	Ability     any        `json:"ability"`
-	FarmReadyAt *time.Time `json:"farm_ready_at"`
-	ArenaReadyAt *time.Time `json:"arena_ready_at"`
-	GateReadyAt *time.Time `json:"gate_ready_at"`
-	TowerReadyAt *time.Time `json:"tower_ready_at"`
-	GrindToday  int        `json:"grind_today"`
-	GrindCap    int        `json:"grind_cap"`
-	Streak      int        `json:"streak"`
-	Session     *Session   `json:"session"`
+	MaxHP        int            `json:"max_hp"`
+	Power        int            `json:"power"`
+	Rank         string         `json:"rank"`
+	Difficulty   string         `json:"difficulty"`
+	Materials    map[string]int `json:"materials"`
+	Clears       int            `json:"clears"`
+	TowerFloor   int            `json:"tower_floor"`
+	Aura         int64          `json:"aura"`
+	TotalAura    int64          `json:"total_aura"`
+	Level        int            `json:"level"`
+	XP           int            `json:"xp"`
+	XPToNext     int            `json:"xp_to_next"`
+	StatPoints   int            `json:"stat_points"`
+	Stats        Stats          `json:"stats"`
+	HeroClass    HeroClass      `json:"hero_class"`
+	ClassName    string         `json:"class_name"`
+	Ability      any            `json:"ability"`
+	FarmReadyAt  *time.Time     `json:"farm_ready_at"`
+	ArenaReadyAt *time.Time     `json:"arena_ready_at"`
+	GateReadyAt  *time.Time     `json:"gate_ready_at"`
+	TowerReadyAt *time.Time     `json:"tower_ready_at"`
+	GrindToday   int            `json:"grind_today"`
+	GrindCap     int            `json:"grind_cap"`
+	Streak       int            `json:"streak"`
+	Session      *Session       `json:"session"`
 }
 
 // Stats are the five attributes a level point can go into.

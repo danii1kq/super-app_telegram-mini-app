@@ -39,7 +39,7 @@ var topicNames = map[Topic]string{
 // Question is one exercise with its four options already shuffled.
 type Question struct {
 	Text      string `json:"text"`
-	Answer    int    `json:"answer"`
+	Answer    int    `json:"answer,omitempty"`
 	Options   []int  `json:"options"`
 	Topic     Topic  `json:"topic"`
 	TopicName string `json:"topic_name"`

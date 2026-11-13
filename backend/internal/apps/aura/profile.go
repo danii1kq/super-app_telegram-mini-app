@@ -36,7 +36,7 @@ func (s *Service) relics(ctx context.Context, userID int64) ([]OwnedRelic, error
 		if !ok {
 			continue
 		}
-		out = append(out, OwnedRelic{Relic: relic, Level: level, Worn: slot != ""})
+		out = append(out, OwnedRelic{Relic: scaledRelic(relic, level), Level: level, Worn: slot != ""})
 	}
 	return out, rows.Err()
 }
@@ -81,6 +81,9 @@ func (s *Service) Equip(ctx context.Context, userID int64, key string, slot Slot
 		return httpapi.BadRequest("aura", "Эта реликвия не подходит для этого слота")
 	}
 	return s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if _, err := s.locked(ctx, tx, userID); err != nil {
+			return err
+		}
 		var owned bool
 		if err := tx.QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM aura_relics WHERE user_id = $1 AND relic_key = $2)`,
@@ -146,29 +149,31 @@ func (s *Service) SpendStat(ctx context.Context, userID int64, stat string) (Pla
 
 // TopEntry is one row of the leaderboard.
 type TopEntry struct {
-	UserID    string `json:"user_id"`
-	Name      string `json:"name"`
-	Level     int    `json:"level"`
-	TotalAura int64  `json:"total_aura"`
-	Rank      int    `json:"rank"`
-	Mine      bool   `json:"mine"`
+	UserID     string `json:"user_id"`
+	Name       string `json:"name"`
+	Level      int    `json:"level"`
+	TotalAura  int64  `json:"total_aura"`
+	Rank       int    `json:"rank"`
+	Clears     int    `json:"clears"`
+	Depth      int    `json:"depth"`
+	Difficulty int    `json:"difficulty"`
+	Errors     int    `json:"errors"`
+	Mine       bool   `json:"mine"`
 }
 
-// Top ranks by lifetime aura, which is the number that only grows.
+// The weekly board rewards dungeon depth, difficulty and accuracy; lifetime totals stay intact.
 func (s *Service) Top(ctx context.Context, viewerID int64, limit int) ([]TopEntry, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
 	rows, err := s.pool.Query(ctx,
 		`WITH ranked AS (
-		     SELECT p.user_id, u.public_name, p.level, p.total_aura,
-		            row_number() OVER (ORDER BY p.total_aura DESC, p.user_id) AS rank
-		       FROM aura_players p JOIN users u ON u.id = p.user_id
-		      WHERE u.status = 'active' AND p.total_aura > 0
-		 )
-		 SELECT user_id, public_name, level, total_aura, rank
-		   FROM ranked WHERE rank <= $1 OR user_id = $2
-		  ORDER BY rank`, limit, viewerID)
+ SELECT p.user_id,u.public_name,p.level,p.total_aura,w.clears,w.depth,w.difficulty,w.errors,
+ row_number() OVER(ORDER BY w.depth DESC,w.difficulty DESC,w.errors,w.clears DESC,p.user_id) AS rank
+ FROM aura_weekly_scores w JOIN aura_players p ON p.user_id=w.user_id JOIN users u ON u.id=p.user_id
+ WHERE w.week=$3 AND u.status='active')
+ SELECT user_id,public_name,level,total_aura,rank,clears,depth,difficulty,errors
+ FROM ranked WHERE rank<=$1 OR user_id=$2 ORDER BY rank`, limit, viewerID, auraWeekStart(s.now()))
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +183,7 @@ func (s *Service) Top(ctx context.Context, viewerID int64, limit int) ([]TopEntr
 	for rows.Next() {
 		var id int64
 		var entry TopEntry
-		if err := rows.Scan(&id, &entry.Name, &entry.Level, &entry.TotalAura, &entry.Rank); err != nil {
+		if err := rows.Scan(&id, &entry.Name, &entry.Level, &entry.TotalAura, &entry.Rank, &entry.Clears, &entry.Depth, &entry.Difficulty, &entry.Errors); err != nil {
 			return nil, err
 		}
 		entry.UserID = itoa(id)
