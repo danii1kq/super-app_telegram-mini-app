@@ -26,5 +26,6 @@ span.aura-relic-fragments>i:nth-child(1){left:9%;top:32%}span.aura-relic-fragmen
 @keyframes aura-art-breathe{0%,100%{opacity:.2;translate:0 4px}50%{opacity:.85;translate:0 -3px}}
 @media(prefers-reduced-motion:reduce){.aura-hunter-sparks{animation:none}}
 
-/* Second relic sheet: same 4x3 grid, so only the image changes. */
+/* Extra relic sheets: same 4x3 grid, so only the image changes. */
 .aura-sheet-2 .aura-painted-relic-image{background-image:url('/aura/relics-atlas-2.webp')}
+.aura-sheet-3 .aura-painted-relic-image{background-image:url('/aura/relics-atlas-3.webp')}
