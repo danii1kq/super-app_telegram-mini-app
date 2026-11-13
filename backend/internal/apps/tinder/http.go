@@ -34,7 +34,7 @@ func cardJSON(card Card) map[string]any {
 		"username":   card.Username,
 		"bio":        card.Bio,
 		"photo_url":  card.PhotoURL,
-		"city":       card.City,
+		"university": card.University,
 		"age":        card.Age,
 		"likes_you":  card.LikesYou,
 		"created_at": card.CreatedAt.UTC().Format(time.RFC3339),
@@ -66,7 +66,7 @@ func (h *Handler) ownProfile(w http.ResponseWriter, r *http.Request) {
 			"user_id":   strconv.FormatInt(profile.UserID, 10),
 			"bio":       profile.Bio,
 			"photo_url": profile.PhotoURL,
-			"city":      profile.City,
+			"university": profile.University,
 			"age":       profile.Age,
 			"active":    profile.Active,
 		},
@@ -77,7 +77,7 @@ func (h *Handler) ownProfile(w http.ResponseWriter, r *http.Request) {
 type profileRequest struct {
 	Bio      string `json:"bio"`
 	PhotoURL string `json:"photo_url"`
-	City     string `json:"city"`
+	University string `json:"university"`
 	Age      int    `json:"age"`
 	Active   *bool  `json:"active"`
 }
@@ -97,7 +97,7 @@ func (h *Handler) saveProfile(w http.ResponseWriter, r *http.Request) {
 	if body.Active != nil {
 		active = *body.Active
 	}
-	profile, err := h.service.SaveProfile(r.Context(), user.ID, body.Bio, body.PhotoURL, body.City, body.Age, active)
+	profile, err := h.service.SaveProfile(r.Context(), user.ID, body.Bio, body.PhotoURL, body.University, body.Age, active)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return
@@ -107,7 +107,7 @@ func (h *Handler) saveProfile(w http.ResponseWriter, r *http.Request) {
 			"user_id":   strconv.FormatInt(profile.UserID, 10),
 			"bio":       profile.Bio,
 			"photo_url": profile.PhotoURL,
-			"city":      profile.City,
+			"university": profile.University,
 			"age":       profile.Age,
 			"active":    profile.Active,
 		},

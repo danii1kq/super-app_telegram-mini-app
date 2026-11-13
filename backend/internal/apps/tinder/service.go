@@ -33,7 +33,7 @@ type Profile struct {
 	UserID   int64
 	Bio      string
 	PhotoURL string
-	City     string
+	University string
 	Age      int
 	Active   bool
 }
@@ -45,7 +45,7 @@ type Card struct {
 	Username  string
 	Bio       string
 	PhotoURL  string
-	City      string
+	University string
 	Age       int
 	LikesYou  bool
 	CreatedAt time.Time
@@ -67,14 +67,14 @@ func profileAAD(userID int64) string {
 
 // SaveProfile creates or replaces the viewer's card. Bio is sealed like every
 // other free-form text in this project.
-func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, city string, age int, active bool) (Profile, error) {
+func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, university string, age int, active bool) (Profile, error) {
 	if len([]rune(bio)) > 500 {
 		return Profile{}, httpapi.Validation(map[string]string{"bio": "Слишком длинный текст"}, "Проверьте поля")
 	}
 	if age != 0 && (age < 18 || age > 120) {
 		return Profile{}, httpapi.Validation(map[string]string{"age": "Возраст от 18 до 120"}, "Проверьте поля")
 	}
-	if len(photoURL) > 500 || len(city) > 80 {
+	if len(photoURL) > 500 || len(university) > 80 {
 		return Profile{}, httpapi.Validation(map[string]string{"photo_url": "Слишком длинное значение"}, "Проверьте поля")
 	}
 
@@ -83,21 +83,21 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, 
 		return Profile{}, err
 	}
 	_, err = s.pool.Exec(ctx,
-		`INSERT INTO tinder_profiles (user_id, bio_sealed, key_id, photo_url, city, age, active)
+		`INSERT INTO tinder_profiles (user_id, bio_sealed, key_id, photo_url, university, age, active)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET bio_sealed = EXCLUDED.bio_sealed,
 		        key_id = EXCLUDED.key_id,
 		        photo_url = EXCLUDED.photo_url,
-		        city = EXCLUDED.city,
+		        university = EXCLUDED.university,
 		        age = EXCLUDED.age,
 		        active = EXCLUDED.active,
 		        updated_at = now()`,
-		userID, sealed.Ciphertext, sealed.KeyID, photoURL, city, age, active)
+		userID, sealed.Ciphertext, sealed.KeyID, photoURL, university, age, active)
 	if err != nil {
 		return Profile{}, err
 	}
-	return Profile{UserID: userID, Bio: bio, PhotoURL: photoURL, City: city, Age: age, Active: active}, nil
+	return Profile{UserID: userID, Bio: bio, PhotoURL: photoURL, University: university, Age: age, Active: active}, nil
 }
 
 // OwnProfile returns the viewer's card, or a zero profile when none exists.
@@ -106,9 +106,9 @@ func (s *Service) OwnProfile(ctx context.Context, userID int64) (Profile, bool, 
 	var keyID string
 	var profile Profile
 	err := s.pool.QueryRow(ctx,
-		`SELECT bio_sealed, key_id, photo_url, city, coalesce(age, 0), active
+		`SELECT bio_sealed, key_id, photo_url, university, coalesce(age, 0), active
 		   FROM tinder_profiles WHERE user_id = $1`, userID,
-	).Scan(&sealed, &keyID, &profile.PhotoURL, &profile.City, &profile.Age, &profile.Active)
+	).Scan(&sealed, &keyID, &profile.PhotoURL, &profile.University, &profile.Age, &profile.Active)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, false, nil
 	}
@@ -136,7 +136,7 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 	}
 	rows, err := s.pool.Query(ctx,
 		`SELECT p.user_id, u.public_name, coalesce(u.username, ''),
-		        p.bio_sealed, p.key_id, p.photo_url, p.city, coalesce(p.age, 0),
+		        p.bio_sealed, p.key_id, p.photo_url, p.university, coalesce(p.age, 0),
 		        EXISTS (SELECT 1 FROM tinder_likes l WHERE l.from_id = p.user_id AND l.to_id = $1) AS likes_you,
 		        p.updated_at
 		   FROM tinder_profiles p
@@ -162,7 +162,7 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 		var sealed []byte
 		var keyID string
 		if err := rows.Scan(&card.UserID, &card.Name, &card.Username, &sealed, &keyID,
-			&card.PhotoURL, &card.City, &card.Age, &card.LikesYou, &card.CreatedAt); err != nil {
+			&card.PhotoURL, &card.University, &card.Age, &card.LikesYou, &card.CreatedAt); err != nil {
 			return nil, err
 		}
 		bio, err := s.content.OpenString(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, profileAAD(card.UserID))

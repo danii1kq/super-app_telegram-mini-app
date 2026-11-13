@@ -42,7 +42,7 @@ export function TinderPage() {
 
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState('');
-  const [city, setCity] = useState('');
+  const [university, setUniversity] = useState('');
   const [age, setAge] = useState('');
   const [photo, setPhoto] = useState('');
   const [showMatches, setShowMatches] = useState(false);
@@ -54,7 +54,7 @@ export function TinderPage() {
 
   const startEditing = () => {
     setBio(own?.bio ?? '');
-    setCity(own?.city ?? '');
+    setUniversity(own?.university ?? '');
     setAge(own?.age ? String(own.age) : '');
     setPhoto(own?.photo_url ?? '');
     setEditing(true);
@@ -64,7 +64,7 @@ export function TinderPage() {
     saveProfile.mutate(
       {
         bio: bio.trim(),
-        city: city.trim(),
+        university: university.trim(),
         age: Number(age) || 0,
         photo_url: photo.trim(),
         active: true,
@@ -127,9 +127,9 @@ export function TinderPage() {
             />
             <div className="flex gap-2">
               <input
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-                placeholder={t('tinderCity')}
+                value={university}
+                onChange={(event) => setUniversity(event.target.value)}
+                placeholder={t('tinderUniversity')}
                 className="flex-1 rounded-lg bg-neutral-soft/60 px-3 py-2 text-body-lg text-ink outline-none placeholder:text-hint"
               />
               <input
@@ -226,7 +226,7 @@ export function TinderPage() {
                     </Chip>
                   ) : null}
                 </div>
-                {card.city ? <div className="pt-1 text-caption text-ink-2">{card.city}</div> : null}
+                {card.university ? <div className="pt-1 text-caption text-ink-2">{card.university}</div> : null}
                 {card.bio ? <p className="whitespace-pre-wrap pt-2 text-body-lg text-ink">{card.bio}</p> : null}
 
                 <div className="flex items-center gap-2 pt-4">
