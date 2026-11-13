@@ -69,7 +69,7 @@ func (s *Service) SaveReceipt(ctx context.Context, authorID, receiptID, payerID 
 		}
 		participants := map[int64]bool{authorID: true, payerID: true}
 		for _, item := range receipt.Items {
-			if item.Unclear || strings.TrimSpace(item.Name) == "" || item.AmountMinor <= 0 {
+			if item.Unclear || strings.TrimSpace(item.Name) == "" || item.AmountMinor < 0 {
 				return httpapi.Validation(map[string]string{"items": "Проверьте название и цену каждой позиции"}, "Подтвердите распознанные позиции")
 			}
 			for id := range item.Units {

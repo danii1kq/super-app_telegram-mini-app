@@ -1,6 +1,14 @@
 export const MAX_RECEIPT_MINOR = 1_000_000_000_000;
 export const MAX_RECEIPT_ITEMS = 200;
 
+export function parseReceiptMinor(input: string): number | null {
+  const value = input.replace(/\s/g, '').replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(value)) return null;
+  const [whole, fraction = ''] = value.split('.');
+  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return Number.isSafeInteger(minor) && minor >= 0 && minor <= MAX_RECEIPT_MINOR ? minor : null;
+}
+
 export interface ReceiptPreviewItem { key: string; amount: number; units: Record<string, number> }
 
 /** Match server integer division, including discounts and numeric user-id ordering. */

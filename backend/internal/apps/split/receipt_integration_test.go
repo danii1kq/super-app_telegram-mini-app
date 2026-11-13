@@ -336,6 +336,33 @@ func TestReceiptDraftLimits(t *testing.T) {
 		requireReceiptStatus(t, err, 422)
 	}
 }
+
+func TestReceiptSavesReviewedFreeModifiers(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	group, err := s.CreateGroup(ctx, 1, "Doner", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := s.CreateManualReceipt(ctx, 1, group.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := []ReceiptItem{{Name: "Doner", Quantity: 1, AmountMinor: 234996, Units: map[int64]int{2: 1}}, {Name: "Jalapeno included", Quantity: 1, AmountMinor: 0, Units: map[int64]int{2: 1}, Unclear: true}}
+	if _, err = s.UpdateReceipt(ctx, 1, receipt.ID, 234996, 0, 0, items); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.SaveReceipt(ctx, 1, receipt.ID, 1, "free-not-reviewed", "Doner", "cafe")
+	requireReceiptStatus(t, err, 422)
+	items[1].Unclear = false
+	if _, err = s.UpdateReceipt(ctx, 1, receipt.ID, 234996, 0, 0, items); err != nil {
+		t.Fatal(err)
+	}
+	expense, err := s.SaveReceipt(ctx, 1, receipt.ID, 1, "free-reviewed", "Doner", "cafe")
+	if err != nil || expense.AmountMinor != 234996 || expense.Shares[2] != 234996 {
+		t.Fatal("free modifier prevented exact reviewed expense", expense, err)
+	}
+}
 func makeAllocatedReceipt(t *testing.T, s *Service, groupID int64) Receipt {
 	t.Helper()
 	ctx := context.Background()

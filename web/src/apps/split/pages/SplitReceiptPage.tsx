@@ -2,11 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   formatMinor,
-  parseMinor,
   useSplitGroups,
 } from '../api';
 import { newRequestId } from '../mutations';
-import { receiptPreview, MAX_RECEIPT_MINOR, MAX_RECEIPT_ITEMS } from '../receiptPreview';
+import { receiptPreview, parseReceiptMinor, MAX_RECEIPT_MINOR, MAX_RECEIPT_ITEMS } from '../receiptPreview';
 import { ApiError } from '@/shared/api/client';
 import {
   useGroupMembers,
@@ -32,11 +31,6 @@ import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
 import { usePeople } from '@/core/social/api';
 import { useT, type DictKey } from '@/shared/i18n';
-
-function parseReceiptMinor(input: string): number | null {
-  const value = parseMinor(input);
-  return value !== null && Number.isSafeInteger(value) && value <= MAX_RECEIPT_MINOR ? value : null;
-}
 
 /** One editable line of the draft. */
 interface DraftItem {
