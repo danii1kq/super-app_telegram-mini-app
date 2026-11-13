@@ -229,7 +229,7 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, 
 	}
 	_, err = s.pool.Exec(ctx,
 		`INSERT INTO tinder_profiles (user_id, bio_sealed, key_id, photo_url, university, gender, seeking, age, active)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,0),$9)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET bio_sealed = EXCLUDED.bio_sealed,
 		        key_id = EXCLUDED.key_id,

@@ -157,4 +157,7 @@ func TestTinderConcurrentMatchPhotosAndBlocks(t *testing.T) {
 	if err = s.pool.QueryRow(ctx, `SELECT bio_sealed FROM tinder_profiles WHERE user_id=1`).Scan(&raw); err != nil || bytes.Contains(raw, []byte("Private bio")) {
 		t.Fatal("bio is not encrypted", err)
 	}
+	if _, err = s.SaveProfile(ctx, 4, "", "", "University", "", nil, 0, true); err != nil {
+		t.Fatal("optional age prevented profile creation", err)
+	}
 }
