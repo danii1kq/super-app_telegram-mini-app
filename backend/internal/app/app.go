@@ -54,7 +54,16 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	deps := Deps{Config: cfg, Pool: pool, Content: content, Index: index}
 
 	verifier := auth.NewVerifier(cfg.BotToken, cfg.AllowedBotID, cfg.InitDataMaxAge)
-	authService := auth.NewService(pool, index, content, cfg.SessionTTL)
+	identity, err := secure.NewCipher(cfg.IdentityKey)
+	if err != nil {
+		return nil, err
+	}
+	authService := auth.NewService(pool, index, content, cfg.SessionTTL, identity)
+	if pool != nil {
+		if err = authService.MigrateIdentityKeys(ctx); err != nil {
+			return nil, err
+		}
+	}
 
 	mux := http.NewServeMux()
 
@@ -89,7 +98,9 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	splitService := split.NewService(pool, content, receiptReader(visionClient), delivery)
 	splitService.MiniAppURL = telegram.MiniAppURL(cfg.BotUsername, cfg.MiniAppShortName)
 	split.NewHandler(splitService, authService, pool).Register(mux)
-	go splitService.RunReminders(ctx)
+	if pool != nil {
+		go splitService.RunReminders(ctx)
+	}
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 

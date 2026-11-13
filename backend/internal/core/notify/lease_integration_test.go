@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
 	"github.com/danii1kq/srunal/internal/platform/telegram"
@@ -56,7 +57,7 @@ func leaseFixture(t *testing.T) (*Worker, *leasedBot, func(string) int64) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	for _, name := range []string{"000001_core_identity.up.sql", "000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000018_split_payment_confirmation.up.sql", "000020_split_reminders.up.sql"} {
+	for _, name := range []string{"000001_core_identity.up.sql", "000004_session_initdata.up.sql", "000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000018_split_payment_confirmation.up.sql", "000020_split_reminders.up.sql"} {
 		raw, err := os.ReadFile("../../../../db/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
@@ -173,5 +174,63 @@ func TestWorkerRetriesAndChecksLatestPreference(t *testing.T) {
 	var state string
 	if err = w.pool.QueryRow(ctx, `SELECT state FROM notification_delivery WHERE id=$1`, id).Scan(&state); err != nil || state != "skipped" {
 		t.Fatal(state, err)
+	}
+}
+
+func TestIdentityMigrationAndLoginKeepContentKeyAwayFromWorker(t *testing.T) {
+	w, bot, enqueue := leaseFixture(t)
+	ctx := context.Background()
+	rawKey := make([]byte, 32)
+	rawKey[0] = 19
+	identity, err := secure.NewCipher(base64.StdEncoding.EncodeToString(rawKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, err := secure.NewLookupIndex(base64.StdEncoding.EncodeToString(rawKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := auth.NewService(w.pool, index, w.delivery, time.Hour, identity)
+	if err = service.MigrateIdentityKeys(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.MigrateIdentityKeys(ctx); err != nil {
+		t.Fatal("migration replay", err)
+	}
+	var raw []byte
+	var key string
+	if err = w.pool.QueryRow(ctx, `SELECT telegram_id_sealed,key_id FROM users WHERE id=1`).Scan(&raw, &key); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := identity.OpenString(secure.Sealed{Ciphertext: raw, KeyID: key}, "user:telegram_id")
+	if err != nil || plain != "12345" {
+		t.Fatal("existing identity not migrated", err)
+	}
+	if _, err = w.delivery.OpenString(secure.Sealed{Ciphertext: raw, KeyID: key}, "user:telegram_id"); err == nil {
+		t.Fatal("content key can still read migrated identity")
+	}
+	user, token, err := service.Login(ctx, auth.InitData{TelegramID: 6789, FirstName: "Identity test", Raw: "signed-test-data"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = w.pool.QueryRow(ctx, `SELECT telegram_id_sealed,key_id FROM users WHERE id=$1`, user.ID).Scan(&raw, &key); err != nil {
+		t.Fatal(err)
+	}
+	plain, err = identity.OpenString(secure.Sealed{Ciphertext: raw, KeyID: key}, "user:telegram_id")
+	if err != nil || plain != "6789" {
+		t.Fatal("new identity not isolated", err)
+	}
+	if value, err := service.InitDataFor(ctx, user.ID, token); err != nil || value != "signed-test-data" {
+		t.Fatal("content session broke", err)
+	}
+	w.identity = identity
+	enqueue("after-migration")
+	jobs, err := w.claim(ctx)
+	if err != nil || len(jobs) != 1 {
+		t.Fatal(jobs, err)
+	}
+	w.deliver(ctx, jobs[0])
+	if len(bot.messages) != 1 || bot.messages[0].ChatID != 12345 {
+		t.Fatal("worker could not deliver migrated identity", bot.messages)
 	}
 }

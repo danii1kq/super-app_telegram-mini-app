@@ -19,7 +19,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
-	cfg, err := config.Load()
+	cfg, err := config.LoadWorker()
 	if err != nil {
 		slog.Error("config", "err", err)
 		os.Exit(1)
