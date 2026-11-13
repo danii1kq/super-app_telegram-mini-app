@@ -35,6 +35,7 @@ import { useT, type DictKey } from '@/shared/i18n';
 
 /** One editable line of the draft. */
 interface DraftItem {
+  id?: string;
   key: string;
   name: string;
   quantity: number;
@@ -80,6 +81,7 @@ export function SplitReceiptPage() {
   const manualReceipt = useManualReceipt(groupId);
 
   const [receiptId, setReceiptId] = useState('');
+  const [version, setVersion] = useState(1);
   const [items, setItems] = useState<DraftItem[]>([]);
   const [total, setTotal] = useState('');
   const [category, setCategory] = useState('cafe');
@@ -135,14 +137,16 @@ export function SplitReceiptPage() {
 
   const applyReceipt = (receipt: {
     id: string;
+    version: number;
     total_minor: string;
     discount_minor: string;
     service_minor: string;
     ocr_error?: string;
     image_bytes?: number;
-    items: { name: string; quantity: number; amount_minor: string; unclear: boolean; units: Record<string, number> }[];
+    items: { id: string; name: string; quantity: number; amount_minor: string; unclear: boolean; units: Record<string, number> }[];
   }) => {
     setReceiptId(receipt.id);
+    setVersion(receipt.version);
     setTotal(receipt.total_minor === '0' ? '' : formatMinor(receipt.total_minor));
     setDiscount(receipt.discount_minor === '0' ? '' : formatMinor(receipt.discount_minor));
     setService(receipt.service_minor === '0' ? '' : formatMinor(receipt.service_minor));
@@ -150,6 +154,7 @@ export function SplitReceiptPage() {
     setItems(
       receipt.items.map((item) => ({
         key: nextKey(),
+        id: item.id,
         name: item.name,
         quantity: item.quantity,
         amount: formatMinor(item.amount_minor),
@@ -286,8 +291,9 @@ export function SplitReceiptPage() {
     }
     submitting.current = true;
     updateReceipt.mutate({
+      version,
       totalMinor: String(totalMinor), discountMinor: String(parseReceiptMinor(discount) ?? 0), serviceMinor: String(parseReceiptMinor(service) ?? 0),
-      items: items.map((item) => ({ name: item.name.trim(), quantity: item.quantity, amountMinor: String(parseReceiptMinor(item.amount) ?? 0), unclear: false, units: item.units })),
+      items: items.map((item) => ({ id: item.id, name: item.name.trim(), quantity: item.quantity, amountMinor: String(parseReceiptMinor(item.amount) ?? 0), unclear: false, units: item.units })),
     }, {
       onSuccess: () => {
         saveAttempt.current = { payerId, clientRequestId: saveKey, description: group?.title ?? t('receiptTitle'), category };

@@ -11,6 +11,9 @@ export interface ReceiptItem {
   unclear: boolean;
   /** How many units of this line each person takes, keyed by user id. */
   units: Record<string, number>;
+  allocation_mode: 'units' | 'shared';
+  parent_position: number | null;
+  suggested_parent_position?: number | null;
 }
 
 export interface Receipt {
@@ -18,6 +21,7 @@ export interface Receipt {
   group_id: string;
   author_id: string;
   status: 'draft' | 'saved';
+  version: number;
   total_minor: string;
   discount_minor: string;
   service_minor: string;
@@ -148,18 +152,23 @@ export function useUpdateReceipt(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
+      version: number;
       totalMinor: string;
       discountMinor: string;
       serviceMinor: string;
-      items: { name: string; quantity: number; amountMinor: string; unclear: boolean; units: Record<string, number> }[];
+      items: { id?: string; name: string; quantity: number; amountMinor: string; unclear: boolean; units: Record<string, number>; allocationMode?: 'units' | 'shared'; parentPosition?: number | null }[];
     }) =>
       api<Receipt>(`/split/receipts/${id}`, {
         method: 'PATCH',
         body: {
+          version: input.version,
           total_minor: input.totalMinor,
           discount_minor: input.discountMinor,
           service_minor: input.serviceMinor,
           items: input.items.map((item) => ({
+            id: item.id,
+            allocation_mode: item.allocationMode,
+            parent_position: item.parentPosition,
             name: item.name,
             quantity: item.quantity,
             amount_minor: item.amountMinor,

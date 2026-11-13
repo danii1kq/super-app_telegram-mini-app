@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -25,6 +24,7 @@ type Receipt struct {
 	GroupID        int64
 	AuthorID       int64
 	Status         string
+	Version        int
 	OCRError       string
 	TotalMinor     int64
 	Discount       int64
@@ -43,12 +43,15 @@ type Receipt struct {
 
 // ReceiptItem is one line, with how many units each person takes.
 type ReceiptItem struct {
-	ID          int64
-	Position    int
-	Name        string
-	Quantity    int
-	AmountMinor int64
-	Unclear     bool
+	ID                      int64
+	Position                int
+	Name                    string
+	Quantity                int
+	AmountMinor             int64
+	Unclear                 bool
+	AllocationMode          string
+	ParentPosition          *int
+	SuggestedParentPosition *int
 	// Units maps a user to how many units of this line they take.
 	Units map[int64]int
 }
@@ -120,6 +123,7 @@ func (s *Service) CreateManualReceipt(ctx context.Context, authorID, groupID int
 	receipt.GroupID = groupID
 	receipt.AuthorID = authorID
 	receipt.Status = "draft"
+	receipt.Version = 1
 	receipt.Items = []ReceiptItem{}
 	receipt.ImageState = "none"
 	return receipt, nil
@@ -190,6 +194,7 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 	receipt.GroupID = groupID
 	receipt.AuthorID = authorID
 	receipt.Status = "draft"
+	receipt.Version = 1
 	receipt.ImageState = "purged"
 	receipt.ImageWidth, receipt.ImageHeight = normalized.Width, normalized.Height
 
@@ -259,9 +264,9 @@ func (s *Service) storeRecognized(ctx context.Context, receiptID int64, result o
 			}
 			if _, err := tx.Exec(ctx,
 				`UPDATE split_receipt_items
-				    SET name_sealed = $2, name_key_id = $3, amount_sealed = $4, amount_key_id = $5
+				    SET name_sealed = $2, name_key_id = $3, amount_sealed = $4, amount_key_id = $5, suggested_parent_position=$6
 				  WHERE id = $1`,
-				itemID, nameSealed.Ciphertext, nameSealed.KeyID, amountSealed.Ciphertext, amountSealed.KeyID,
+				itemID, nameSealed.Ciphertext, nameSealed.KeyID, amountSealed.Ciphertext, amountSealed.KeyID, item.ParentPosition,
 			); err != nil {
 				return err
 			}
@@ -325,7 +330,7 @@ func (s *Service) receipt(ctx context.Context, q receiptQuerier, viewerID, recei
 		`SELECT r.id, r.group_id, r.author_id, r.status, r.ocr_error,
 		        r.total_sealed, r.total_key_id, r.discount_sealed, r.discount_key_id,
 		        r.service_sealed, r.service_key_id, r.saved_expense_id, r.created_at,
-            r.image_state, coalesce(r.image_width,0), coalesce(r.image_height,0), r.image_bytes, r.image_expires_at
+            r.image_state, coalesce(r.image_width,0), coalesce(r.image_height,0), r.image_bytes, r.image_expires_at, r.version
 		   FROM split_receipts r
 		   JOIN split_members m ON m.group_id = r.group_id
 		  WHERE r.id = $1 AND m.user_id = $2 AND m.state = 'active'`,
@@ -333,7 +338,7 @@ func (s *Service) receipt(ctx context.Context, q receiptQuerier, viewerID, recei
 	).Scan(&receipt.ID, &receipt.GroupID, &receipt.AuthorID, &receipt.Status, &ocrError,
 		&totalSealed, &totalKey, &discountSealed, &discountKey,
 		&serviceSealed, &serviceKey, &savedExpense, &receipt.CreatedAt,
-		&receipt.ImageState, &receipt.ImageWidth, &receipt.ImageHeight, &receipt.ImageBytes, &receipt.ImageExpiresAt)
+		&receipt.ImageState, &receipt.ImageWidth, &receipt.ImageHeight, &receipt.ImageBytes, &receipt.ImageExpiresAt, &receipt.Version)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Receipt{}, httpapi.NotFound("Чек не найден")
@@ -375,7 +380,7 @@ func (s *Service) openOptional(sealed []byte, keyID *string, aad string) (int64,
 
 func (s *Service) receiptItems(ctx context.Context, q receiptQuerier, receiptID int64) ([]ReceiptItem, error) {
 	rows, err := q.Query(ctx,
-		`SELECT id, position, name_sealed, name_key_id, quantity, amount_sealed, amount_key_id, confidence
+		`SELECT id, position, name_sealed, name_key_id, quantity, amount_sealed, amount_key_id, confidence, allocation_mode, parent_position, suggested_parent_position
 		   FROM split_receipt_items WHERE receipt_id = $1 ORDER BY position`, receiptID)
 	if err != nil {
 		return nil, err
@@ -388,7 +393,7 @@ func (s *Service) receiptItems(ctx context.Context, q receiptQuerier, receiptID 
 		var nameSealed, amountSealed []byte
 		var nameKey, amountKey, confidence string
 		if err := rows.Scan(&item.ID, &item.Position, &nameSealed, &nameKey,
-			&item.Quantity, &amountSealed, &amountKey, &confidence); err != nil {
+			&item.Quantity, &amountSealed, &amountKey, &confidence, &item.AllocationMode, &item.ParentPosition, &item.SuggestedParentPosition); err != nil {
 			return nil, err
 		}
 		name, err := s.content.OpenString(secure.Sealed{KeyID: nameKey, Ciphertext: nameSealed}, receiptItemNameAAD(item.ID))
@@ -449,160 +454,6 @@ func (s *Service) itemUnits(ctx context.Context, q receiptQuerier, receiptID int
 		out[itemID][userID] = units
 	}
 	return out, rows.Err()
-}
-
-// UpdateReceipt replaces the editable draft: totals and every line with its
-// units. The author alone may edit, and only while it is a draft.
-func (s *Service) UpdateReceipt(ctx context.Context, authorID, receiptID int64, total, discount, service int64, items []ReceiptItem) (Receipt, error) {
-	var groupID int64
-	var status string
-	var owner int64
-	if err := s.pool.QueryRow(ctx,
-		`SELECT group_id, status, author_id FROM split_receipts WHERE id = $1`, receiptID,
-	).Scan(&groupID, &status, &owner); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Receipt{}, httpapi.NotFound("Чек не найден")
-		}
-		return Receipt{}, err
-	}
-	if owner != authorID {
-		return Receipt{}, httpapi.Forbidden("Чек создал другой участник")
-	}
-	if status != "draft" {
-		return Receipt{}, httpapi.Conflict("receipt_saved", "Чек уже сохранён как расход")
-	}
-	if err := s.requireMember(ctx, authorID, groupID); err != nil {
-		return Receipt{}, err
-	}
-	if total < 0 || discount < 0 || service < 0 || total > ocr.MaxMoneyMinor || discount > ocr.MaxMoneyMinor || service > ocr.MaxMoneyMinor {
-		return Receipt{}, httpapi.Validation(map[string]string{"total_minor": "Суммы должны быть от 0 до 10 миллиардов тенге"}, "Проверьте поля")
-	}
-	if len(items) == 0 || len(items) > ocr.MaxItems {
-		return Receipt{}, httpapi.Validation(map[string]string{"items": "Добавьте от 1 до 200 позиций"}, "Проверьте поля")
-	}
-
-	var itemsTotal int64
-	for index, item := range items {
-		items[index].Name = strings.TrimSpace(item.Name)
-		if len([]rune(items[index].Name)) > 200 {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Название до 200 символов"}, "Проверьте позиции")
-		}
-		if item.Quantity <= 0 || item.Quantity > ocr.MaxQuantity {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Количество должно быть от 1 до 999"}, "Проверьте поля")
-		}
-		if item.AmountMinor < 0 || item.AmountMinor > ocr.MaxMoneyMinor || itemsTotal > ocr.MaxMoneyMinor-item.AmountMinor {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Сумма позиций должна быть от 0 до 10 миллиардов тенге"}, "Проверьте поля")
-		}
-		itemsTotal += item.AmountMinor
-		if len(item.Units) > 100 {
-			return Receipt{}, httpapi.Validation(map[string]string{"items": "Не больше 100 участников в позиции"}, "Проверьте позиции")
-		}
-		// A line is shared by people, not by units: one pizza split between two
-		// people has quantity 1 and two participants. Quantity bounds the units
-		// only when the line really has several units to hand out, so the cap is
-		// the larger of the two.
-		maxUnits := item.Quantity
-		if len(item.Units) > maxUnits {
-			maxUnits = len(item.Units)
-		}
-		units := 0
-		for userID, count := range item.Units {
-			if count <= 0 || count > ocr.MaxQuantity {
-				return Receipt{}, httpapi.Validation(map[string]string{"items": "Единицы должны быть от 1 до 999"}, "Проверьте поля")
-			}
-			units += count
-			if err := s.requireMember(ctx, userID, groupID); err != nil {
-				return Receipt{}, httpapi.Validation(map[string]string{"items": "Позиция назначена не участнику группы"}, "Проверьте поля")
-			}
-		}
-		if units > maxUnits {
-			return Receipt{}, httpapi.Validation(
-				map[string]string{"items": "Единиц больше, чем в позиции: одна единица учтена дважды"},
-				"Проверьте поля",
-			)
-		}
-		items[index].Position = index
-	}
-
-	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
-		// Save and edit lock the same draft; a late edit cannot rewrite a saved expense.
-		var lockedStatus string
-		if err := tx.QueryRow(ctx, `SELECT status FROM split_receipts WHERE id=$1 FOR UPDATE`, receiptID).Scan(&lockedStatus); err != nil {
-			return err
-		}
-		if lockedStatus != "draft" {
-			return httpapi.Conflict("receipt_saved", "Чек уже сохранён как расход")
-		}
-
-		if _, err := tx.Exec(ctx,
-			`DELETE FROM split_receipt_items WHERE receipt_id = $1`, receiptID,
-		); err != nil {
-			return err
-		}
-
-		for _, item := range items {
-			var itemID int64
-			if err := tx.QueryRow(ctx,
-				`INSERT INTO split_receipt_items (receipt_id, position, name_sealed, name_key_id, quantity, amount_sealed, amount_key_id, confidence)
-				 VALUES ($1, $2, ''::bytea, 'pending', $3, ''::bytea, 'pending', $4)
-				 RETURNING id`,
-				receiptID, item.Position, item.Quantity, confidenceOf(item.Unclear),
-			).Scan(&itemID); err != nil {
-				return err
-			}
-			nameSealed, err := s.content.SealString(item.Name, receiptItemNameAAD(itemID))
-			if err != nil {
-				return err
-			}
-			amountSealed, err := s.content.SealString(strconv.FormatInt(item.AmountMinor, 10), receiptItemAmountAAD(itemID))
-			if err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx,
-				`UPDATE split_receipt_items
-				    SET name_sealed = $2, name_key_id = $3, amount_sealed = $4, amount_key_id = $5
-				  WHERE id = $1`,
-				itemID, nameSealed.Ciphertext, nameSealed.KeyID, amountSealed.Ciphertext, amountSealed.KeyID,
-			); err != nil {
-				return err
-			}
-			for userID, count := range item.Units {
-				if _, err := tx.Exec(ctx,
-					`INSERT INTO split_receipt_item_units (item_id, user_id, units) VALUES ($1, $2, $3)`,
-					itemID, userID, count,
-				); err != nil {
-					return err
-				}
-			}
-		}
-
-		totalSealed, totalKey, err := s.sealOptional(total, receiptTotalAAD(receiptID))
-		if err != nil {
-			return err
-		}
-		discountSealed, discountKey, err := s.sealOptional(discount, receiptDiscountAAD(receiptID))
-		if err != nil {
-			return err
-		}
-		serviceSealed, serviceKey, err := s.sealOptional(service, receiptServiceAAD(receiptID))
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx,
-			`UPDATE split_receipts
-			    SET total_sealed = $2, total_key_id = $3,
-			        discount_sealed = $4, discount_key_id = $5,
-			        service_sealed = $6, service_key_id = $7,
-			        updated_at = now()
-			  WHERE id = $1`,
-			receiptID, totalSealed, totalKey, discountSealed, discountKey, serviceSealed, serviceKey,
-		)
-		return err
-	})
-	if err != nil {
-		return Receipt{}, err
-	}
-	return s.Receipt(ctx, authorID, receiptID)
 }
 
 // ReceiptImage returns the sealed photo for a group member.

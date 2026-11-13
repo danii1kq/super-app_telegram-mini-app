@@ -92,6 +92,7 @@ func (h *Handler) getReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateReceiptRequest struct {
+	Version       int                 `json:"version"`
 	TotalMinor    string              `json:"total_minor"`
 	DiscountMinor string              `json:"discount_minor"`
 	ServiceMinor  string              `json:"service_minor"`
@@ -99,11 +100,14 @@ type updateReceiptRequest struct {
 }
 
 type updateReceiptItem struct {
-	Name        string         `json:"name"`
-	Quantity    int            `json:"quantity"`
-	AmountMinor string         `json:"amount_minor"`
-	Unclear     bool           `json:"unclear"`
-	Units       map[string]int `json:"units"`
+	ID             string         `json:"id"`
+	AllocationMode string         `json:"allocation_mode"`
+	ParentPosition *int           `json:"parent_position"`
+	Name           string         `json:"name"`
+	Quantity       int            `json:"quantity"`
+	AmountMinor    string         `json:"amount_minor"`
+	Unclear        bool           `json:"unclear"`
+	Units          map[string]int `json:"units"`
 }
 
 func (h *Handler) updateReceipt(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +146,15 @@ func (h *Handler) updateReceipt(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]ReceiptItem, 0, len(body.Items))
 	for _, item := range body.Items {
+		var itemID int64
+		if item.ID != "" {
+			var parseErr error
+			itemID, parseErr = strconv.ParseInt(item.ID, 10, 64)
+			if parseErr != nil || itemID <= 0 {
+				httpapi.WriteError(w, httpapi.BadRequest("invalid_item", "Некорректная позиция"))
+				return
+			}
+		}
 		amount, err := parseMinorField(item.AmountMinor, "items")
 		if err != nil {
 			httpapi.WriteError(w, err)
@@ -157,15 +170,22 @@ func (h *Handler) updateReceipt(w http.ResponseWriter, r *http.Request) {
 			units[userID] = count
 		}
 		items = append(items, ReceiptItem{
-			Name:        item.Name,
-			Quantity:    item.Quantity,
-			AmountMinor: amount,
-			Unclear:     item.Unclear,
-			Units:       units,
+			ID:             itemID,
+			AllocationMode: item.AllocationMode,
+			ParentPosition: item.ParentPosition,
+			Name:           item.Name,
+			Quantity:       item.Quantity,
+			AmountMinor:    amount,
+			Unclear:        item.Unclear,
+			Units:          units,
 		})
 	}
 
-	receipt, err := h.service.UpdateReceipt(r.Context(), user.ID, receiptID, total, discount, service, items)
+	if body.Version < 1 {
+		httpapi.WriteError(w, httpapi.Conflict("client_update_required", "Обновите приложение и откройте чек заново"))
+		return
+	}
+	receipt, err := h.service.UpdateReceipt(r.Context(), user.ID, receiptID, total, discount, service, items, body.Version)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return
@@ -425,13 +445,16 @@ func receiptJSON(receipt Receipt) map[string]any {
 			units[strconv.FormatInt(userID, 10)] = count
 		}
 		items = append(items, map[string]any{
-			"id":           strconv.FormatInt(item.ID, 10),
-			"position":     item.Position,
-			"name":         item.Name,
-			"quantity":     item.Quantity,
-			"amount_minor": strconv.FormatInt(item.AmountMinor, 10),
-			"unclear":      item.Unclear,
-			"units":        units,
+			"allocation_mode":           item.AllocationMode,
+			"parent_position":           item.ParentPosition,
+			"suggested_parent_position": item.SuggestedParentPosition,
+			"id":                        strconv.FormatInt(item.ID, 10),
+			"position":                  item.Position,
+			"name":                      item.Name,
+			"quantity":                  item.Quantity,
+			"amount_minor":              strconv.FormatInt(item.AmountMinor, 10),
+			"unclear":                   item.Unclear,
+			"units":                     units,
 		})
 	}
 
@@ -440,6 +463,7 @@ func receiptJSON(receipt Receipt) map[string]any {
 		"group_id":       strconv.FormatInt(receipt.GroupID, 10),
 		"author_id":      strconv.FormatInt(receipt.AuthorID, 10),
 		"status":         receipt.Status,
+		"version":        receipt.Version,
 		"total_minor":    strconv.FormatInt(receipt.TotalMinor, 10),
 		"discount_minor": strconv.FormatInt(receipt.Discount, 10),
 		"service_minor":  strconv.FormatInt(receipt.Service, 10),

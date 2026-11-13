@@ -74,7 +74,7 @@ func receiptTestService(t *testing.T) (*Service, *receiptTestReader) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql", "000015_split_memory_only_photos.up.sql"} {
+	for _, name := range []string{"000006_split.up.sql", "000009_split_receipts_debts.up.sql", "000010_split_report_media_notify.up.sql", "000014_split_deepseek_budget.up.sql", "000015_split_memory_only_photos.up.sql", "000016_split_receipt_items.up.sql"} {
 		raw, err := os.ReadFile("../../../../db/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
