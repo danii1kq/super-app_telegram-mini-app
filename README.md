@@ -1,10 +1,12 @@
 # SruNal
 
-Соцсеть с лентой, профилями и календарём внутри Telegram Mini App. Личные сообщения остаются в Telegram. В каталоге четыре приложения: **Docgen**, **SruPulse**, **SruNotes**, **SruSplit**. Календарь SruDay открывается отдельной основной вкладкой.
+Соцсеть с лентой, профилями и календарём внутри Telegram Mini App. Личные сообщения остаются в Telegram. В каталоге **Docgen**, **SruPulse**, **SruNotes**, **SruSplit**, **SruTinder** и игровой раздел **SruGame** с **SruFarm** и **SruAura**. Календарь SruDay открывается отдельной основной вкладкой.
 
 Документация продукта и архитектуры находится в [`docs/`](docs/README.md).
 
 Совместные чеки, возвраты и напоминания SruSplit: [возможности и обновление](docs/srusplit-collaboration.md).
+
+Перенос Tinder, Farm и Aura с сохранением актуального main: [интеграция и миграции](docs/apps-integration.md).
 
 ## Стек
 

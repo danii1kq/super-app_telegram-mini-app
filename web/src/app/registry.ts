@@ -1,5 +1,5 @@
 /**
- * App registry: four catalogue apps; the calendar is a core section.
+ * App registry: catalogue apps and the games hub; the calendar is a core section.
  *
  * Each app owns its route and its lazy-loaded module. Adding an app means adding
  * one entry here and its folder under src/apps/<id>.
