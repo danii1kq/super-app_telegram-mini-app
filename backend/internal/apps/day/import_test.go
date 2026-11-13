@@ -5,17 +5,23 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"image"
 	"image/png"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
+	"github.com/danii1kq/srunal/internal/platform/secure"
+	"github.com/danii1kq/srunal/internal/platform/vision"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -103,7 +109,8 @@ func TestTimetableImageBoundsBeforeQuotaOrProvider(t *testing.T) {
 	}
 }
 
-func TestImportQuotaIsAtomicAndResetsByUTCDay(t *testing.T) {
+func importTestService(t *testing.T) *Service {
+	t.Helper()
 	dsn := os.Getenv("SRUNAL_TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("set SRUNAL_TEST_DATABASE_URL for isolated PostgreSQL quota test")
@@ -129,7 +136,10 @@ func TestImportQuotaIsAtomicAndResetsByUTCDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `CREATE TABLE users (id bigint PRIMARY KEY); INSERT INTO users VALUES (1)`); err != nil {
+	if _, err := pool.Exec(ctx, `CREATE TABLE users (id bigint PRIMARY KEY, public_name text NOT NULL, username text, status text NOT NULL);
+	 CREATE TABLE sessions (token_hash text PRIMARY KEY, user_id bigint NOT NULL REFERENCES users(id), revoked_at timestamptz, expires_at timestamptz NOT NULL);
+	 CREATE TABLE app_links (user_id bigint NOT NULL REFERENCES users(id), app_id text NOT NULL, external_id text NOT NULL, PRIMARY KEY(user_id,app_id));
+	 INSERT INTO users VALUES (1,'Test user',NULL,'active')`); err != nil {
 		t.Fatal(err)
 	}
 	migration, err := os.ReadFile("../../../../db/migrations/000013_day_import_limits.up.sql")
@@ -139,7 +149,13 @@ func TestImportQuotaIsAtomicAndResetsByUTCDay(t *testing.T) {
 	if _, err := pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(&postgres.Pool{Pool: pool}, nil)
+	return NewService(&postgres.Pool{Pool: pool}, nil)
+}
+
+func TestImportQuotaIsAtomicAndResetsByUTCDay(t *testing.T) {
+	service := importTestService(t)
+	pool := service.pool
+	ctx := context.Background()
 	var group sync.WaitGroup
 	results := make(chan time.Duration, 2)
 	failures := make(chan error, 2)
@@ -190,5 +206,143 @@ func TestImportQuotaIsAtomicAndResetsByUTCDay(t *testing.T) {
 	var used int
 	if err := pool.QueryRow(ctx, `SELECT used FROM day_import_limits`).Scan(&used); err != nil || used != 1 {
 		t.Fatal("new-day quota not reset", used, err)
+	}
+}
+
+type importBodyTrap struct{ reads int }
+
+func (body *importBodyTrap) Read([]byte) (int, error) {
+	body.reads++
+	return 0, errors.New("body read reached")
+}
+func (*importBodyTrap) Close() error { return nil }
+
+func TestBusyImportRejectsBeforeReadingOrChargingQuota(t *testing.T) {
+	service := importTestService(t)
+	token := "day-import-test-not-production-token"
+	if _, err := service.pool.Exec(context.Background(), `INSERT INTO sessions (token_hash,user_id,expires_at) VALUES ($1,1,now()+interval '1 hour');`, secure.TokenHash(token)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.pool.Exec(context.Background(), `INSERT INTO app_links VALUES (1,'day','verified-upstream-account')`); err != nil {
+		t.Fatal(err)
+	}
+	authService := auth.NewService(service.pool, nil, nil, time.Hour)
+	handler := NewHandler(service, authService, vision.NewClient("http://127.0.0.1:1", "synthetic-test-key", "deepseek-flash"), NewWeatherClient(""))
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	for range cap(handler.importSlots) {
+		handler.importSlots <- struct{}{}
+	}
+	request := func(body *importBodyTrap) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/day/import/preview?week_start=2026-11-09&timezone=UTC", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-AI-Consent", "deepseek")
+		req.Header.Set("Content-Type", "image/png")
+		req.Body = body
+		req.ContentLength = 10 << 20
+		return req
+	}
+	body := &importBodyTrap{}
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request(body))
+	var result struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusServiceUnavailable || response.Header().Get("Retry-After") != "5" || result.Error.Code != "import_busy" || body.reads != 0 {
+		t.Fatalf("busy upload reached body or returned wrong response: code=%d header=%q error=%q reads=%d", response.Code, response.Header().Get("Retry-After"), result.Error.Code, body.reads)
+	}
+	if len(handler.importSlots) != cap(handler.importSlots) {
+		t.Fatal("busy request released another import's slot")
+	}
+	for range cap(handler.importSlots) {
+		<-handler.importSlots
+	}
+	body = &importBodyTrap{}
+	response = httptest.NewRecorder()
+	mux.ServeHTTP(response, request(body))
+	if response.Code != http.StatusBadRequest || body.reads != 1 || len(handler.importSlots) != 0 {
+		t.Fatal("failed body must release its acquired slot", response.Code, body.reads, len(handler.importSlots))
+	}
+	var charged int
+	if err := service.pool.QueryRow(context.Background(), `SELECT count(*) FROM day_import_limits`).Scan(&charged); err != nil || charged != 0 {
+		t.Fatal("busy or malformed upload charged quota", charged, err)
+	}
+}
+
+func TestSharedVisionBusyIsReturnedAsRetryableImportBusy(t *testing.T) {
+	service := importTestService(t)
+	token := "shared-vision-busy-not-production-token"
+	if _, err := service.pool.Exec(context.Background(), `INSERT INTO sessions (token_hash,user_id,expires_at) VALUES ($1,1,now()+interval '1 hour')`, secure.TokenHash(token)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.pool.Exec(context.Background(), `INSERT INTO app_links VALUES (1,'day','verified-upstream-account')`); err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	requests := make(chan struct{}, 3)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- struct{}{}
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"items\":[]}"},"finish_reason":"stop"}]}`))
+	}))
+	defer provider.Close()
+	reader := vision.NewClient(provider.URL, "synthetic-test-key", "deepseek-flash")
+	var picture bytes.Buffer
+	if err := png.Encode(&picture, image.NewNRGBA(image.Rect(0, 0, 40, 20))); err != nil {
+		t.Fatal(err)
+	}
+	background, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	finished := make(chan error, 2)
+	for range 2 {
+		go func() { _, err := reader.Extract(background, picture.Bytes(), "image/png", "test"); finished <- err }()
+	}
+	defer func() {
+		close(release)
+		for range 2 {
+			<-finished
+		}
+	}()
+	for range 2 {
+		select {
+		case <-requests:
+		case <-time.After(3 * time.Second):
+			t.Fatal("provider calls did not occupy both shared slots")
+		}
+	}
+	handler := NewHandler(service, auth.NewService(service.pool, nil, nil, time.Hour), reader, NewWeatherClient(""))
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	requestContext, stop := context.WithTimeout(context.Background(), 3*time.Second)
+	defer stop()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/day/import/preview?week_start=2026-11-09&timezone=UTC", bytes.NewReader(picture.Bytes())).WithContext(requestContext)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-AI-Consent", "deepseek")
+	req.Header.Set("Content-Type", "image/png")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, req)
+	var result struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusServiceUnavailable || response.Header().Get("Retry-After") != "5" || result.Error.Code != "import_busy" || len(requests) != 0 {
+		t.Fatal("shared busy was mistaken for unreadable image or caused another provider call", response.Code, result.Error.Code, len(requests))
+	}
+	if len(handler.importSlots) != 0 {
+		t.Fatal("shared busy did not release preparation slot")
+	}
+	var used int
+	if err := service.pool.QueryRow(context.Background(), `SELECT used FROM day_import_limits WHERE user_id=1`).Scan(&used); err != nil || used != 1 {
+		t.Fatal("valid prepared attempt should remain counted", used, err)
 	}
 }

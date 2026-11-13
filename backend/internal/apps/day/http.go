@@ -10,14 +10,15 @@ import (
 )
 
 type Handler struct {
-	service *Service
-	auth    *auth.Service
-	weather *WeatherClient
-	vision  *vision.Client
+	service     *Service
+	auth        *auth.Service
+	weather     *WeatherClient
+	vision      *vision.Client
+	importSlots chan struct{}
 }
 
 func NewHandler(service *Service, authService *auth.Service, imageReader *vision.Client, weather *WeatherClient) *Handler {
-	return &Handler{service: service, auth: authService, weather: weather, vision: imageReader}
+	return &Handler{service: service, auth: authService, weather: weather, vision: imageReader, importSlots: make(chan struct{}, 2)}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {

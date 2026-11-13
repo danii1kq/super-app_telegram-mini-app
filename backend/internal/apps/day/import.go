@@ -175,6 +175,15 @@ func (h *Handler) importTimetable(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, httpapi.Conflict("not_linked", "Подключите свой календарь SruDay"))
 		return
 	}
+	// Bound decoded image memory before reading or preparing the upload.
+	select {
+	case h.importSlots <- struct{}{}:
+		defer func() { <-h.importSlots }()
+	default:
+		w.Header().Set("Retry-After", "5")
+		httpapi.WriteError(w, &httpapi.Error{Status: http.StatusServiceUnavailable, Code: "import_busy", Message: "Подготовка изображений занята. Повторите через 5 секунд"})
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, vision.MaxImageBytes)
 	raw, err := io.ReadAll(r.Body)
 	if err != nil || len(raw) == 0 {
@@ -198,6 +207,11 @@ func (h *Handler) importTimetable(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.vision.Extract(r.Context(), normalized.Data, normalized.Mime, timetablePrompt(week, location.String()))
 	if err != nil {
+		if errors.Is(err, vision.ErrBusy) {
+			w.Header().Set("Retry-After", "5")
+			httpapi.WriteError(w, &httpapi.Error{Status: http.StatusServiceUnavailable, Code: "import_busy", Message: "Распознавание занято. Повторите через 5 секунд"})
+			return
+		}
 		httpapi.WriteError(w, httpapi.Conflict("import_unreadable", "Не удалось распознать расписание, попробуйте более чёткий снимок"))
 		return
 	}
