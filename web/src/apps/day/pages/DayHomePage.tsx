@@ -4,6 +4,7 @@ import { addDays, eventsOnDay, sortEvents, startOfWeek } from '../calendar';
 import { useConnectDay, useDisconnectDay } from '../mutations';
 import { EventComposer } from './EventComposer';
 import { DayWeather, loadWeatherCity, WeatherPicker } from './WeatherPicker';
+import { TimetableImporter } from './TimetableImporter';
 import { AppHeader, Banner, Card, EmptyState, Icon, PrimaryButton, Screen, SectionLabel, Segmented, Skeleton } from '@/shared/ui';
 import { useT, useI18n } from '@/shared/i18n';
 import { formatDayMonth, formatDateTime, formatWeekday } from '@/shared/i18n/date';
@@ -35,6 +36,7 @@ export function DayHomePage() {
   const [view, setView] = useState<'week' | 'agenda'>('week');
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [composing, setComposing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [weatherCity, setWeatherCity] = useState(loadWeatherCity);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const linked = status.data?.linked === true;
@@ -58,6 +60,8 @@ export function DayHomePage() {
       });
     } finally { setConfirmingDisconnect(false); }
   };
+
+  if (importing) return <Screen header={<AppHeader title={t('dayImport')} onBack={() => setImporting(false)} leadingIcon="document_scanner" />} bottomSpace><TimetableImporter week={anchor} available={status.data?.import_available === true} onClose={() => setImporting(false)} /></Screen>;
 
   return (
     <Screen header={<AppHeader title="SruDay" leadingIcon="calendar_month" trailing={
@@ -87,6 +91,7 @@ export function DayHomePage() {
           <button type="button" onClick={() => setAnchor(startOfWeek(new Date()))} className="min-h-11 self-center px-4 text-body-secondary text-accent">{t('dayToday')}</button>
           {linked ? <Segmented options={[{ value: 'week', label: t('dayWeek') }, { value: 'agenda', label: t('dayAgenda') }]} value={view} onChange={setView} /> : null}
           {linked ? composing ? <EventComposer onCancel={() => setComposing(false)} onCreated={(date) => { setComposing(false); setAnchor(startOfWeek(date)); }} /> : <PrimaryButton full onClick={() => setComposing(true)}>{t('dayCreate')}</PrimaryButton> : null}
+          {linked && !composing ? <button type="button" onClick={() => setImporting(true)} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface px-4 text-body-strong text-accent"><Icon name="document_scanner" size={22} />{t('dayImport')}</button> : null}
           {events.isLoading ? <Skeleton className="h-28 w-full" /> : null}
           {events.isError ? <Banner tone="danger" icon="error" title={t('dayUnavailable')} action={<button type="button" onClick={() => void events.refetch()} className="min-h-11 font-semibold">{t('retry')}</button>} /> : null}
           {events.data?.length === 0 ? <EmptyState icon="event_available" title={t('dayNoEvents')} text={t('dayNoEventsText')} /> : null}

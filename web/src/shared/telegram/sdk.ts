@@ -114,7 +114,7 @@ export function openLink(url: string): void {
 }
 
 export function openTelegramLink(url: string): void {
-  if (tg) {
+  if (tg && isMiniApp()) {
     tg.openTelegramLink(url);
     return;
   }

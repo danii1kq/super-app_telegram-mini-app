@@ -46,7 +46,7 @@ export function PulseMeetingForm({ status, onClose }: { status: PulseStatus; onC
       <p className="break-words text-caption text-ink-2">{t('pulseDeviceTimezone')}: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
       {!input ? <p role="alert" className="text-caption text-danger">{t('pulseCalendarInvalid')}</p> : null}
       {save.isError ? <Banner tone="danger" icon="error" title={t(notLinked ? 'dayNotLinked' : 'pulseCalendarFailed')} /> : null}
-      <Link to="/apps/day" className="flex min-h-11 items-center text-body-secondary text-accent">{t('pulseOpenCalendar')}</Link>
+      <Link to="/calendar" className="flex min-h-11 items-center text-body-secondary text-accent">{t('pulseOpenCalendar')}</Link>
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={onClose} disabled={save.isPending} className="min-h-11 px-2 text-body-secondary text-ink-2 disabled:opacity-50">{t('cancel')}</button>
         <PrimaryButton onClick={submit} disabled={!input} progress={save.isPending}>{t('save')}</PrimaryButton>

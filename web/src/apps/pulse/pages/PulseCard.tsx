@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { type PulseStatus, usePulseResponders } from '../api';
 import { useCancelResponse, useCloseStatus, useRespond } from '../mutations';
 import { minutesLeft } from '../time';
-import { useOpenDirect } from '@/core/chat/mutations';
 import { Avatar, Banner, Card, Chip, Icon, Skeleton } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useT } from '@/shared/i18n';
@@ -12,24 +11,14 @@ import { showConfirm } from '@/shared/telegram/sdk';
 export function PulseCard({ status, now, onCalendar }: { status: PulseStatus; now: number; onCalendar: (status: PulseStatus) => void }) {
   const t = useT();
   const feedback = useFeedback();
-  const navigate = useNavigate();
   const respond = useRespond();
   const withdraw = useCancelResponse();
   const close = useCloseStatus();
-  const openChat = useOpenDirect();
   const [showPeople, setShowPeople] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const people = usePulseResponders(status.id, status.mine && showPeople);
   const left = minutesLeft(status.expires_at, now);
   const busy = respond.isPending || withdraw.isPending;
-
-  const chatWith = (id: string) => {
-    if (openChat.isPending) return;
-    openChat.mutate(id, {
-      onSuccess: (conversation) => navigate(`/chats/${conversation.id}`),
-      onError: () => feedback(t('chatOpenFailed'), 'error'),
-    });
-  };
 
   const finish = async () => {
     if (confirming || close.isPending) return;
@@ -72,7 +61,7 @@ export function PulseCard({ status, now, onCalendar }: { status: PulseStatus; no
         )}
       </div>
       <div className="flex flex-wrap gap-2 border-t border-line pt-2">
-        {!status.mine ? <button type="button" disabled={openChat.isPending} onClick={() => chatWith(status.author_id)} className="flex min-h-11 items-center gap-1 px-2 text-body-secondary text-accent disabled:opacity-50"><Icon name="chat_bubble" size={18} />{t('chat')}</button> : null}
+        {!status.mine ? <Link to={`/people/${status.author_id}`} className="flex min-h-11 items-center gap-1 px-2 text-body-secondary text-accent"><Icon name="person" size={18} />{t('profile')}</Link> : null}
         <button type="button" onClick={() => onCalendar(status)} className="flex min-h-11 items-center gap-1 px-2 text-body-secondary text-accent"><Icon name="event" size={18} />{t('pulseCalendar')}</button>
       </div>
       {status.mine && showPeople ? (
@@ -85,7 +74,7 @@ export function PulseCard({ status, now, onCalendar }: { status: PulseStatus; no
             <div key={person.id} className="flex min-h-14 items-center gap-2">
               <Avatar name={person.public_name} size={32} />
               <span className="min-w-0 flex-1 break-words text-body-secondary text-ink">{person.public_name}</span>
-              <button type="button" aria-label={`${t('chat')}: ${person.public_name}`} disabled={openChat.isPending} onClick={() => chatWith(person.id)} className="flex size-11 shrink-0 items-center justify-center text-accent disabled:opacity-50"><Icon name="chat_bubble" size={20} /></button>
+              <Link to={`/people/${person.id}`} aria-label={`${t('profile')}: ${person.public_name}`} className="flex size-11 shrink-0 items-center justify-center text-accent"><Icon name="person" size={20} /></Link>
             </div>
           ))}
         </section>

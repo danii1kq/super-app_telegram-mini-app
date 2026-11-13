@@ -4,7 +4,7 @@ import { AppHeader, Icon, Screen } from '@/shared/ui';
 import { useT } from '@/shared/i18n';
 
 /**
- * Catalogue: the five apps as cards with an icon and a name.
+ * Catalogue: four apps as cards with an icon and a name.
  *
  * A grid of two columns, the way a launcher looks on a phone. Each card is the
  * whole tap target, so the name is never the only thing that opens the app.

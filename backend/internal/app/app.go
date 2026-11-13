@@ -14,15 +14,15 @@ import (
 	"github.com/danii1kq/srunal/internal/apps/pulse"
 	"github.com/danii1kq/srunal/internal/apps/split"
 	"github.com/danii1kq/srunal/internal/core/auth"
-	"github.com/danii1kq/srunal/internal/core/chat"
 	"github.com/danii1kq/srunal/internal/core/social"
 	"github.com/danii1kq/srunal/internal/core/user"
 	"github.com/danii1kq/srunal/internal/integration"
 	"github.com/danii1kq/srunal/internal/platform/config"
-	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
+	"github.com/danii1kq/srunal/internal/platform/vision"
 )
 
 // Deps carries what every module needs.
@@ -72,7 +72,6 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	}
 	user.NewHandler(user.NewService(pool), authService).Register(mux)
 	social.NewHandler(social.NewService(pool, content), authService).Register(mux)
-	chat.NewHandler(chat.NewService(pool, content), authService, chat.NewHub()).Register(mux)
 
 	docClient := doc.NewClient(cfg.DocAPIURL, cfg.DocAPIToken)
 	docService := doc.NewService(pool, docClient)
@@ -80,7 +79,8 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 
 	dayClient := day.NewClient(cfg.DayAPIURL, cfg.DayAPIToken)
 	dayService := day.NewService(pool, dayClient)
-	day.NewHandler(dayService, authService).Register(mux)
+	visionClient := vision.NewClient(cfg.DeepSeekBaseURL, cfg.DeepSeekAPIKey, cfg.DeepSeekModel)
+	day.NewHandler(dayService, authService, visionClient, day.NewWeatherClient(cfg.WeatherAPIKey)).Register(mux)
 
 	notesService := notes.NewService(pool, content)
 	notes.NewHandler(notesService, authService).Register(mux)

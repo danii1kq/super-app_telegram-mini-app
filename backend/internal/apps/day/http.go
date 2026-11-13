@@ -6,20 +6,23 @@ import (
 
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
+	"github.com/danii1kq/srunal/internal/platform/vision"
 )
 
 type Handler struct {
 	service *Service
 	auth    *auth.Service
 	weather *WeatherClient
+	vision  *vision.Client
 }
 
-func NewHandler(service *Service, authService *auth.Service) *Handler {
-	return &Handler{service: service, auth: authService, weather: NewWeatherClient("")}
+func NewHandler(service *Service, authService *auth.Service, imageReader *vision.Client, weather *WeatherClient) *Handler {
+	return &Handler{service: service, auth: authService, weather: weather, vision: imageReader}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	h.registerWeather(mux)
+	mux.Handle("POST /api/v1/day/import/preview", h.auth.Middleware(http.HandlerFunc(h.importTimetable)))
 	mux.Handle("GET /api/v1/apps/day/status", h.auth.Middleware(http.HandlerFunc(h.status)))
 	mux.Handle("GET /api/v1/apps/day/events", h.auth.Middleware(http.HandlerFunc(h.events)))
 	mux.Handle("POST /api/v1/apps/day/connect", h.auth.Middleware(http.HandlerFunc(h.connect)))
@@ -38,7 +41,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, httpapi.Internal(err))
 		return
 	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]bool{"linked": linked, "configured": h.service.client.Configured()})
+	httpapi.WriteJSON(w, http.StatusOK, map[string]bool{"linked": linked, "configured": h.service.client.Configured(), "import_available": h.vision.Configured()})
 }
 
 func (h *Handler) events(w http.ResponseWriter, r *http.Request) {

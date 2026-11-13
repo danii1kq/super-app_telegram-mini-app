@@ -1,7 +1,6 @@
 # SruNal
 
-Соцсеть с лентой и чатами и super app в Telegram Mini App. В каталоге пять приложений:
-**SruDoc**, **SruDay**, **SruPulse**, **SruNotes**, **SruSplit**.
+Соцсеть с лентой, профилями и календарём внутри Telegram Mini App. Личные сообщения остаются в Telegram. В каталоге четыре приложения: **Docgen**, **SruPulse**, **SruNotes**, **SruSplit**. Календарь SruDay открывается отдельной основной вкладкой.
 
 Документация продукта и архитектуры находится в [`docs/`](docs/README.md).
 
@@ -21,7 +20,7 @@
 ```text
 web/src/
   app/        маршруты, провайдеры, сессия, тема, реестр приложений
-  core/       лента, чаты, профиль самой SruNal
+  core/       лента, публикации и профили самой SruNal
   apps/       doc, day, pulse, notes, split
   shared/     UI DocGen, HTTP-клиент, Telegram SDK, локализация
   styles/     токены и общие стили
@@ -29,10 +28,10 @@ backend/
   cmd/        api, worker, migrate
   internal/
     app/            сборка сервисов и маршрутов
-    core/           auth, user, social, chat, notify
+    core/           auth, user, social, notify
     apps/           doc, day, pulse, notes, split
     integration/    подтверждённые действия между приложениями
-    platform/       httpapi, postgres, secure, telegram, config
+    platform/       httpapi, postgres, secure, telegram, config, vision
 db/migrations/      SQL по этапам
 deploy/             Dockerfile, Compose, Caddyfile
 docs/               продукт и архитектура

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/shared/api/client';
+import { api, apiUpload } from '@/shared/api/client';
 import { dayKeys, type DayEvent } from './api';
 
 export function useConnectDay() {
@@ -28,5 +28,14 @@ export function useCreateDayEvent() {
     mutationFn: (input: { title: string; starts_at: string; ends_at: string; location: string }) => api<DayEvent>('/day/events', { method: 'POST', body: input }),
     retry: false,
     onSuccess: () => cache.invalidateQueries({ queryKey: dayKeys.all }),
+  });
+}
+
+export interface TimetableItem { title: string; starts_at: string; ends_at: string; location: string; uncertain: boolean }
+
+export function useReadTimetable() {
+  return useMutation({
+    mutationFn: (input: { file: File; week: string; timezone: string }) => apiUpload<{ items: TimetableItem[] }>(`/day/import/preview?week_start=${encodeURIComponent(input.week)}&timezone=${encodeURIComponent(input.timezone)}`, input.file, input.file.type || 'application/octet-stream', 'deepseek'),
+    retry: false,
   });
 }

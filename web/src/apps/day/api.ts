@@ -20,7 +20,7 @@ export const dayKeys = {
 export function useDayStatus(enabled = true) {
   return useQuery({
     queryKey: dayKeys.status,
-    queryFn: () => api<{ linked: boolean; configured: boolean }>('/apps/day/status'),
+    queryFn: () => api<{ linked: boolean; configured: boolean; import_available: boolean }>('/apps/day/status'),
     enabled,
   });
 }

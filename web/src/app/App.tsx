@@ -4,9 +4,6 @@ import { AppShell } from './AppShell';
 import { FeedPage } from '@/core/social/FeedPage';
 import { PostPage } from '@/core/social/PostPage';
 import { UserProfilePage } from '@/core/profile/UserProfilePage';
-import { ChatsPage } from '@/core/chat/ChatsPage';
-import { ChatPage } from '@/core/chat/ChatPage';
-import { CreateGroupPage } from '@/core/chat/CreateGroupPage';
 import { CataloguePage } from '@/apps/CataloguePage';
 import { ProfilePage } from '@/core/profile/ProfilePage';
 import { Skeleton } from '@/shared/ui';
@@ -37,12 +34,10 @@ export function App() {
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/posts/:id" element={<PostPage />} />
           <Route path="/people/:id" element={<UserProfilePage />} />
-          <Route path="/chats" element={<ChatsPage />} />
-          <Route path="/chats/new-group" element={<CreateGroupPage />} />
-          <Route path="/chats/:id" element={<ChatPage />} />
+          <Route path="/calendar/*" element={<DayApp />} />
           <Route path="/apps" element={<CataloguePage />} />
           <Route path="/apps/doc/*" element={<DocApp />} />
-          <Route path="/apps/day/*" element={<DayApp />} />
+          <Route path="/apps/day/*" element={<Navigate to="/calendar" replace />} />
           <Route path="/apps/pulse/*" element={<PulseApp />} />
           <Route path="/apps/notes/*" element={<NotesApp />} />
           <Route path="/apps/split/*" element={<SplitApp />} />
