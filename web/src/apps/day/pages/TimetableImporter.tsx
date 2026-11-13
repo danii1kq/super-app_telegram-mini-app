@@ -81,7 +81,7 @@ export function TimetableImporter({ week, available, onClose }: { week: Date; av
   if (items !== null) return <div className="flex flex-col gap-3 py-3">
     <p className="text-caption text-ink-2">{t('dayImportHint')}</p>
     {items.length === 0 ? <Banner tone="info" icon="event_busy" title={t('dayImportEmpty')} /> : items.map((item, index) => <TimetableRow key={index} item={item} />)}
-    <button type="button" onClick={onClose} className="min-h-12 rounded-xl bg-surface px-3 text-body-strong text-accent"><Icon name="calendar_month" size={20} /> {t('dayToday')}</button>
+    <button type="button" onClick={onClose} className="min-h-12 rounded-xl bg-surface px-3 text-body-strong text-accent"><Icon name="calendar_month" size={20} /> {t('dayBackCalendar')}</button>
   </div>;
 
   const rateLimited = read.error instanceof ApiError && read.error.code === 'import_rate_limit';

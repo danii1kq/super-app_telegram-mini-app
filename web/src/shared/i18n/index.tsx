@@ -13,6 +13,11 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  dayEventDetails: 'Событие',
+  dayEventReadonly: 'Изменять здесь можно только свои личные события без повторений. Общие, повторяющиеся и внешние события остаются в SruDay.',
+  dayEventUpdated: 'Изменения сохранены',
+  dayEventChanged: 'Событие уже изменилось. Обновите календарь и откройте его заново.',
+  dayBackCalendar: 'К календарю',
   calendar: 'Календарь',
   dayWeatherChoose: "Погода в вашем городе",
   dayWeatherCity: "Название города",
@@ -361,6 +366,11 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  dayEventDetails: 'Оқиға',
+  dayEventReadonly: 'Мұнда тек қайталанбайтын жеке оқиғаларыңызды өзгертуге болады. Ортақ, қайталанатын және сыртқы оқиғалар SruDay ішінде қалады.',
+  dayEventUpdated: 'Өзгерістер сақталды',
+  dayEventChanged: 'Оқиға өзгертілген. Күнтізбені жаңартып, қайта ашыңыз.',
+  dayBackCalendar: 'Күнтізбеге',
   calendar: 'Күнтізбе',
   dayWeatherChoose: "Қалаңыздағы ауа райы",
   dayWeatherCity: "Қала атауы",
@@ -707,6 +717,11 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  dayEventDetails: 'Event',
+  dayEventReadonly: 'Only your own private events without recurrence can be edited here. Shared, recurring and external events stay in SruDay.',
+  dayEventUpdated: 'Changes saved',
+  dayEventChanged: 'This event changed. Refresh the calendar and reopen it.',
+  dayBackCalendar: 'Back to calendar',
   calendar: 'Calendar',
   dayWeatherChoose: "Weather in your city",
   dayWeatherCity: "City name",

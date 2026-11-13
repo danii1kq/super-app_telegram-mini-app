@@ -53,6 +53,9 @@ type Event struct {
 	AllDay    bool      `json:"all_day"`
 	Location  string    `json:"location,omitempty"`
 	SourceRef string    `json:"source_ref,omitempty"`
+	Recurring bool      `json:"recurring,omitempty"`
+	Editable  bool      `json:"editable"`
+	Version   int       `json:"version,omitempty"`
 }
 
 type CreateEventInput struct {
@@ -80,7 +83,7 @@ func (c *Client) authenticate(ctx context.Context, initData string) (daySession,
 	if found && session.ExpiresAt.After(time.Now()) {
 		return session, nil
 	}
-	if err := c.do(ctx, http.MethodPost, "/api/v1/auth/telegram", "", map[string]string{"init_data": initData}, &session); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/api/v1/auth/telegram", "", map[string]string{"init_data": initData}, &session, 0); err != nil {
 		return daySession{}, err
 	}
 	if session.Token == "" || session.User.ID <= 0 || session.User.TelegramID != user.ID || !session.ExpiresAt.After(time.Now()) {
@@ -117,15 +120,16 @@ func (c *Client) ListEvents(ctx context.Context, initData string, from, to time.
 	query := url.Values{"from": {from.UTC().Format(time.RFC3339)}, "to": {to.UTC().Format(time.RFC3339)}}
 	var out struct {
 		Occurrences []struct {
-			EventID  int64     `json:"event_id"`
-			Title    string    `json:"title"`
-			StartsAt time.Time `json:"starts_at"`
-			EndsAt   time.Time `json:"ends_at"`
-			AllDay   bool      `json:"all_day"`
-			Location string    `json:"location"`
+			EventID   int64     `json:"event_id"`
+			Title     string    `json:"title"`
+			StartsAt  time.Time `json:"starts_at"`
+			EndsAt    time.Time `json:"ends_at"`
+			AllDay    bool      `json:"all_day"`
+			Location  string    `json:"location"`
+			Recurring bool      `json:"is_recurring"`
 		} `json:"occurrences"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/api/v1/events?"+query.Encode(), session.Token, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/v1/events?"+query.Encode(), session.Token, nil, &out, 0); err != nil {
 		c.forgetOnAuthError(initData, err)
 		return nil, err
 	}
@@ -137,7 +141,7 @@ func (c *Client) ListEvents(ctx context.Context, initData string, from, to time.
 		if item.EventID <= 0 || item.StartsAt.IsZero() || !item.EndsAt.After(item.StartsAt) {
 			return nil, httpapi.Conflict("day_error", "SruDay вернул некорректное событие")
 		}
-		events = append(events, Event{ID: strconv.FormatInt(item.EventID, 10), Title: item.Title, StartsAt: item.StartsAt, EndsAt: item.EndsAt, AllDay: item.AllDay, Location: item.Location})
+		events = append(events, Event{ID: strconv.FormatInt(item.EventID, 10), Title: item.Title, StartsAt: item.StartsAt, EndsAt: item.EndsAt, AllDay: item.AllDay, Location: item.Location, Recurring: item.Recurring})
 	}
 	return events, nil
 }
@@ -157,7 +161,7 @@ func (c *Client) CreateEvent(ctx context.Context, initData string, input CreateE
 		Location string    `json:"location"`
 	}
 	body := map[string]any{"title": input.Title, "starts_at": input.StartsAt, "ends_at": input.EndsAt, "all_day": input.AllDay, "location": input.Location, "visibility": "private"}
-	if err := c.do(ctx, http.MethodPost, "/api/v1/events", session.Token, body, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/api/v1/events", session.Token, body, &out, 0); err != nil {
 		c.forgetOnAuthError(initData, err)
 		return Event{}, err
 	}
@@ -180,7 +184,7 @@ func (c *Client) forgetOnAuthError(initData string, err error) {
 	}
 }
 
-func (c *Client) do(ctx context.Context, method, path, token string, body any, dst any) error {
+func (c *Client) do(ctx context.Context, method, path, token string, body any, dst any, version int) error {
 	if !c.Configured() {
 		return httpapi.Conflict("day_unavailable", "Подключение к SruDay ещё не настроено")
 	}
@@ -202,6 +206,9 @@ func (c *Client) do(ctx context.Context, method, path, token string, body any, d
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if version > 0 {
+		req.Header.Set("If-Match", strconv.Itoa(version))
+	}
 	response, err := c.http.Do(req)
 	if err != nil {
 		return httpapi.Conflict("day_unavailable", "SruDay сейчас недоступен. Перед повтором создания проверьте календарь")
@@ -209,6 +216,12 @@ func (c *Client) do(ctx context.Context, method, path, token string, body any, d
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return httpapi.Conflict("day_reauth_required", "SruDay не подтвердил вход. Нужны свежие данные Telegram и совместимый бот")
+	}
+	if response.StatusCode == http.StatusNotFound {
+		return httpapi.NotFound("Событие не найдено")
+	}
+	if response.StatusCode == http.StatusConflict || response.StatusCode == http.StatusPreconditionFailed {
+		return httpapi.Conflict("day_event_changed", "Событие уже изменилось, обновите календарь")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return httpapi.Conflict("day_error", "SruDay отклонил запрос. Проверьте календарь перед повтором")

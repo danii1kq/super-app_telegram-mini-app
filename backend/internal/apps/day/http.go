@@ -28,6 +28,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/apps/day/connect", h.auth.Middleware(http.HandlerFunc(h.connect)))
 	mux.Handle("DELETE /api/v1/apps/day/connect", h.auth.Middleware(http.HandlerFunc(h.disconnect)))
 	mux.Handle("POST /api/v1/day/events", h.auth.Middleware(http.HandlerFunc(h.create)))
+	mux.Handle("GET /api/v1/day/events/{id}", h.auth.Middleware(http.HandlerFunc(h.event)))
+	mux.Handle("PATCH /api/v1/day/events/{id}", h.auth.Middleware(http.HandlerFunc(h.update)))
 }
 
 func (h *Handler) status(w http.ResponseWriter, r *http.Request) {

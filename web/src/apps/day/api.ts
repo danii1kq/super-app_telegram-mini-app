@@ -9,6 +9,9 @@ export interface DayEvent {
   all_day: boolean;
   location?: string;
   source_ref?: string;
+  recurring?: boolean;
+  editable?: boolean;
+  version?: number;
 }
 
 export const dayKeys = {
@@ -32,6 +35,15 @@ export function useDayEvents(from: string, to: string, enabled: boolean) {
     select: (data) => data.events,
     enabled,
     refetchOnWindowFocus: 'always',
+  });
+}
+
+export function useDayEvent(id: string) {
+  return useQuery({
+    queryKey: ['day', 'event', id],
+    queryFn: ({ signal }) => api<DayEvent>(`/day/events/${id}`, { signal }),
+    refetchOnWindowFocus: false,
+    staleTime: 0,
   });
 }
 

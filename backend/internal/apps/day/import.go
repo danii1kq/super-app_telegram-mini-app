@@ -30,7 +30,7 @@ type TimetableItem struct {
 }
 
 func importWeek(week, zone string) (time.Time, *time.Location, error) {
-	if len(zone) > 80 {
+	if zone == "" || zone == "Local" || len(zone) > 80 {
 		return time.Time{}, nil, httpapi.BadRequest("invalid_timezone", "Некорректный часовой пояс")
 	}
 	location, err := time.LoadLocation(zone)
@@ -129,6 +129,24 @@ func (s *Service) reserveImport(ctx context.Context, userID int64) (time.Duratio
 	return time.Duration(math.Ceil(seconds)) * time.Second, err
 }
 
+func prepareTimetableImage(raw []byte) (media.Result, error) {
+	if len(raw) == 0 || len(raw) > vision.MaxImageBytes {
+		return media.Result{}, httpapi.BadRequest("invalid_image", "Выберите изображение до 10 МБ")
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 16_000_000/config.Height {
+		return media.Result{}, httpapi.BadRequest("invalid_image", "Выберите JPEG, PNG или WebP до 16 мегапикселей")
+	}
+	normalized, err := media.Normalize(raw)
+	if err != nil {
+		return media.Result{}, httpapi.BadRequest("invalid_image", "Изображение повреждено или не поддерживается")
+	}
+	if normalized.Width > 8192 || normalized.Height > 8192 || len(normalized.Data) > vision.MaxImageBytes {
+		return media.Result{}, httpapi.BadRequest("invalid_image", "Обрежьте изображение: максимальная сторона 8192 пикселя, размер до 10 МБ")
+	}
+	return normalized, nil
+}
+
 func (h *Handler) importTimetable(w http.ResponseWriter, r *http.Request) {
 	user, ok := auth.UserFrom(r.Context())
 	if !ok {
@@ -163,14 +181,9 @@ func (h *Handler) importTimetable(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_image", "Выберите изображение до 10 МБ"))
 		return
 	}
-	config, _, err := image.DecodeConfig(bytes.NewReader(raw))
-	if err != nil || int64(config.Width)*int64(config.Height) > 16_000_000 {
-		httpapi.WriteError(w, httpapi.BadRequest("invalid_image", "Выберите JPEG, PNG или WebP до 16 мегапикселей"))
-		return
-	}
-	normalized, err := media.Normalize(raw)
+	normalized, err := prepareTimetableImage(raw)
 	if err != nil {
-		httpapi.WriteError(w, httpapi.BadRequest("invalid_image", "Изображение повреждено или не поддерживается"))
+		httpapi.WriteError(w, err)
 		return
 	}
 	wait, err := h.service.reserveImport(r.Context(), user.ID)

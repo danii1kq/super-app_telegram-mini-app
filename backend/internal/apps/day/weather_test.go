@@ -67,6 +67,11 @@ func TestWeatherValidationAndFailureIsolation(t *testing.T) {
 	if _, err := client.Forecast(context.Background(), 1, 2, "Not/AZone"); err == nil {
 		t.Fatal("invalid timezone accepted")
 	}
+	for _, zone := range []string{"", "Local"} {
+		if _, err := client.Forecast(context.Background(), 1, 2, zone); err == nil {
+			t.Fatal("implicit timezone accepted")
+		}
+	}
 	for _, body := range []string{`{"daily":{"time":["2026-11-13"],"weather_code":[],"temperature_2m_min":[0],"temperature_2m_max":[1]}}`, `not json`, `{"daily":{"time":["bad"],"weather_code":[0],"temperature_2m_min":[0],"temperature_2m_max":[1]}}`} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) }))
 		client.forecastURL = server.URL

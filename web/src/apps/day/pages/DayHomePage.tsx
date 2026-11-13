@@ -5,6 +5,7 @@ import { useConnectDay, useDisconnectDay } from '../mutations';
 import { EventComposer } from './EventComposer';
 import { DayWeather, loadWeatherCity, WeatherPicker } from './WeatherPicker';
 import { TimetableImporter } from './TimetableImporter';
+import { EventEditor } from './EventEditor';
 import { AppHeader, Banner, Card, EmptyState, Icon, PrimaryButton, Screen, SectionLabel, Segmented, Skeleton } from '@/shared/ui';
 import { useT, useI18n } from '@/shared/i18n';
 import { formatDayMonth, formatDateTime, formatWeekday } from '@/shared/i18n/date';
@@ -12,15 +13,15 @@ import { useSession } from '@/app/session';
 import { useFeedback } from '@/shared/ui/toast';
 import { showConfirm } from '@/shared/telegram/sdk';
 
-function EventDetails({ event }: { event: DayEvent }) {
+function EventDetails({ event, onOpen }: { event: DayEvent; onOpen: () => void }) {
   const t = useT();
   const { lang } = useI18n();
   return (
-    <Card className="gap-1 p-4">
+    <Card><button type="button" onClick={onOpen} aria-label={`${t('dayEventDetails')}: ${event.title}`} className="flex min-h-16 w-full flex-col gap-1 rounded-[14px] p-4 text-left active:bg-neutral-soft">
       <span className="break-words text-body-strong text-ink [overflow-wrap:anywhere]">{event.title}</span>
       <span className="text-caption text-ink-2">{event.all_day ? t('dayAllDay') : `${formatDateTime(event.starts_at, lang)} - ${formatDateTime(event.ends_at, lang)}`}</span>
       {event.location ? <span className="break-words text-body-secondary text-ink-2 [overflow-wrap:anywhere]">{event.location}</span> : null}
-    </Card>
+    </button></Card>
   );
 }
 
@@ -37,6 +38,7 @@ export function DayHomePage() {
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [composing, setComposing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [weatherCity, setWeatherCity] = useState(loadWeatherCity);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const linked = status.data?.linked === true;
@@ -62,6 +64,8 @@ export function DayHomePage() {
   };
 
   if (importing) return <Screen header={<AppHeader title={t('dayImport')} onBack={() => setImporting(false)} leadingIcon="document_scanner" />} bottomSpace><TimetableImporter week={anchor} available={status.data?.import_available === true} onClose={() => setImporting(false)} /></Screen>;
+  if (editing) return <Screen header={<AppHeader title={t('dayEventDetails')} onBack={() => setEditing(null)} leadingIcon="event" />} bottomSpace><EventEditor id={editing} onClose={() => setEditing(null)} onSaved={(date) => { setEditing(null); setAnchor(startOfWeek(date)); }} /></Screen>;
+  if (composing) return <Screen header={<AppHeader title={t('dayCreate')} onBack={() => setComposing(false)} leadingIcon="event" />} bottomSpace><div className="pt-3"><EventComposer onCancel={() => setComposing(false)} onCreated={(date) => { setComposing(false); setAnchor(startOfWeek(date)); }} /></div></Screen>;
 
   return (
     <Screen header={<AppHeader title="SruDay" leadingIcon="calendar_month" trailing={
@@ -90,16 +94,16 @@ export function DayHomePage() {
           </div>
           <button type="button" onClick={() => setAnchor(startOfWeek(new Date()))} className="min-h-11 self-center px-4 text-body-secondary text-accent">{t('dayToday')}</button>
           {linked ? <Segmented options={[{ value: 'week', label: t('dayWeek') }, { value: 'agenda', label: t('dayAgenda') }]} value={view} onChange={setView} /> : null}
-          {linked ? composing ? <EventComposer onCancel={() => setComposing(false)} onCreated={(date) => { setComposing(false); setAnchor(startOfWeek(date)); }} /> : <PrimaryButton full onClick={() => setComposing(true)}>{t('dayCreate')}</PrimaryButton> : null}
-          {linked && !composing ? <button type="button" onClick={() => setImporting(true)} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface px-4 text-body-strong text-accent"><Icon name="document_scanner" size={22} />{t('dayImport')}</button> : null}
+          {linked ? <PrimaryButton full onClick={() => setComposing(true)}>{t('dayCreate')}</PrimaryButton> : null}
+          {linked ? <button type="button" onClick={() => setImporting(true)} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface px-4 text-body-strong text-accent"><Icon name="document_scanner" size={22} />{t('dayImport')}</button> : null}
           {events.isLoading ? <Skeleton className="h-28 w-full" /> : null}
           {events.isError ? <Banner tone="danger" icon="error" title={t('dayUnavailable')} action={<button type="button" onClick={() => void events.refetch()} className="min-h-11 font-semibold">{t('retry')}</button>} /> : null}
           {events.data?.length === 0 ? <EmptyState icon="event_available" title={t('dayNoEvents')} text={t('dayNoEventsText')} /> : null}
           {view === 'week' || !linked ? days.map((day) => <div key={day.date.toISOString()}>
             <SectionLabel>{formatWeekday(day.date, lang)}</SectionLabel>
             {weatherCity ? <DayWeather date={day.date} days={weather.data} loading={weather.isLoading} /> : null}
-            <div className="flex flex-col gap-2">{linked && day.events.length ? day.events.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} />) : <Card className="p-4 text-caption text-ink-2">{t(!linked ? 'dayConnectToSee' : events.isLoading ? 'loading' : events.isError ? 'dayUnavailable' : 'dayFree')}</Card>}</div>
-          </div>) : agenda.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} />)}
+            <div className="flex flex-col gap-2">{linked && day.events.length ? day.events.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} onOpen={() => setEditing(event.id)} />) : <Card className="p-4 text-caption text-ink-2">{t(!linked ? 'dayConnectToSee' : events.isLoading ? 'loading' : events.isError ? 'dayUnavailable' : 'dayFree')}</Card>}</div>
+          </div>) : agenda.map((event) => <EventDetails key={`${event.id}:${event.starts_at}`} event={event} onOpen={() => setEditing(event.id)} />)}
           {linked ? <button type="button" disabled={confirmingDisconnect || disconnect.isPending} onClick={() => void unlink()} className="min-h-11 px-4 text-body-secondary text-ink-2 disabled:opacity-50">{t('dayDisconnect')}</button> : null}
         </>
       </div>

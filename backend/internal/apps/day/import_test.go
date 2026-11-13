@@ -1,9 +1,14 @@
 package day
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
+	"image"
+	"image/png"
 	"os"
 	"strings"
 	"sync"
@@ -49,6 +54,11 @@ func TestTimetablePreviewValidatesWeekTimesAndUncertainty(t *testing.T) {
 	if _, _, err := importWeek("2026-03-02", "bad/zone"); err == nil {
 		t.Fatal("invalid timezone accepted")
 	}
+	for _, zone := range []string{"", "Local"} {
+		if _, _, err := importWeek("2026-03-02", zone); err == nil {
+			t.Fatal("implicit timezone accepted")
+		}
+	}
 	if !strings.Contains(timetablePrompt(week, zone.String()), "Do not create repeated weeks") {
 		t.Fatal("missing explicit recurrence boundary")
 	}
@@ -61,6 +71,35 @@ func TestTimetablePreviewValidatesWeekTimesAndUncertainty(t *testing.T) {
 	long, err := timetableItems(oversized, week, zone)
 	if err != nil || len(long[0].Title) != 200 || !long[0].Uncertain {
 		t.Fatal("truncated content must be marked uncertain")
+	}
+}
+
+func TestTimetableImageBoundsBeforeQuotaOrProvider(t *testing.T) {
+	var imageBytes bytes.Buffer
+	if err := png.Encode(&imageBytes, image.NewNRGBA(image.Rect(0, 0, 40, 20))); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := prepareTimetableImage(imageBytes.Bytes()); err != nil || result.Mime != "image/jpeg" {
+		t.Fatal("valid photo failed", err)
+	}
+	imageBytes.Reset()
+	if err := png.Encode(&imageBytes, image.NewNRGBA(image.Rect(0, 0, 9000, 1))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := prepareTimetableImage(imageBytes.Bytes()); err == nil || !strings.Contains(err.Error(), "8192") {
+		t.Fatal("long narrow image reached provider", err)
+	}
+	var header bytes.Buffer
+	header.Write([]byte{137, 80, 78, 71, 13, 10, 26, 10})
+	binary.Write(&header, binary.BigEndian, uint32(13))
+	chunk := append([]byte("IHDR"), make([]byte, 13)...)
+	binary.BigEndian.PutUint32(chunk[4:8], 8000)
+	binary.BigEndian.PutUint32(chunk[8:12], 3000)
+	chunk[12], chunk[13] = 8, 6
+	header.Write(chunk)
+	binary.Write(&header, binary.BigEndian, crc32.ChecksumIEEE(chunk))
+	if _, err := prepareTimetableImage(header.Bytes()); err == nil || !strings.Contains(err.Error(), "16") {
+		t.Fatal("oversized pixel header accepted", err)
 	}
 }
 

@@ -144,7 +144,7 @@ func (c *WeatherClient) Cities(ctx context.Context, query, language string) ([]W
 }
 
 func (c *WeatherClient) Forecast(ctx context.Context, latitude, longitude float64, zone string) ([]WeatherDay, error) {
-	if !validCoordinates(latitude, longitude) || len(zone) > 80 {
+	if !validCoordinates(latitude, longitude) || zone == "" || zone == "Local" || len(zone) > 80 {
 		return nil, httpapi.BadRequest("invalid_location", "Выберите город и корректный часовой пояс")
 	}
 	if _, err := time.LoadLocation(zone); err != nil {
