@@ -13,6 +13,7 @@ const DayApp = lazy(() => import('@/apps/day/routes'));
 const PulseApp = lazy(() => import('@/apps/pulse/routes'));
 const NotesApp = lazy(() => import('@/apps/notes/routes'));
 const SplitApp = lazy(() => import('@/apps/split/routes'));
+const GameApp = lazy(() => import('@/apps/game/routes'));
 const FarmApp = lazy(() => import('@/apps/farm/routes'));
 const TinderApp = lazy(() => import('@/apps/tinder/routes'));
 
@@ -42,7 +43,11 @@ export function App() {
           <Route path="/apps/pulse/*" element={<PulseApp />} />
           <Route path="/apps/notes/*" element={<NotesApp />} />
           <Route path="/apps/split/*" element={<SplitApp />} />
-          <Route path="/apps/farm/*" element={<FarmApp />} />
+          <Route path="/apps/game/*" element={<GameApp />} />
+          <Route path="/apps/game/farm/*" element={<FarmApp />} />
+          <Route path="/apps/game/tinder/*" element={<TinderApp />} />
+          {/* Old paths stay alive: a bookmark or a Telegram button may still point here. */}
+          <Route path="/apps/farm/*" element={<Navigate to="/apps/game/farm" replace />} />
           <Route path="/apps/tinder/*" element={<TinderApp />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/feed" replace />} />

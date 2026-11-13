@@ -107,12 +107,12 @@ export default function FarmRoutes() {
     setModal({ kind: 'help' });
   }, []);
   const act = (action: FarmAction) => { if (!mutation.isPending) { sound.prime(); mutation.mutate(['crash_start','crash_cashout','plant_upgrade','flip_create','flip_join','flip_cancel'].includes(action.kind) ? {...action,request_id:crypto.randomUUID()} : action); } };
-  const back = () => navigate('/apps');
+  const back = () => navigate('/apps/game');
 
   if (session.status !== 'ready' || !farm.data) {
     const failed = farm.isError || session.status === 'error' || session.status === 'outside';
     return <div className="farm-app farm-loading"><BackButton onClick={back}/><Glyph name="sprout" size={48}/><h1>SruFarm</h1><p>{failed ? 'Не удалось открыть ферму' : 'Готовим твой маленький сад…'}</p>
-      {failed && <><button className="farm-primary" onClick={() => { session.retry(); void farm.refetch(); }}>Попробовать ещё</button><Link to="/apps">Вернуться к приложениям</Link></>}
+      {failed && <><button className="farm-primary" onClick={() => { session.retry(); void farm.refetch(); }}>Попробовать ещё</button><Link to="/apps/game">Вернуться к играм</Link></>}
     </div>;
   }
 
@@ -155,8 +155,8 @@ export default function FarmRoutes() {
     <BackButton onClick={back}/>
     <Atmosphere/>
     <header className="farm-topbar"><div className="farm-topbar-inner">
-      <Link to="/apps" className="farm-back" aria-label="К приложениям"><Glyph name="arrow" size={19}/></Link>
-      <Link className="farm-brand" to="/apps/farm" onClick={() => setTab('garden')}><span className="farm-brand-mark"><Glyph name="sprout" size={25}/></span>Sru<span>Farm</span><span className="farm-beta">BETA</span></Link>
+      <Link to="/apps/game" className="farm-back" aria-label="К играм"><Glyph name="arrow" size={19}/></Link>
+      <Link className="farm-brand" to="/apps/game/farm" onClick={() => setTab('garden')}><span className="farm-brand-mark"><Glyph name="sprout" size={25}/></span>Sru<span>Farm</span><span className="farm-beta">BETA</span></Link>
       <div className="farm-topbar-right"><button className="farm-sound-toggle" onClick={sound.toggle} aria-label={sound.enabled ? 'Выключить звуки' : 'Включить звуки'} aria-pressed={sound.enabled} title={sound.enabled ? 'Звуки включены' : 'Звуки выключены'}><Glyph name={sound.enabled ? 'sound' : 'muted'} size={18}/></button><span className="farm-wallet"><Coins value={state.coins}/>{effect?.kind === 'sell' && <span className="farm-coin-pop" aria-hidden="true">+{number(effect.coins)}</span>}</span><button className="farm-avatar" onClick={() => setTab('top')} aria-label="Мой рейтинг">{(session.me?.public_name ?? 'Ф').slice(0,1).toUpperCase()}</button></div>
     </div></header>
 
