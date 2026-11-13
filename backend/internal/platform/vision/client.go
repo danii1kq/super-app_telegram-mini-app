@@ -8,12 +8,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdimage "image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	_ "golang.org/x/image/webp"
 )
 
 var (
@@ -62,6 +67,10 @@ func (c *Client) Extract(ctx context.Context, image []byte, mime, prompt string)
 		return nil, ErrUnavailable
 	}
 	if len(image) == 0 || len(image) > MaxImageBytes || (mime != "image/jpeg" && mime != "image/png" && mime != "image/webp") {
+		return nil, ErrUnreadable
+	}
+	config, format, err := stdimage.DecodeConfig(bytes.NewReader(image))
+	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 8192 || config.Height > 8192 || mime != "image/"+format {
 		return nil, ErrUnreadable
 	}
 	select {

@@ -1,14 +1,33 @@
 package vision
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func testImage(t *testing.T, width, height int) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	if err := png.Encode(&out, image.NewRGBA(image.Rect(0, 0, width, height))); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}
+
+func TestVisionRejectsOversizedImageBeforeNetwork(t *testing.T) {
+	_, err := NewClient("", "test-only-secret", "").Extract(context.Background(), testImage(t, 8193, 1), "image/png", "JSON")
+	if !errors.Is(err, ErrUnreadable) {
+		t.Fatal("oversized image accepted")
+	}
+}
 
 func TestVisionRequestAndPrivateFailures(t *testing.T) {
 	calls := 0
@@ -39,18 +58,18 @@ func TestVisionRequestAndPrivateFailures(t *testing.T) {
 	}))
 	defer server.Close()
 	client := NewClient(server.URL, "test-only-secret", "")
-	result, err := client.Extract(context.Background(), []byte("fixture"), "image/png", "Return JSON items")
+	result, err := client.Extract(context.Background(), testImage(t, 2, 2), "image/png", "Return JSON items")
 	if err != nil || string(result) != "{\"items\":[]}" {
 		t.Fatalf("read: %s %v", result, err)
 	}
-	_, err = client.Extract(context.Background(), []byte("fixture"), "image/png", "Return JSON items")
+	_, err = client.Extract(context.Background(), testImage(t, 2, 2), "image/png", "Return JSON items")
 	if !errors.Is(err, ErrUnreadable) || strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "private") {
 		t.Fatal("provider error leaked private data")
 	}
 }
 
 func TestVisionLimitsAndRedirects(t *testing.T) {
-	if _, err := NewClient("", "", "").Extract(context.Background(), []byte("x"), "image/png", ""); !errors.Is(err, ErrUnavailable) {
+	if _, err := NewClient("", "", "").Extract(context.Background(), testImage(t, 2, 2), "image/png", ""); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("missing key accepted")
 	}
 	for _, target := range []string{"http://example.com", "https://user:pass@example.com", "https://example.com?token=x"} {
@@ -64,16 +83,16 @@ func TestVisionLimitsAndRedirects(t *testing.T) {
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, destination.URL, 307) }))
 	defer source.Close()
 	c := NewClient(source.URL, "test-only-secret", "")
-	if _, err := c.Extract(context.Background(), []byte("x"), "image/png", ""); !errors.Is(err, ErrUnreadable) || reached {
+	if _, err := c.Extract(context.Background(), testImage(t, 2, 2), "image/png", ""); !errors.Is(err, ErrUnreadable) || reached {
 		t.Fatal("redirect followed")
 	}
 	for i := 0; i < cap(c.slots); i++ {
 		c.slots <- struct{}{}
 	}
-	if _, err := c.Extract(context.Background(), []byte("x"), "image/png", ""); !errors.Is(err, ErrBusy) {
+	if _, err := c.Extract(context.Background(), testImage(t, 2, 2), "image/png", ""); !errors.Is(err, ErrBusy) {
 		t.Fatal("unbounded parallel inference")
 	}
-	if _, err := c.Extract(context.Background(), []byte("x"), "image/svg+xml", ""); !errors.Is(err, ErrUnreadable) {
+	if _, err := c.Extract(context.Background(), testImage(t, 2, 2), "image/svg+xml", ""); !errors.Is(err, ErrUnreadable) {
 		t.Fatal("unsafe image accepted")
 	}
 }
@@ -83,7 +102,7 @@ func TestVisionRejectsBrokenAndTruncatedJSON(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": sample.content}, "finish_reason": sample.finish}}})
 		}))
-		_, err := NewClient(server.URL, "x", "").Extract(context.Background(), []byte("x"), "image/png", "")
+		_, err := NewClient(server.URL, "x", "").Extract(context.Background(), testImage(t, 2, 2), "image/png", "")
 		server.Close()
 		if !errors.Is(err, ErrUnreadable) {
 			t.Fatal("invalid model output accepted")
