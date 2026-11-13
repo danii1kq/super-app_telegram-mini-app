@@ -60,6 +60,7 @@ interface TelegramWebApp {
   };
   isVersionAtLeast?(version: string): boolean;
   requestWriteAccess?(callback: (allowed: boolean) => void): void;
+  openInvoice?(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
   onEvent(event: string, handler: () => void): void;
   offEvent(event: string, handler: () => void): void;
   setHeaderColor(color: string): void;

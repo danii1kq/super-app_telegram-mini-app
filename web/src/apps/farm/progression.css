@@ -1,0 +1,16 @@
+.farm-progression{background:var(--farm-surface);border:1px solid var(--farm-line);border-radius:18px;padding:24px;margin-bottom:22px}
+.farm-progression>header{display:flex;align-items:center;gap:18px}
+.farm-progression-emblem{width:64px;height:64px;display:grid;place-items:center;flex-shrink:0;border:1px solid var(--farm-line);border-radius:18px;color:var(--world-accent);background:var(--world-soft)}
+.farm-progression h2{font-size:21px;font-weight:550;letter-spacing:-.6px;margin:4px 0}
+.farm-progression p{font-size:12px;line-height:1.7;color:var(--farm-muted);max-width:520px;margin:0}
+.farm-progression-count{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;white-space:nowrap;color:var(--farm-muted);font-size:10px}
+.farm-progression-count>strong{font-size:28px;color:var(--world-accent);font-weight:550;line-height:1.3}.farm-progression-count small{font-size:14px;color:var(--farm-muted);font-weight:400}
+.farm-next-unlocks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:22px;border-top:1px solid var(--farm-line)}
+.farm-next-unlocks>div{display:flex;align-items:center;gap:11px;padding:18px 16px 0 0;min-width:0}.farm-next-unlocks>div>div{min-width:0}.farm-next-unlocks>div>svg{margin-left:auto;flex-shrink:0;color:var(--world-accent)}
+.farm-unlock-level{font-size:21px;font-weight:550;line-height:1.2;color:var(--world-accent);text-align:center;min-width:40px}.farm-unlock-level small{display:block;font-size:9px;color:var(--farm-muted);font-weight:400;margin-top:4px}
+.farm-next-unlocks strong{font-size:11px;font-weight:550;display:block;line-height:1.5}.farm-next-unlocks div>span:not(.farm-unlock-level){display:block;color:var(--farm-muted);font-size:10px;margin-top:4px}
+.farm-upgrade-card .farm-upgrade-stage{display:inline-flex;padding:3px 8px;border-radius:5px;background:var(--world-soft);color:var(--world-accent);font-size:10px;margin-bottom:9px}
+.farm-upgrade-progress{width:100%;height:5px;border-radius:5px;overflow:hidden;background:var(--farm-line);margin-top:22px}.farm-upgrade-progress>span{display:block;background:var(--world-accent);height:100%;border-radius:inherit}
+.farm-upgrade-price{display:flex;gap:8px;justify-content:space-between;align-items:center;font-size:11px;width:100%;margin:0 0 12px;color:var(--farm-muted)}.farm-upgrade-price strong{display:inline-flex;align-items:center;gap:4px;color:var(--world-coin);font-size:13px;font-weight:550;white-space:nowrap}
+.farm-upgrade-card.level-locked .farm-upgrade-art{opacity:.7}.farm-app .farm-level-next{font-size:10px;color:var(--farm-muted);margin-top:6px;display:block;line-height:1.5}
+@media(max-width:760px){.farm-progression{padding:20px}.farm-progression-emblem{width:48px;height:48px;border-radius:14px}.farm-progression-count{display:none}.farm-progression h2{font-size:18px}.farm-progression>header{align-items:flex-start;gap:12px}.farm-next-unlocks{grid-template-columns:1fr}.farm-next-unlocks>div{padding:13px 0}.farm-next-unlocks>div+div{border-top:1px dashed var(--farm-line)}.farm-next-unlocks strong{font-size:12px}.farm-upgrade-price{flex-wrap:wrap}.farm-upgrade-card .farm-upgrade-stage{margin-bottom:8px}}

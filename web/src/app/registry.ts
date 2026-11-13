@@ -10,7 +10,7 @@
 
 import type { DictKey } from '@/shared/i18n';
 
-export type AppId = 'doc' | 'pulse' | 'notes' | 'split';
+export type AppId = 'doc' | 'pulse' | 'notes' | 'split' | 'game' | 'tinder';
 
 export interface AppMeta {
   id: AppId;
@@ -25,6 +25,8 @@ export interface AppMeta {
 }
 
 export const APPS: readonly AppMeta[] = [
+  {id:'game',path:'/apps/game',title:'SruGame',tagline:'appGameTagline',icon:'sports_esports',ready:true},
+  {id:'tinder',path:'/apps/tinder',title:'SruTinder',tagline:'appTinderTagline',icon:'favorite',ready:true},
   {
     id: 'doc',
     path: '/apps/doc',

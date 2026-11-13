@@ -71,6 +71,16 @@ export async function apiUpload<T>(path: string, file: Blob, mime: string, conse
   return readResponse<T>(response);
 }
 
+/** Fetch private media using the same in-memory session as JSON requests. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const headers: Record<string,string> = {};
+  if(sessionToken) headers.Authorization=`Bearer ${sessionToken}`;
+  const response=await fetch(`/api/v1${path}`,{headers});
+  if(response.status===401){clearSessionToken();onUnauthorized?.();}
+  if(!response.ok)throw new ApiError(response.status,'blob_failed',`Запрос не выполнен (${response.status})`);
+  return response.blob();
+}
+
 async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     clearSessionToken();

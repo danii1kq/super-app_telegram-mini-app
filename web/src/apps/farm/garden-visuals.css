@@ -1,0 +1,48 @@
+.farm-app{--scene-sky:#dcead0;--scene-ground:#d8e5bd;--scene-hill:#b6cc9d;--scene-cloud:#fff9df;--scene-path:#d6c7a4;--scene-path-light:#ece0c2;--scene-roof:#b67e61;--scene-wall:#dfbb89;--scene-door:#8d7458;--scene-tree:#739b6c;--scene-glass:#d1e8cf;--scene-frame:#89a28b;--scene-fence:#acb68c;--scene-pond-edge:#b2c6a1;--scene-water:#92b8ab;--scene-sign:#fff2cc;--scene-sign-ink:#596b47}
+.farm-app.theme-tropical{--scene-sky:#c5e6d8;--scene-ground:#c8dfb6;--scene-hill:#98c5a3;--scene-path:#d9cc9e;--scene-path-light:#f0e4ba;--scene-roof:#a76f55;--scene-wall:#e4c7a0;--scene-tree:#4e977d;--scene-glass:#b2e1cd;--scene-frame:#71a392;--scene-fence:#98b68d;--scene-water:#73bdba;--scene-pond-edge:#a8cbaa}
+.farm-app.theme-lunar{--scene-sky:#222b49;--scene-ground:#38465b;--scene-hill:#313b55;--scene-cloud:#a3a7c4;--scene-path:#555975;--scene-path-light:#7b7b97;--scene-roof:#555477;--scene-wall:#777492;--scene-door:#454963;--scene-tree:#526b73;--scene-glass:#8ba8b8;--scene-frame:#637e8c;--scene-fence:#707c91;--scene-pond-edge:#526475;--scene-water:#617e9c;--scene-sign:#68627e;--scene-sign-ink:#efdfc8}
+.farm-app.theme-enchanted{--scene-sky:#35364f;--scene-ground:#485966;--scene-hill:#3c4f5a;--scene-cloud:#9ebbb7;--scene-path:#6e6881;--scene-path-light:#92879c;--scene-roof:#71637e;--scene-wall:#9b88a0;--scene-door:#5e576e;--scene-tree:#6a9a8a;--scene-glass:#b1d8bc;--scene-frame:#88afa0;--scene-fence:#79968c;--scene-pond-edge:#64877d;--scene-water:#82b3ac;--scene-sign:#66867a;--scene-sign-ink:#e3f0d7}
+.farm-app.theme-autumn{--scene-sky:#f1dfba;--scene-ground:#dfceaa;--scene-hill:#c8b48b;--scene-path:#cbb68d;--scene-path-light:#efdfbc;--scene-roof:#ab6e53;--scene-wall:#e0b282;--scene-door:#8c694e;--scene-tree:#b18a58;--scene-glass:#d2dbbb;--scene-frame:#989f7c;--scene-fence:#b49772;--scene-pond-edge:#b9b99b;--scene-water:#9cae9b;--scene-sign:#f5dfb0;--scene-sign-ink:#76562c}
+.farm-app.theme-frost{--scene-sky:#d8e9ef;--scene-ground:#d2e1e7;--scene-hill:#b6cdd5;--scene-cloud:#fff;--scene-path:#b9ced5;--scene-path-light:#ecf4ef;--scene-roof:#7e9cae;--scene-wall:#b9cbd1;--scene-door:#6d8b9b;--scene-tree:#8eafb1;--scene-glass:#e5f5f6;--scene-frame:#95b6c2;--scene-fence:#a6c0c8;--scene-pond-edge:#acc9d0;--scene-water:#a0c8da;--scene-sign:#ecf6f5;--scene-sign-ink:#4c7181}
+.farm-app .farm-garden{padding:156px 42px 46px;background:var(--scene-ground);background-image:radial-gradient(ellipse at 50% 25%,#ffffff10,transparent 65%);min-height:505px}
+.farm-app .farm-garden::before{inset:140px 0 0;opacity:.2;background-image:radial-gradient(var(--scene-tree) .8px,transparent 1px);background-size:17px 23px}
+.farm-village{z-index:0}
+.farm-village-art{position:absolute;top:0;left:0;width:100%;height:190px}
+.farm-village-moon{display:none}
+.theme-lunar .farm-village-sun,.theme-enchanted .farm-village-sun{display:none}
+.theme-lunar .farm-village-moon,.theme-enchanted .farm-village-moon{display:block}
+.farm-village-clouds{animation:farm-village-clouds 16s ease-in-out infinite alternate}
+.farm-village-ripple{transform-origin:232px 137px;animation:farm-village-ripple 3s ease-out infinite}
+.farm-village-edge{position:absolute;bottom:35px;width:36px;height:70%;opacity:.45;background-image:radial-gradient(ellipse,var(--scene-tree) 0 18%,transparent 20%),radial-gradient(ellipse,var(--scene-path-light) 0 7%,transparent 9%);background-size:27px 42px,31px 63px;background-position:0 0,12px 20px}
+.farm-village-edge.edge-left{left:-8px;transform:rotate(-3deg)}
+.farm-village-edge.edge-right{right:-8px;transform:rotate(3deg)}
+.farm-app .farm-plots{gap:26px;max-width:460px}
+.farm-app .farm-plot{height:165px;padding-bottom:16px}
+.farm-app .farm-plot-soil{height:132px;top:26px;border-radius:15px;background-image:linear-gradient(145deg,#ffffff12,transparent 45%,#00000013);box-shadow:inset 0 5px #ffffff12,inset 0 -7px #0000000b,0 7px #1d35251b,0 12px 12px #1d352514}
+.farm-app .farm-plot-soil::after{inset:10px 12px 20px;background:repeating-linear-gradient(0deg,transparent 0 19px,#544a3d 20px 22px,transparent 23px 29px);opacity:.18}
+.farm-app .farm-plot.empty .farm-plot-soil{box-shadow:inset 0 4px #ffffff16,inset 0 -5px #00000008,0 6px #1d352517}
+.farm-app .farm-plot>.farm-crop-art{width:121px;height:121px;top:-7px;z-index:1}
+.farm-app .farm-plot-name{z-index:2;color:var(--farm-ink);background:var(--farm-surface);border:1px solid var(--farm-line);border-radius:7px;padding:2px 9px;text-shadow:none;max-width:calc(100% - 20px);font-size:12px;line-height:1.5}
+.farm-app .farm-plot-status{z-index:2;font-size:11px;min-width:78px;background:var(--scene-path-light);color:var(--scene-sign-ink);box-shadow:0 2px 3px #25392d15}
+.farm-app .farm-plot-care{z-index:2;top:37px;right:10px;color:var(--scene-sign-ink);background:var(--scene-sign);border:1px solid #ffffff22;box-shadow:0 2px 3px #00000012}
+.farm-app .farm-plot.empty .farm-plot-name{background:transparent;border-color:transparent;box-shadow:none;font-size:12px}
+.farm-app .farm-plot.empty .farm-empty-caption{font-size:10px;z-index:2}
+.farm-app .farm-growth-track{bottom:8px;background:#ffffff35;height:3px;width:70px;z-index:2}
+.farm-app .farm-growth-track>span{background:var(--scene-tree)}
+.farm-app .farm-plot.ready .farm-plot-soil{border-color:var(--world-accent);box-shadow:inset 0 5px #ffffff12,0 6px #1d35251b,0 0 0 3px #ffffff1a,0 0 24px color-mix(in srgb,var(--world-accent) 20%,transparent)}
+.farm-app .farm-plot.ready .farm-plot-status{color:var(--world-accent-ink);background:var(--world-accent)}
+.farm-app .farm-plot.ready::before{content:'';position:absolute;left:18%;top:15px;width:9px;height:9px;background:var(--world-accent);clip-path:polygon(50% 0,65% 35%,100% 50%,65% 65%,50% 100%,35% 65%,0 50%,35% 35%);animation:farm-harvest-spark 2.6s ease-in-out infinite;z-index:2}
+.farm-app .farm-plot.ready::after{content:'';position:absolute;left:50%;top:24px;width:112px;height:100px;transform:translateX(-50%);background:radial-gradient(ellipse,#fff6c333,transparent 65%);pointer-events:none}
+.farm-packet.orchard{background:#f1e3b7;border-color:#c7ab69;box-shadow:5px 7px 0 #947a4130,inset -5px 0 #e3c782;color:#816b3d}
+.farm-packet.orchard .farm-packet-stitch{background:#d3bd82;border-color:#b99c5d}
+.farm-pack-card.orchard .farm-pack-visual{background:radial-gradient(ellipse,#e6d9ac80,transparent 70%);border-radius:20px}
+.farm-pack-card.orchard .farm-pack-orbit{background:#e6d9ad}
+.farm-app .farm-seed-card>.farm-crop-art,.farm-app .farm-discovery>.farm-crop-art{filter:drop-shadow(0 6px 7px #26372f10)}
+.farm-app.theme-frost .farm-village-roof{stroke:#eaf5f5;stroke-width:3}
+@keyframes farm-village-clouds{from{transform:translateX(-8px)}to{transform:translateX(8px)}}
+@keyframes farm-village-ripple{0%{opacity:.7;transform:scale(.75)}100%{opacity:0;transform:scale(1.8)}}
+@keyframes farm-harvest-spark{0%,100%{opacity:.2;transform:scale(.7) rotate(0)}50%{opacity:.9;transform:scale(1.1) rotate(90deg)}}
+@media(max-width:1000px){.farm-app .farm-garden{padding:150px 24px 40px}.farm-village-art{height:170px}}
+@media(max-width:760px){.farm-app .farm-garden{padding:145px 42px 36px}.farm-village-art{height:175px}}
+@media(max-width:500px){.farm-app .farm-garden{padding:124px 17px 32px}.farm-village-art{height:145px}.farm-app .farm-plots{gap:22px 15px}.farm-app .farm-plot{height:157px}.farm-app .farm-plot-soil{height:124px}.farm-app .farm-plot>.farm-crop-art{width:112px;height:112px;top:-5px}.farm-app .farm-plot-name{font-size:11px;padding:2px 7px;max-width:calc(100% - 8px)}.farm-app .farm-plot-care{right:7px;top:37px;padding:3px}.farm-app .farm-plot-care>svg{width:12px;height:12px}.farm-village-edge{opacity:.25}.farm-app .farm-plot.empty .farm-plot-name{font-size:11px}.farm-app .farm-plot.empty .farm-empty-caption{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.farm-village-clouds,.farm-village-ripple,.farm-app .farm-plot.ready::before{animation:none!important}.farm-village-ripple{opacity:.3}}

@@ -8,11 +8,14 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/danii1kq/srunal/internal/apps/aura"
 	"github.com/danii1kq/srunal/internal/apps/day"
 	"github.com/danii1kq/srunal/internal/apps/doc"
+	"github.com/danii1kq/srunal/internal/apps/farm"
 	"github.com/danii1kq/srunal/internal/apps/notes"
 	"github.com/danii1kq/srunal/internal/apps/pulse"
 	"github.com/danii1kq/srunal/internal/apps/split"
+	"github.com/danii1kq/srunal/internal/apps/tinder"
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/core/social"
 	"github.com/danii1kq/srunal/internal/core/user"
@@ -103,6 +106,20 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	}
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
+	tinderService := tinder.NewService(pool, content)
+	tinderService.SetDelivery(delivery)
+	tinder.NewHandler(tinderService, authService).Register(mux)
+	aura.NewHandler(aura.NewService(pool), authService).Register(mux)
+	farmHandler := farm.NewHandler(pool, authService)
+	if cfg.DevInsecureKeys && pool != nil {
+		if err = farmHandler.SeedDevThemes(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.FarmStarsEnabled {
+		farmHandler.EnableStars(telegram.NewClient(cfg.BotToken), index, cfg.WebhookSecret)
+	}
+	farmHandler.Register(mux)
 
 	integration.NewHandler(
 		integration.NewService(pool, docService, dayService, notesService, authService),

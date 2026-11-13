@@ -136,9 +136,30 @@ func (w *Worker) deliver(ctx context.Context, item job) {
 		w.fail(ctx, item, "settings lookup failed", time.Minute)
 		return
 	}
-	if !allowed || !enabled {
+	if !allowed || (!enabled && !strings.HasPrefix(item.kind, "tinder.")) {
 		w.mark(ctx, item, "skipped", "notifications disabled")
 		return
+	}
+	if strings.HasPrefix(item.kind, "tinder.") {
+		if !allowed {
+			w.mark(ctx, item, "skipped", "notifications disabled")
+			return
+		}
+		column := "tinder_like_notifications"
+		if item.kind == "tinder.matched" {
+			column = "tinder_match_notifications"
+		} else if item.kind != "tinder.liked" {
+			w.mark(ctx, item, "failed", "unknown tinder event")
+			return
+		}
+		if err := w.pool.QueryRow(ctx, `SELECT `+column+` FROM user_settings WHERE user_id=$1`, item.userID).Scan(&enabled); err != nil {
+			w.fail(ctx, item, "settings lookup failed", time.Minute)
+			return
+		}
+		if !enabled {
+			w.mark(ctx, item, "skipped", "notifications disabled")
+			return
+		}
 	}
 	if item.subject != nil && strings.HasPrefix(*item.subject, "debt:") {
 		debtID, err := strconv.ParseInt(strings.TrimPrefix(*item.subject, "debt:"), 10, 64)
@@ -200,8 +221,11 @@ func (w *Worker) deliver(ctx context.Context, item job) {
 		return
 	}
 
-	raw, err := w.delivery.Open(secure.Sealed{KeyID: item.keyID, Ciphertext: item.sealed},
-		noticeAAD(item.userID, item.dedupeKey))
+	aad := noticeAAD(item.userID, item.dedupeKey)
+	if strings.HasPrefix(item.kind, "tinder.") {
+		aad = "tinder_notice:" + strconv.FormatInt(item.userID, 10) + ":" + item.dedupeKey
+	}
+	raw, err := w.delivery.Open(secure.Sealed{KeyID: item.keyID, Ciphertext: item.sealed}, aad)
 	if err != nil {
 		w.mark(ctx, item, "failed", "payload cannot be opened")
 		return
@@ -212,7 +236,7 @@ func (w *Worker) deliver(ctx context.Context, item job) {
 		return
 	}
 
-	if !showAmounts {
+	if !showAmounts && !strings.HasPrefix(item.kind, "tinder.") {
 		body.Text = "SruSplit: есть обновление. Откройте приложение для подробностей."
 		if lang == "kk" {
 			body.Text = "SruSplit: жаңарту бар. Мәліметтерді қолданбадан қараңыз."
