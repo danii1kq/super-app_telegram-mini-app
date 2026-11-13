@@ -26,6 +26,10 @@ export interface Receipt {
   /** Stable code, translated by the UI: unavailable or unreadable. */
   ocr_error?: 'unavailable' | 'unreadable';
   saved_expense_id?: string;
+  image_state?: 'none' | 'stored' | 'purged' | 'processing';
+  image_bytes?: number;
+  image_width?: number;
+  image_height?: number;
 }
 
 export interface Allocation {
@@ -121,6 +125,7 @@ export function useUploadReceipt(groupId: string) {
         `/split/groups/${groupId}/receipts`,
         file,
         file.type || 'application/octet-stream',
+        'deepseek',
       ),
     onSuccess: (receipt) => {
       queryClient.setQueryData(receiptKeys.one(receipt.id), receipt);

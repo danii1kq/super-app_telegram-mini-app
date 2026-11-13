@@ -192,3 +192,10 @@ func TestReceiptWeightsAvoidOverflow(t *testing.T) {
 		t.Fatal("accepted overflowing weights")
 	}
 }
+
+func TestReceiptServiceWithRoundedZeroShare(t *testing.T) {
+	allocation := Allocate(Receipt{TotalMinor: 2, Service: 1, Items: []ReceiptItem{{ID: 1, Name: "Tiny", Quantity: 1, AmountMinor: 1, Units: map[int64]int{1: 1, 2: 1, 3: 1}}}}, 1)
+	if allocation.Difference != 0 || allocation.SumShares != 2 || allocation.PerPerson[1] != 2 {
+		t.Fatalf("service must not disappear with zero-rounded shares: %#v", allocation)
+	}
+}

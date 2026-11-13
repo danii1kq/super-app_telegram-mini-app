@@ -151,6 +151,10 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		return Receipt{}, httpapi.Validation(map[string]string{"image": "Поддерживаются JPEG, PNG и WebP"}, "Проверьте поля")
 	}
 
+	if err := s.checkReceiptBudget(ctx, s.pool, authorID); err != nil {
+		return Receipt{}, err
+	}
+
 	// Normalize before encrypting: compressing ciphertext would be pointless,
 	// and the stored bytes must already be the small, metadata-free version.
 	normalized, err := media.Normalize(image)
@@ -163,20 +167,20 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		}
 	}
 
+	if normalized.StoredBytes > maxImageBytes {
+		return Receipt{}, httpapi.Validation(map[string]string{"image": "Подготовленное фото больше 5 МБ: уменьшите размер изображения"}, "Проверьте фото")
+	}
+
 	var receipt Receipt
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
 		// Serialize the per-person recognition budget before making a paid request.
 		if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, authorID); err != nil {
 			return err
 		}
-		var attempts int
-		var latest *time.Time
-		if err := tx.QueryRow(ctx, `SELECT count(*), max(created_at) FROM split_receipts WHERE author_id=$1 AND image_bytes>0 AND created_at>now()-interval '24 hours'`, authorID).Scan(&attempts, &latest); err != nil {
+		if err := s.checkReceiptBudget(ctx, tx, authorID); err != nil {
 			return err
 		}
-		if attempts >= 50 || (latest != nil && time.Since(*latest) < 30*time.Second) {
-			return &httpapi.Error{Status: 429, Code: "receipt_rate_limited", Message: "Между фото нужно 30 секунд, доступно до 50 распознаваний за 24 часа"}
-		}
+
 		// The photo is scheduled for deletion from the start: a draft that never
 		// becomes an expense must not keep its image for long.
 		if err := tx.QueryRow(ctx,
@@ -243,6 +247,18 @@ func (s *Service) CreateReceipt(ctx context.Context, authorID, groupID int64, im
 		return Receipt{}, err
 	}
 	return receipt, nil
+}
+
+func (s *Service) checkReceiptBudget(ctx context.Context, q receiptQuerier, authorID int64) error {
+	var attempts int
+	var latest *time.Time
+	if err := q.QueryRow(ctx, `SELECT count(*), max(created_at) FROM split_receipts WHERE author_id=$1 AND image_bytes>0 AND created_at>now()-interval '24 hours'`, authorID).Scan(&attempts, &latest); err != nil {
+		return err
+	}
+	if attempts >= 50 || (latest != nil && time.Since(*latest) < 30*time.Second) {
+		return &httpapi.Error{Status: 429, Code: "receipt_rate_limited", Message: "Между фото нужно 30 секунд, доступно до 50 распознаваний за 24 часа"}
+	}
+	return nil
 }
 
 // storeRecognized writes the recognized lines and totals onto the draft.
@@ -697,7 +713,9 @@ func Allocate(receipt Receipt, payerID int64) ReceiptAllocation {
 	if adjustment != 0 && len(perPerson) > 0 {
 		weights := make(map[int64]int64, len(perPerson))
 		for userID, share := range perPerson {
-			weights[userID] = share
+			if share > 0 {
+				weights[userID] = share
+			}
 		}
 		adjusted, err := splitByWeights(adjustment, weights)
 		if err == nil {
