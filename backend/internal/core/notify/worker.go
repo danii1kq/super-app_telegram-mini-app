@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,11 +33,16 @@ type Worker struct {
 	// batch bounds one tick so a backlog never holds the pool.
 	batch int
 	// now is injectable so tests can control retry timing.
-	now func() time.Time
+	now        func() time.Time
+	miniAppURL string
 }
 
-func NewWorker(pool *postgres.Pool, bot Sender, delivery, identity *secure.Cipher) *Worker {
-	return &Worker{pool: pool, bot: bot, delivery: delivery, identity: identity, batch: 20, now: time.Now}
+func NewWorker(pool *postgres.Pool, bot Sender, delivery, identity *secure.Cipher, base ...string) *Worker {
+	w := &Worker{pool: pool, bot: bot, delivery: delivery, identity: identity, batch: 20, now: time.Now}
+	if len(base) > 0 {
+		w.miniAppURL = base[0]
+	}
+	return w
 }
 
 // Run polls the outbox until ctx is cancelled.
@@ -65,15 +71,17 @@ type payload struct {
 
 // job is one claimed row.
 type job struct {
-	id         int64
-	userID     int64
-	kind       string
-	sealed     []byte
-	keyID      string
-	dedupeKey  string
-	subject    *string
-	version    *int64
-	attempts   int
+	id              int64
+	userID          int64
+	kind            string
+	sealed          []byte
+	keyID           string
+	dedupeKey       string
+	subject         *string
+	version         *int64
+	attempts        int
+	claimToken      string
+	reminderVersion *int
 }
 
 // tick claims a batch and sends it.
@@ -93,32 +101,77 @@ func (w *Worker) tick(ctx context.Context) error {
 }
 
 func (w *Worker) claim(ctx context.Context) ([]job, error) {
-	rows, err := w.pool.Query(ctx,
-		`SELECT id, user_id, kind, payload_sealed, payload_key_id, dedupe_key, subject, subject_version, attempts
-		   FROM notification_delivery
-		  WHERE state = 'pending' AND next_attempt_at <= now()
-		  ORDER BY next_attempt_at, id
-		  LIMIT $1
-		  FOR UPDATE SKIP LOCKED`, w.batch)
+	token, err := secure.NewToken(24)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := w.pool.Query(ctx, `WITH picked AS (
+ SELECT id FROM notification_delivery WHERE state='pending' AND next_attempt_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY next_attempt_at,id LIMIT $1 FOR UPDATE SKIP LOCKED
+ ) UPDATE notification_delivery n SET lease_until=now()+interval '10 minutes',claim_token=$2 FROM picked WHERE n.id=picked.id
+ RETURNING n.id,n.user_id,n.kind,n.payload_sealed,n.payload_key_id,n.dedupe_key,n.subject,n.subject_version,n.attempts,n.claim_token,n.reminder_version`, w.batch, token)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	out := make([]job, 0, w.batch)
+	out := []job{}
 	for rows.Next() {
-		var item job
-		if err := rows.Scan(&item.id, &item.userID, &item.kind, &item.sealed, &item.keyID,
-			&item.dedupeKey, &item.subject, &item.version, &item.attempts); err != nil {
+		var j job
+		if err = rows.Scan(&j.id, &j.userID, &j.kind, &j.sealed, &j.keyID, &j.dedupeKey, &j.subject, &j.version, &j.attempts, &j.claimToken, &j.reminderVersion); err != nil {
 			return nil, err
 		}
-		out = append(out, item)
+		out = append(out, j)
 	}
 	return out, rows.Err()
 }
 
 // deliver sends one row and records the outcome.
 func (w *Worker) deliver(ctx context.Context, item job) {
+	var owned bool
+	if err := w.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM notification_delivery WHERE id=$1 AND state='pending' AND claim_token=$2 AND lease_until>now())`, item.id, item.claimToken).Scan(&owned); err != nil || !owned {
+		return
+	}
+	var allowed, enabled, showAmounts bool
+	var lang string
+	if err := w.pool.QueryRow(ctx, `SELECT bot_notifications_opt_in,split_debt_notifications,split_debt_show_amounts,lang FROM user_settings WHERE user_id=$1`, item.userID).Scan(&allowed, &enabled, &showAmounts, &lang); err != nil {
+		w.fail(ctx, item, "settings lookup failed", time.Minute)
+		return
+	}
+	if !allowed || !enabled {
+		w.mark(ctx, item, "skipped", "notifications disabled")
+		return
+	}
+	if item.subject != nil && strings.HasPrefix(*item.subject, "debt:") {
+		debtID, err := strconv.ParseInt(strings.TrimPrefix(*item.subject, "debt:"), 10, 64)
+		if err != nil {
+			w.mark(ctx, item, "failed", "invalid debt subject")
+			return
+		}
+		var current int64
+		if err = w.pool.QueryRow(ctx, `SELECT version FROM split_debts WHERE id=$1`, debtID).Scan(&current); err != nil {
+			w.mark(ctx, item, "skipped", "debt unavailable")
+			return
+		}
+		if item.version == nil || current != *item.version {
+			w.mark(ctx, item, "skipped", "debt changed")
+			return
+		}
+		if item.kind == "split.debt_reminder" {
+			var active bool
+			if item.reminderVersion == nil {
+				w.mark(ctx, item, "skipped", "missing agreement")
+				return
+			}
+			if err = w.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM split_reminder_agreements a WHERE a.debt_id=$1 AND a.status='active' AND a.version=$2 AND NOT EXISTS(SELECT 1 FROM split_debt_payments p WHERE p.debt_id=$1 AND p.status='pending'))`, debtID, *item.reminderVersion).Scan(&active); err != nil {
+				w.fail(ctx, item, "agreement lookup failed", time.Minute)
+				return
+			}
+			if !active {
+				w.mark(ctx, item, "skipped", "agreement inactive or payment pending")
+				return
+			}
+		}
+	}
+
 	// A newer change to the same subject makes an older unsent message stale:
 	// sending "you owe 4000" after the debt was settled would be wrong.
 	if item.subject != nil {
@@ -134,7 +187,7 @@ func (w *Worker) deliver(ctx context.Context, item job) {
 			return
 		}
 		if newer {
-			w.mark(ctx, item.id, "skipped", "superseded by a newer change")
+			w.mark(ctx, item, "skipped", "superseded by a newer change")
 			return
 		}
 	}
@@ -143,22 +196,31 @@ func (w *Worker) deliver(ctx context.Context, item job) {
 	chatID, err := w.chatID(ctx, item.userID)
 	if err != nil {
 		// No linked Telegram chat: nothing to send to, and retrying will not help.
-		w.mark(ctx, item.id, "skipped", "no telegram chat")
+		w.mark(ctx, item, "skipped", "no telegram chat")
 		return
 	}
 
 	raw, err := w.delivery.Open(secure.Sealed{KeyID: item.keyID, Ciphertext: item.sealed},
 		noticeAAD(item.userID, item.dedupeKey))
 	if err != nil {
-		w.mark(ctx, item.id, "failed", "payload cannot be opened")
+		w.mark(ctx, item, "failed", "payload cannot be opened")
 		return
 	}
 	var body payload
 	if err := json.Unmarshal(raw, &body); err != nil {
-		w.mark(ctx, item.id, "failed", "payload is malformed")
+		w.mark(ctx, item, "failed", "payload is malformed")
 		return
 	}
 
+	if !showAmounts {
+		body.Text = "SruSplit: есть обновление. Откройте приложение для подробностей."
+		if lang == "kk" {
+			body.Text = "SruSplit: жаңарту бар. Мәліметтерді қолданбадан қараңыз."
+		} else if lang == "en" {
+			body.Text = "SruSplit: an update is available. Open the app for details."
+		}
+	}
+	body.ButtonURL = telegram.NotificationLink(w.miniAppURL, body.ButtonURL)
 	request := telegram.SendMessageRequest{
 		ChatID: chatID,
 		Text:   body.Text,
@@ -171,9 +233,11 @@ func (w *Worker) deliver(ctx context.Context, item job) {
 		}
 	}
 
-	_, err = w.bot.SendMessage(ctx, request)
+	sendCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	_, err = w.bot.SendMessage(sendCtx, request)
 	if err == nil {
-		w.mark(ctx, item.id, "sent", "")
+		w.mark(ctx, item, "sent", "")
 		return
 	}
 
@@ -186,7 +250,7 @@ func (w *Worker) deliver(ctx context.Context, item job) {
 		}
 		if isPermanent(apiErr.Description) {
 			// The bot is blocked or the chat does not exist: retrying is pointless.
-			w.mark(ctx, item.id, "skipped", "telegram refused: "+apiErr.Description)
+			w.mark(ctx, item, "skipped", "telegram refused")
 			return
 		}
 	}
@@ -209,11 +273,11 @@ func isPermanent(description string) bool {
 	return false
 }
 
-func (w *Worker) mark(ctx context.Context, id int64, state, reason string) {
+func (w *Worker) mark(ctx context.Context, item job, state, reason string) {
 	_, err := w.pool.Exec(ctx,
 		`UPDATE notification_delivery
 		    SET state = $2, last_error = nullif($3, ''), sent_at = case when $2 = 'sent' then now() else sent_at end
-		  WHERE id = $1`, id, state, reason)
+		  WHERE id = $1 AND claim_token=$4`, item.id, state, reason, item.claimToken)
 	if err != nil {
 		slog.Error("notify: mark", "err", err)
 	}
@@ -225,8 +289,9 @@ func (w *Worker) fail(ctx context.Context, item job, reason string, delay time.D
 		    SET attempts = attempts + 1,
 		        last_error = $2,
 		        next_attempt_at = $3,
-		        state = case when attempts + 1 >= 8 then 'failed' else 'pending' end
-		  WHERE id = $1`, item.id, reason, w.now().Add(delay))
+		        state = case when attempts + 1 >= 8 then 'failed' else 'pending' end,
+		  lease_until=NULL,claim_token=NULL
+ WHERE id = $1 AND claim_token=$4`, item.id, reason, w.now().Add(delay), item.claimToken)
 	if err != nil {
 		slog.Error("notify: fail", "err", err)
 	}

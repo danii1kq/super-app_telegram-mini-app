@@ -23,6 +23,7 @@ type Config struct {
 
 	// Telegram
 	BotToken         string
+	BotUsername      string
 	WebhookSecret    string
 	AllowedBotID     int64
 	InitDataMaxAge   time.Duration
@@ -51,10 +52,25 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	return load(false)
+}
+
+func LoadWorker() (Config, error) { return load(true) }
+
+func LoadDatabase() (Config, error) {
+	dsn := env("SRUNAL_DATABASE_URL", "")
+	if dsn == "" {
+		return Config{}, fmt.Errorf("SRUNAL_DATABASE_URL is required")
+	}
+	return Config{DatabaseURL: dsn}, nil
+}
+
+func load(worker bool) (Config, error) {
 	cfg := Config{
 		Addr:             env("SRUNAL_ADDR", ":8080"),
 		DatabaseURL:      env("SRUNAL_DATABASE_URL", ""),
 		BotToken:         env("SRUNAL_BOT_TOKEN", ""),
+		BotUsername:      env("SRUNAL_BOT_USERNAME", ""),
 		WebhookSecret:    env("SRUNAL_WEBHOOK_SECRET", ""),
 		AllowedBotID:     envInt("SRUNAL_BOT_ID", 0),
 		InitDataMaxAge:   envDuration("SRUNAL_INITDATA_MAX_AGE", 24*time.Hour),
@@ -100,11 +116,17 @@ func Load() (Config, error) {
 		}
 	}
 
-	if cfg.ContentKey == "" {
+	if !worker && cfg.ContentKey == "" {
 		return Config{}, fmt.Errorf("SRUNAL_CONTENT_KEY is required (or set SRUNAL_DEV_INSECURE_KEYS=1 for local development)")
 	}
-	if cfg.HMACIndexKey == "" {
+	if !worker && cfg.HMACIndexKey == "" {
 		return Config{}, fmt.Errorf("SRUNAL_HMAC_INDEX_KEY is required (or set SRUNAL_DEV_INSECURE_KEYS=1 for local development)")
+	}
+	if cfg.IdentityKey == "" {
+		return Config{}, fmt.Errorf("SRUNAL_IDENTITY_KEY is required")
+	}
+	if cfg.DeliveryKey == "" {
+		return Config{}, fmt.Errorf("SRUNAL_DELIVERY_KEY is required")
 	}
 	return cfg, nil
 }

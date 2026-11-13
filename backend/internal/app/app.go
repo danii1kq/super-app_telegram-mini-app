@@ -22,6 +22,7 @@ import (
 	"github.com/danii1kq/srunal/internal/platform/ocr"
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
+	"github.com/danii1kq/srunal/internal/platform/telegram"
 	"github.com/danii1kq/srunal/internal/platform/vision"
 )
 
@@ -53,7 +54,16 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	deps := Deps{Config: cfg, Pool: pool, Content: content, Index: index}
 
 	verifier := auth.NewVerifier(cfg.BotToken, cfg.AllowedBotID, cfg.InitDataMaxAge)
-	authService := auth.NewService(pool, index, content, cfg.SessionTTL)
+	identity, err := secure.NewCipher(cfg.IdentityKey)
+	if err != nil {
+		return nil, err
+	}
+	authService := auth.NewService(pool, index, content, cfg.SessionTTL, identity)
+	if pool != nil {
+		if err = authService.MigrateIdentityKeys(ctx); err != nil {
+			return nil, err
+		}
+	}
 
 	mux := http.NewServeMux()
 
@@ -85,7 +95,12 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	notesService := notes.NewService(pool, content)
 	notes.NewHandler(notesService, authService).Register(mux)
 
-	split.NewHandler(split.NewService(pool, content, receiptReader(visionClient), delivery), authService, pool).Register(mux)
+	splitService := split.NewService(pool, content, receiptReader(visionClient), delivery)
+	splitService.MiniAppURL = telegram.MiniAppURL(cfg.BotUsername, cfg.MiniAppShortName)
+	split.NewHandler(splitService, authService, pool).Register(mux)
+	if pool != nil {
+		go splitService.RunReminders(ctx)
+	}
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 

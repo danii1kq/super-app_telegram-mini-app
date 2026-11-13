@@ -25,6 +25,7 @@ type Service struct {
 	reader       ocr.Reader
 	delivery     *secure.Cipher
 	receiptSlots chan struct{}
+	MiniAppURL   string
 }
 
 func NewService(pool *postgres.Pool, content *secure.Cipher, reader ocr.Reader, delivery *secure.Cipher) *Service {
@@ -57,6 +58,7 @@ type Balance struct {
 	UserID       int64
 	PaidMinor    int64
 	ShareMinor   int64
+	SettledMinor int64
 	BalanceMinor int64
 }
 
@@ -167,6 +169,9 @@ func (s *Service) AddExpense(ctx context.Context, authorID, groupID, payerID int
 
 	var expense Expense
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if err := lockGroup(ctx, tx, groupID); err != nil {
+			return err
+		}
 		// The author must belong to the group: without this check any account
 		// could write an expense into someone else's group by guessing its id.
 		var authorMember bool
@@ -283,7 +288,7 @@ func (s *Service) AddExpense(ctx context.Context, authorID, groupID, payerID int
 				return err
 			}
 		}
-		return nil
+		return touchFinance(ctx, tx, groupID)
 	})
 	if err != nil {
 		return Expense{}, err
@@ -450,6 +455,17 @@ func (s *Service) Balances(ctx context.Context, viewerID, groupID int64) ([]Bala
 	for userID, amount := range owe {
 		shared[userID] += amount
 	}
+	settled := map[int64]int64{}
+	debts, err := s.Debts(ctx, viewerID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	for _, debt := range debts {
+		if debt.SourceExpenseID != nil {
+			settled[debt.DebtorID] += debt.PaidMinor
+			settled[debt.CreditorID] -= debt.PaidMinor
+		}
+	}
 
 	rows, err := s.pool.Query(ctx,
 		`SELECT user_id FROM split_members WHERE group_id = $1 AND state = 'active'`, groupID)
@@ -474,7 +490,8 @@ func (s *Service) Balances(ctx context.Context, viewerID, groupID int64) ([]Bala
 			UserID:       id,
 			PaidMinor:    paid[id],
 			ShareMinor:   shared[id],
-			BalanceMinor: BalanceOf(paid[id], shared[id]),
+			SettledMinor: settled[id],
+			BalanceMinor: BalanceOf(paid[id], shared[id]) + settled[id],
 		})
 	}
 	return out, nil

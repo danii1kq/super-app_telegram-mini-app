@@ -12,7 +12,7 @@ import (
 
 func TestRetiredChatRoutesAreUnavailable(t *testing.T) {
 	key := base64.StdEncoding.EncodeToString(make([]byte, 32))
-	handler, err := NewAPI(context.Background(), config.Config{ContentKey: key, HMACIndexKey: key, DeliveryKey: key}, nil)
+	handler, err := NewAPI(context.Background(), config.Config{ContentKey: key, IdentityKey: key, HMACIndexKey: key, DeliveryKey: key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

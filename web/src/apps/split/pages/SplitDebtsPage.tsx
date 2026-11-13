@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { formatMinor, parseMinor } from '../api';
 import { newRequestId } from '../mutations';
-import { useAddPayment, useCreateDebt, useDebts, useGroupMembers } from '../receipts';
+import { useAddPayment, useCreateDebt, useDebts, useGroupMembers, useGroupPeople, useRespondPayment } from '../receipts';
 import {
   AppHeader,
   Banner,
@@ -16,9 +16,10 @@ import {
 } from '@/shared/ui';
 import { useFeedback } from '@/shared/ui/toast';
 import { useSession } from '@/app/session';
-import { usePeople } from '@/core/social/api';
+import { ApiError } from '@/shared/api/client';
 import { useT, useI18n } from '@/shared/i18n';
 import { formatDayMonth } from '@/shared/i18n/date';
+import { BotNotificationSettings, DebtReminder } from '../DebtReminder';
 
 /**
  * Debts of one group: who owes whom, with repayments.
@@ -34,10 +35,11 @@ export function SplitDebtsPage() {
   const feedback = useFeedback();
   const { me } = useSession();
   const debts = useDebts(groupId);
-  const people = usePeople(Boolean(groupId));
+  const people = useGroupPeople(groupId);
   const groupMembers = useGroupMembers(groupId);
   const createDebt = useCreateDebt(groupId);
   const addPayment = useAddPayment(groupId);
+  const respondPayment=useRespondPayment(groupId);
 
   const [composing, setComposing] = useState(false);
   const [creditorId, setCreditorId] = useState('');
@@ -46,6 +48,7 @@ export function SplitDebtsPage() {
   const [note, setNote] = useState('');
   const [requestKey, setRequestKey] = useState(newRequestId);
   const [payingId, setPayingId] = useState('');
+  const [remindingId,setRemindingId]=useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentKey, setPaymentKey] = useState(newRequestId);
 
@@ -108,13 +111,13 @@ export function SplitDebtsPage() {
     addPayment.mutate(
       { debtId, amountMinor: String(minor), clientRequestId: paymentKey },
       {
-        onSuccess: () => {
+        onSuccess: (debt) => {
           setPayingId('');
           setPaymentAmount('');
           setPaymentKey(newRequestId());
-          feedback(t('debtPaid'));
+          feedback(t(debt.payments.some(p=>p.status==='pending')?'splitPaymentAwaiting':'debtPaid'));
         },
-        onError: () => feedback(t('debtPayFailed'), 'error'),
+        onError: (error) => feedback(error instanceof ApiError?error.message:t('debtPayFailed'), 'error'),
       },
     );
   };
@@ -123,6 +126,7 @@ export function SplitDebtsPage() {
     <Screen
       header={<AppHeader title={t('debts')} onBack={() => navigate(`/apps/split/${groupId}`)} />}
     >
+      <BotNotificationSettings />
       {composing ? (
         <Card className="mt-2 p-3">
           <div className="text-caption text-ink-2">{t('debtCreditor')}</div>
@@ -235,18 +239,20 @@ export function SplitDebtsPage() {
                   <div className="pt-2">
                     <div className="text-caption text-ink-2">{t('debtHistory')}</div>
                     {debt.payments.map((payment) => (
-                      <div key={payment.id} className="flex items-center justify-between pt-0.5">
+                      <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 pt-2">
                         <span className="text-caption text-ink-2">
                           {formatDayMonth(payment.paid_at, lang)}
                         </span>
-                        <span className="text-caption text-success">
-                          +{formatMinor(payment.amount_minor)} ₸
+                        <span className={`text-caption ${payment.status==='confirmed'?'text-success':'text-ink-2'}`}>
+                          {formatMinor(payment.amount_minor)} ₸ · {t(payment.status==='confirmed'?'splitPaymentConfirmed':payment.status==='pending'?'splitPaymentAwaiting':'splitPaymentRejected')}
                         </span>
+                        {payment.status==='pending'&&debt.creditor_id===me?.id?<div className="flex w-full gap-2"><SecondaryButton disabled={respondPayment.isPending} onClick={()=>respondPayment.mutate({debtId:debt.id,paymentId:payment.id,accept:true},{onError:e=>feedback(e instanceof ApiError?e.message:t('debtPayFailed'),'error')})}>{t('splitReceived')}</SecondaryButton><SecondaryButton disabled={respondPayment.isPending} onClick={()=>respondPayment.mutate({debtId:debt.id,paymentId:payment.id,accept:false},{onError:e=>feedback(e instanceof ApiError?e.message:t('debtPayFailed'),'error')})}>{t('splitNotReceived')}</SecondaryButton></div>:null}
                       </div>
                     ))}
                   </div>
                 ) : null}
 
+                {!settled&&canPay?<><SecondaryButton onClick={()=>setRemindingId(v=>v===debt.id?'':debt.id)}>{t('splitReminderSettings')}</SecondaryButton>{remindingId===debt.id?<DebtReminder debtId={debt.id}/>:null}</>:null}
                 {!settled && canPay ? (
                   payingId === debt.id ? (
                     <div className="pt-3">
@@ -277,7 +283,7 @@ export function SplitDebtsPage() {
                             onClick={() => pay(debt.id, debt.outstanding_minor)}
                             progress={addPayment.isPending}
                           >
-                            {t('debtPay')}
+                            {t(debt.creditor_id===me?.id?'splitReceived':'splitSent')}
                           </PrimaryButton>
                         </div>
                       </div>
@@ -285,7 +291,7 @@ export function SplitDebtsPage() {
                   ) : (
                     <div className="pt-3">
                       <SecondaryButton onClick={() => setPayingId(debt.id)} full>
-                        {t('debtPay')}
+                        {t(debt.creditor_id===me?.id?'splitReceived':'splitSent')}
                       </SecondaryButton>
                     </div>
                   )
