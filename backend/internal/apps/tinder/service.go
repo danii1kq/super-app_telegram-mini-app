@@ -56,7 +56,10 @@ type Card struct {
 	Gender    string
 	LikesYou  bool
 	HasPhoto  bool
-	CreatedAt time.Time
+	// PhotoVersion changes whenever the photo is replaced, so the client can
+	// request a fresh image instead of a cached one.
+	PhotoVersion string
+	CreatedAt    time.Time
 }
 
 // Match is a mutual like.
@@ -287,6 +290,7 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 		 SELECT p.user_id, u.public_name, coalesce(u.username, ''),
 		        p.bio_sealed, p.key_id, p.photo_url, p.university, coalesce(p.age, 0), p.gender,
 		        coalesce(p.photo_key_id <> '', false),
+		        to_char(p.updated_at, 'YYYYMMDDHH24MISSUS'),
 		        EXISTS (SELECT 1 FROM tinder_likes l WHERE l.from_id = p.user_id AND l.to_id = $1) AS likes_you,
 		        p.updated_at
 		   FROM tinder_profiles p
@@ -317,7 +321,7 @@ func (s *Service) Deck(ctx context.Context, viewerID int64, limit int) ([]Card, 
 		var sealed []byte
 		var keyID string
 		if err := rows.Scan(&card.UserID, &card.Name, &card.Username, &sealed, &keyID,
-			&card.PhotoURL, &card.University, &card.Age, &card.Gender, &card.HasPhoto, &card.LikesYou, &card.CreatedAt); err != nil {
+			&card.PhotoURL, &card.University, &card.Age, &card.Gender, &card.HasPhoto, &card.PhotoVersion, &card.LikesYou, &card.CreatedAt); err != nil {
 			return nil, err
 		}
 		bio, err := s.content.OpenString(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, profileAAD(card.UserID))

@@ -46,8 +46,8 @@ const SEEKING = [
  * CardPhoto loads the stored photo through the authenticated route and shows it
  * from a blob URL. The image is never public, so a plain <img src> cannot work.
  */
-function CardPhoto({ userId, name }: { userId: string; name: string }) {
-  const photo = useProfilePhoto(userId);
+function CardPhoto({ userId, name, version }: { userId: string; name: string; version: string }) {
+  const photo = useProfilePhoto(userId, version);
   if (photo.data) {
     return <img src={photo.data} alt={name} className="h-72 w-full object-cover" />;
   }
@@ -244,11 +244,10 @@ export function TinderPage() {
       ) : null}
 
       {own && !editing ? (
-        <div className="flex items-center gap-2 pt-3">
-          <button type="button" onClick={startEditing} className="text-body-secondary text-accent">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-3">
+          <button type="button" onClick={startEditing} className="whitespace-nowrap text-caption text-accent">
             {t('tinderEditProfile')}
           </button>
-          <span className="flex-1" />
           {likesMe > 0 ? (
             <Chip tone="success" icon="favorite">
               {likesMe} {t('tinderLikesYou')}
@@ -257,7 +256,7 @@ export function TinderPage() {
           <button
             type="button"
             onClick={() => setShowMatches((value) => !value)}
-            className="text-body-secondary text-accent"
+            className="ml-auto whitespace-nowrap text-caption text-accent"
           >
             {t('tinderMatches')} {matches.data?.length ?? 0}
           </button>
@@ -301,7 +300,7 @@ export function TinderPage() {
           {card ? (
             <Card className="overflow-hidden p-0">
               {card.has_photo ? (
-                <CardPhoto userId={card.user_id} name={card.name} />
+                <CardPhoto userId={card.user_id} name={card.name} version={card.photo_version} />
               ) : card.photo_url ? (
                 <img src={card.photo_url} alt={card.name} className="h-72 w-full object-cover" />
               ) : (

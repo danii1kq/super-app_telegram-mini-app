@@ -68,7 +68,9 @@ func (h *Handler) photo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", mime)
-	w.Header().Set("Cache-Control", "private, max-age=300")
+	// A replaced photo must show up immediately: the client appends the
+	// version to the URL, and this header keeps the old bytes from lingering.
+	w.Header().Set("Cache-Control", "private, no-cache")
 	_, _ = w.Write(data)
 }
 
@@ -84,6 +86,7 @@ func cardJSON(card Card) map[string]any {
 		"age":        card.Age,
 		"likes_you":  card.LikesYou,
 		"has_photo":  card.HasPhoto,
+		"photo_version": card.PhotoVersion,
 		"created_at": card.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }

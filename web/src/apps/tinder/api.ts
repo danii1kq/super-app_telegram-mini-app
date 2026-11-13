@@ -20,6 +20,7 @@ export interface TinderCard {
   bio: string;
   photo_url: string;
   has_photo: boolean;
+  photo_version: string;
   university: string;
   gender: string;
   age: number;
@@ -49,10 +50,12 @@ export function useUploadPhoto() {
 }
 
 /** The photo is behind auth, so it is fetched as a blob and shown from memory. */
-export function useProfilePhoto(userId: string, enabled = true) {
+export function useProfilePhoto(userId: string, version = '', enabled = true) {
   return useQuery({
-    queryKey: ['tinder', 'photo', userId] as const,
-    queryFn: () => apiBlobUrl(`/tinder/photo/${userId}`),
+    queryKey: ['tinder', 'photo', userId, version] as const,
+    // The version is part of the key, so a replaced photo is a new query
+    // rather than a cached hit.
+    queryFn: () => apiBlobUrl(`/tinder/photo/${userId}?v=${encodeURIComponent(version)}`),
     enabled: Boolean(userId) && enabled,
     staleTime: 5 * 60_000,
   });
