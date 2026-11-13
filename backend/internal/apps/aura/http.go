@@ -63,6 +63,8 @@ func (h *Handler) state(w http.ResponseWriter, r *http.Request) {
 		"relics":      relics,
 		"classes":     classCatalog,
 		"catalog":     relicsCatalog(),
+		"loot_rules":  lootRules(),
+		"event_pity":  map[string]int{"ss": data.Progress.SSEventPity, "sss": data.Progress.SSSEventPity},
 		"dungeons":    dungeons,
 		"quests":      questsFor(data),
 		"server_time": time.Now().UTC(),

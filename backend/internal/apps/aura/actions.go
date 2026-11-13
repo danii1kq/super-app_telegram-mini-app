@@ -30,19 +30,18 @@ type Result struct {
 	MaterialsGain map[string]int `json:"materials_gain,omitempty"`
 }
 
-// farmEvents are the flavour lines. They are the reason the loop feels like a
-// student's day rather than a spreadsheet.
+// Meditation messages share the same System voice as the dungeon interface.
 var farmEvents = []string{
-	"Ты сдал лабу с первого раза",
-	"Ты нашёл свободную аудиторию для сна",
-	"Ты успел на автобус, который уже отъезжал",
-	"Ты принёс воду на пару и стал героем",
-	"Ты заказал шаурму, а привезли две",
-	"Ты угадал, какой препод зайдёт",
-	"Ты нашёл в кармане 500 тенге",
-	"Ты сдал курсовую за ночь",
-	"Ты объяснил преподу, что интернет не работал",
-	"Ты выиграл катку на последней секунде",
+	"Система: ядро ауры стабилизировано",
+	"Руны откликнулись на твою медитацию",
+	"Система: накопленная энергия извлечена",
+	"За закрытыми вратами стало тише. Аура восстановлена",
+	"След пробуждения усилился",
+	"Система: охотник готов к следующему контракту",
+	"Отголоски разлома превратились в ауру",
+	"Дыхание выровнялось. Ядро вновь наполнено",
+	"Система: печать накопления снята",
+	"Тусклые руны снова засияли",
 }
 
 // Farm collects the passive aura. It is the slow loop: four hours between
@@ -174,6 +173,7 @@ func (s *Service) StartDungeon(ctx context.Context, userID int64, kind SessionKi
 		session := &Session{ID: id, Kind: kind, Room: 1, Rooms: 1, Phase: "combat", Dungeon: dungeon, Difficulty: difficulty, Round: 1, Rounds: CombatRounds, HeroStats: data.Stats, HeroPath: data.HeroClass, Worn: relics, HeroMaxHP: heroMaxHP(data.Stats), HeroHP: heroMaxHP(data.Stats)}
 		if kind == SessionGate {
 			session.Rooms = 3
+			planDungeonEvent(session, s.rnd)
 		}
 		if kind == SessionTower {
 			session.Floor = data.Progress.TowerFloor + 1
@@ -241,10 +241,15 @@ func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestI
 				session.Damage += damage
 				session.BossHP = max(0, session.BossHP-damage)
 				result.Damage = damage
+				if acceptedEvent(session) && session.Event.ID == "red_gate" {
+					result.HeroDamage = 2
+					session.HeroHP = max(0, session.HeroHP-2)
+				}
 			} else {
 				session.Errors++
 				session.Combo = 0
-				if session.Dungeon == "void" && session.Room == session.Rooms {
+				eventMistake(session)
+				if !acceptedEvent(session) && session.Dungeon == "void" && session.Room == session.Rooms {
 					session.BossHP = min(session.BossMaxHP, session.BossHP+8)
 					session.Charge = max(0, session.Charge-1)
 					session.AbilityReady = session.Charge >= 3
@@ -284,12 +289,20 @@ func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestI
 					session.HeroHP = min(session.HeroMaxHP, session.HeroHP+heal)
 					session.ExpiresAt = now.Add(SessionTTL)
 					result.Message = "Комната зачищена. Материалы сохранены. Выбери путь"
+					if revealDungeonEvent(session, now) {
+						result.Message = "Система: обнаружена аномалия. " + session.Event.Name
+					}
 				} else {
 					completed := s.finishRun(&data, session, true, now)
 					completed.Correct = result.Correct
 					completed.Answer = result.Answer
 					completed.Damage = result.Damage
-					completed.MaterialsGain = result.MaterialsGain
+					if completed.MaterialsGain == nil {
+						completed.MaterialsGain = map[string]int{}
+					}
+					for material, amount := range result.MaterialsGain {
+						completed.MaterialsGain[material] += amount
+					}
 					result = completed
 				}
 			default:
@@ -324,7 +337,7 @@ func (s *Service) Answer(ctx context.Context, userID int64, choice int, requestI
 	return s.resultPlayer(ctx, userID, result, err)
 }
 func (s *Service) finishRun(data *row, session *Session, won bool, now time.Time) Result {
-	won = won && session.BossHP <= 0
+	won = won && session.BossHP <= 0 && (session.Kind != SessionGate || session.Room >= session.Rooms)
 	result := Result{Finished: true, Won: won, Message: "Поход завершён поражением. Собранные материалы сохранены"}
 	data.Session = nil
 	wait := 2 * time.Minute
@@ -372,6 +385,11 @@ func (s *Service) finishRun(data *row, session *Session, won bool, now time.Time
 	if session.Kind == SessionGate {
 		data.Progress.Clears++
 		data.Progress.BossClears[session.Dungeon]++
+		if seals := eventSeals(session); seals > 0 {
+			data.Progress.Materials["seal"] += seals
+			result.MaterialsGain = map[string]int{"seal": seals}
+			result.Message = fmt.Sprintf("%s: аномалия зачищена! +%d ауры, +%d опыта, печати ×%d", session.Event.Name, gain, xp, seals)
+		}
 		d, _ := dungeonByID(session.Dungeon)
 		dr := difficultyRank(session.Difficulty)
 		if d.Level > data.Progress.BestDungeon || (d.Level == data.Progress.BestDungeon && (dr > data.Progress.BestDifficulty || (dr == data.Progress.BestDifficulty && session.Errors < data.Progress.BestErrors))) {
@@ -395,30 +413,20 @@ func (s *Service) reward(data *row, session *Session, now time.Time) (int64, int
 	}
 	gain := int64(60 + session.Correct*12)
 	xp := 25 + session.Correct*5
-	floor := RankD
 	if session.Kind == SessionGate {
 		d, _ := dungeonByID(session.Dungeon)
 		gain += int64(d.Level * 20)
 		xp += d.Level * 4
-		floor = RankC
+		if acceptedEvent(session) {
+			gain += int64(80 * eventSeals(session))
+			xp += 20 * eventSeals(session)
+		}
 	}
 	if session.Kind == SessionTower {
 		gain += int64(session.Floor * 15)
 		xp += session.Floor * 3
-		if session.Floor%5 != 0 {
-			return gain, xp, nil
-		}
-		floor = RankB
 	}
-	data.Progress.Pity++
-	if data.Progress.Pity >= RelicPity {
-		floor = RankA
-	}
-	relic := rollRelic(s.rnd, rollRank(s.rnd, floor))
-	if atLeast(relic.Rank, RankA) {
-		data.Progress.Pity = 0
-	}
-	return gain, xp, &relic
+	return gain, xp, rollLoot(s.rnd, session, &data.Progress)
 }
 
 // grantRelic stores a relic, awakening it instead when the player already owns

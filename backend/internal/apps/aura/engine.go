@@ -13,7 +13,7 @@ const (
 	// Meditation is the slow loop; successful combat has a short recovery.
 	FarmCooldown  = 4 * time.Hour
 	ArenaCooldown = 10 * time.Minute
-	GateCooldown  = 10 * time.Minute
+	GateCooldown  = 20 * time.Minute
 	TowerCooldown = 10 * time.Minute
 
 	// A session expires if the player walks away mid-run. Without this the row
@@ -45,46 +45,48 @@ const (
 
 // Session is the open challenge, stored in the player row.
 type Session struct {
-	ID               string      `json:"id"`
-	QuestionID       string      `json:"question_id"`
-	QuestionDeadline time.Time   `json:"question_deadline"`
-	HeroHP           int         `json:"hero_hp"`
-	HeroMaxHP        int         `json:"hero_max_hp"`
-	Room             int         `json:"room"`
-	Rooms            int         `json:"rooms"`
-	Phase            string      `json:"phase"`
-	Dungeon          string      `json:"dungeon"`
-	Intent           string      `json:"intent"`
-	Charge           int         `json:"charge"`
-	AbilityReady     bool        `json:"ability_ready"`
-	Difficulty       string      `json:"difficulty"`
-	Errors           int         `json:"errors"`
-	Elite            bool        `json:"elite"`
-	Shield           bool        `json:"shield"`
-	Empowered        bool        `json:"empowered"`
-	DoubleReward     bool        `json:"double_reward"`
-	TimeUsed         bool        `json:"time_used"`
-	Worn             []Relic     `json:"worn_snapshot,omitempty"`
-	HeroStats        Stats       `json:"hero_stats"`
-	HeroPath         HeroClass   `json:"hero_path"`
-	Kind             SessionKind `json:"kind"`
-	Question         Question    `json:"question"`
-	AskedAt          time.Time   `json:"asked_at"`
-	ExpiresAt        time.Time   `json:"expires_at"`
-	Round            int         `json:"round"`
-	Rounds           int         `json:"rounds"`
-	Correct          int         `json:"correct"`
-	Combo            int         `json:"combo"`
-	BestCombo        int         `json:"best_combo"`
-	Damage           int         `json:"damage"`
-	BossHP           int         `json:"boss_hp"`
-	BossMaxHP        int         `json:"boss_max_hp"`
-	BossName         string      `json:"boss_name"`
-	Floor            int         `json:"floor"`
-	Pity             int         `json:"pity"`
-	Ability          bool        `json:"ability_used"`
-	Seconds          int         `json:"seconds"`
-	RequestIDs       []string    `json:"request_ids"`
+	PendingEvent     *DungeonEvent `json:"pending_event,omitempty"`
+	Event            *DungeonEvent `json:"event,omitempty"`
+	ID               string        `json:"id"`
+	QuestionID       string        `json:"question_id"`
+	QuestionDeadline time.Time     `json:"question_deadline"`
+	HeroHP           int           `json:"hero_hp"`
+	HeroMaxHP        int           `json:"hero_max_hp"`
+	Room             int           `json:"room"`
+	Rooms            int           `json:"rooms"`
+	Phase            string        `json:"phase"`
+	Dungeon          string        `json:"dungeon"`
+	Intent           string        `json:"intent"`
+	Charge           int           `json:"charge"`
+	AbilityReady     bool          `json:"ability_ready"`
+	Difficulty       string        `json:"difficulty"`
+	Errors           int           `json:"errors"`
+	Elite            bool          `json:"elite"`
+	Shield           bool          `json:"shield"`
+	Empowered        bool          `json:"empowered"`
+	DoubleReward     bool          `json:"double_reward"`
+	TimeUsed         bool          `json:"time_used"`
+	Worn             []Relic       `json:"worn_snapshot,omitempty"`
+	HeroStats        Stats         `json:"hero_stats"`
+	HeroPath         HeroClass     `json:"hero_path"`
+	Kind             SessionKind   `json:"kind"`
+	Question         Question      `json:"question"`
+	AskedAt          time.Time     `json:"asked_at"`
+	ExpiresAt        time.Time     `json:"expires_at"`
+	Round            int           `json:"round"`
+	Rounds           int           `json:"rounds"`
+	Correct          int           `json:"correct"`
+	Combo            int           `json:"combo"`
+	BestCombo        int           `json:"best_combo"`
+	Damage           int           `json:"damage"`
+	BossHP           int           `json:"boss_hp"`
+	BossMaxHP        int           `json:"boss_max_hp"`
+	BossName         string        `json:"boss_name"`
+	Floor            int           `json:"floor"`
+	Pity             int           `json:"pity"`
+	Ability          bool          `json:"ability_used"`
+	Seconds          int           `json:"seconds"`
+	RequestIDs       []string      `json:"request_ids"`
 }
 
 // Player is the hero as the client sees it.

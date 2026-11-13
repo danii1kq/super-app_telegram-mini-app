@@ -12,6 +12,8 @@ import (
 )
 
 type Progress struct {
+	SSEventPity    int             `json:"ss_event_pity"`
+	SSSEventPity   int             `json:"sss_event_pity"`
 	Difficulty     string          `json:"difficulty"`
 	Materials      map[string]int  `json:"materials"`
 	Rank           string          `json:"rank"`
@@ -140,7 +142,7 @@ func (s *Service) nextQuestion(session *Session, now time.Time) error {
 	if session.Round%4 == 0 {
 		session.Intent = "Стойка защиты: урон снижен"
 	}
-	if session.Room == session.Rooms && session.Kind == SessionGate {
+	if session.Room == session.Rooms && session.Kind == SessionGate && !acceptedEvent(session) {
 		switch session.Dungeon {
 		case "crypt":
 			if session.Round%2 == 0 {
@@ -154,6 +156,7 @@ func (s *Service) nextQuestion(session *Session, now time.Time) error {
 			session.Intent = "Пустота: ошибка лечит босса и отнимает заряд"
 		}
 	}
+	setEventIntent(session)
 	return nil
 }
 func (s *Service) enterRoom(session *Session, route string, now time.Time) error {
@@ -180,6 +183,7 @@ func (s *Service) enterRoom(session *Session, route string, now time.Time) error
 	}
 	session.BossHP = base
 	session.BossMaxHP = base
+	configureEventEnemy(session)
 	return s.nextQuestion(session, now)
 }
 func calculateHit(session *Session, rndFloat float64) int {
@@ -200,17 +204,17 @@ func calculateHit(session *Session, rndFloat float64) int {
 	if relicBonus(session.Worn, "execute") > 0 && session.BossHP*100 <= session.BossMaxHP*35 {
 		damage += int(float64(damage) * relicBonus(session.Worn, "execute"))
 	}
-	if session.Round%4 == 0 {
+	if session.Round%4 == 0 && !acceptedEvent(session) {
 		damage = max(1, damage*3/4)
 	}
-	if session.Dungeon == "crypt" && session.Room == session.Rooms && session.Round%2 == 0 && session.Combo%3 != 0 {
+	if !acceptedEvent(session) && session.Dungeon == "crypt" && session.Room == session.Rooms && session.Round%2 == 0 && session.Combo%3 != 0 {
 		damage = max(1, damage/2)
 	}
 	if session.Empowered {
 		damage *= 2
 		session.Empowered = false
 	}
-	return damage
+	return eventHit(session, damage)
 }
 func incomingHit(session *Session, evadeRoll float64) int {
 	if session.Shield {
@@ -227,12 +231,13 @@ func incomingHit(session *Session, evadeRoll float64) int {
 	if session.Round%3 == 0 {
 		damage = damage * 3 / 2
 	}
-	if session.Dungeon == "forge" && session.Room == session.Rooms && session.Round%2 == 0 {
+	if !acceptedEvent(session) && session.Dungeon == "forge" && session.Room == session.Rooms && session.Round%2 == 0 {
 		damage *= 2
 	}
 	if session.Elite {
 		damage += 5
 	}
+	damage = eventIncoming(session, damage)
 	reduction := math.Min(.6, relicBonus(session.Worn, "negate")+bonusFor(session.HeroPath).Negate+float64(session.HeroStats.Vit)*.005)
 	return max(1, int(float64(damage)*(1-reduction)))
 }

@@ -48,6 +48,9 @@ const (
 
 // Relic is one collectible. Passive is the numeric bonus the engine applies.
 type Relic struct {
+	Source           string         `json:"source"`
+	Dungeon          string         `json:"dungeon"`
+	Craftable        bool           `json:"craftable"`
 	UpgradeMaterials map[string]int `json:"upgrade_materials"`
 	Description      string         `json:"description"`
 	Effect           string         `json:"effect,omitempty"`
@@ -99,13 +102,48 @@ var relicCatalog = []Relic{
 	{Key: "troll_heart", Name: "Сердце тролля", Rank: RankB, Slot: SlotArmor, Passive: "heal", Value: .12},
 	{Key: "hourglass", Name: "Песочные часы", Rank: RankA, Slot: SlotAccessory, Passive: "time", Value: 5},
 	{Key: "executioner", Name: "Печать палача", Rank: RankA, Slot: SlotAccessory, Passive: "execute", Value: .45},
+	{Key: "pilgrim_sword", Name: "Меч паломника", Rank: RankE, Slot: SlotWeapon, Passive: "damage", Value: .025},
+	{Key: "ash_wand", Name: "Пепельная палочка", Rank: RankE, Slot: SlotWeapon, Passive: "crit", Value: .015},
+	{Key: "thread_mantle", Name: "Мантия из лунной нити", Rank: RankE, Slot: SlotArmor, Passive: "negate", Value: .025},
+	{Key: "chipped_bead", Name: "Треснувшая бусина памяти", Rank: RankE, Slot: SlotAccessory, Passive: "xp", Value: .025},
+	{Key: "bone_rapier", Name: "Костяная рапира", Rank: RankD, Slot: SlotWeapon, Passive: "crit", Value: .045},
+	{Key: "watcher_cloak", Name: "Плащ дозорного", Rank: RankD, Slot: SlotArmor, Passive: "negate", Value: .05},
+	{Key: "lantern_shard", Name: "Осколок путеводного фонаря", Rank: RankD, Slot: SlotAccessory, Passive: "xp", Value: .045},
+	{Key: "moss_wrap", Name: "Повязь живого мха", Rank: RankD, Slot: SlotArmor, Passive: "heal", Value: .035},
+	{Key: "copper_glaive", Name: "Медная глефа", Rank: RankD, Slot: SlotWeapon, Passive: "damage", Value: .06},
+	{Key: "pilgrim_hourglass", Name: "Часы паломника", Rank: RankD, Slot: SlotAccessory, Passive: "time", Value: 2},
+	{Key: "rune_axe", Name: "Топор рунописца", Rank: RankC, Slot: SlotWeapon, Passive: "damage", Value: .075},
+	{Key: "abyss_scale", Name: "Чешуя глубин", Rank: RankC, Slot: SlotArmor, Passive: "negate", Value: .075},
+	{Key: "blood_amber", Name: "Янтарь жизненной силы", Rank: RankC, Slot: SlotAccessory, Passive: "heal", Value: .06},
+	{Key: "spectral_sickle", Name: "Призрачный серп", Rank: RankC, Slot: SlotWeapon, Passive: "echo", Value: .35},
+	{Key: "rune_lens", Name: "Линза охотника за рунами", Rank: RankC, Slot: SlotAccessory, Passive: "execute", Value: .20},
+	{Key: "pilgrim_guardian", Name: "Облачение хранителя знаний", Rank: RankC, Slot: SlotArmor, Passive: "xp", Value: .07},
+	{Key: "ash_halberd", Name: "Алебарда пепельного легиона", Rank: RankB, Slot: SlotWeapon, Passive: "damage", Value: .11},
+	{Key: "ember_carapace", Name: "Панцирь угольного стража", Rank: RankB, Slot: SlotArmor, Passive: "negate", Value: .105},
+	{Key: "echo_bell", Name: "Колокол отголосков", Rank: RankB, Slot: SlotAccessory, Passive: "echo", Value: .45},
+	{Key: "cathedral_seal", Name: "Печать забытого собора", Rank: RankB, Slot: SlotAccessory, Passive: "xp", Value: .13},
+	{Key: "eclipse_lance", Name: "Копьё затмения", Rank: RankA, Slot: SlotWeapon, Passive: "execute", Value: .40},
+	{Key: "dawn_membrane", Name: "Покров первого рассвета", Rank: RankA, Slot: SlotArmor, Passive: "heal", Value: .14},
+	{Key: "night_clock", Name: "Часы безлунной ночи", Rank: RankA, Slot: SlotAccessory, Passive: "time", Value: 6},
+	{Key: "false_gate_sword", Name: "Клинок ложного выхода", Rank: RankB, Slot: SlotWeapon, Passive: "echo", Value: .70, Source: "false_gate"},
+	{Key: "red_gate_mail", Name: "Кольчуга багрового узника", Rank: RankB, Slot: SlotArmor, Passive: "negate", Value: .12, Source: "red_gate"},
+	{Key: "shrine_prayer", Name: "Молитва безымянного бога", Rank: RankB, Slot: SlotAccessory, Passive: "heal", Value: .10, Source: "hidden_shrine"},
+	{Key: "false_gate_mask", Name: "Маска второго пробуждения", Rank: RankA, Slot: SlotArmor, Passive: "heal", Value: .17, Source: "false_gate"},
+	{Key: "red_gate_edge", Name: "Лезвие багровой клятвы", Rank: RankA, Slot: SlotWeapon, Passive: "execute", Value: .50, Source: "red_gate"},
+	{Key: "shrine_clock", Name: "Маятник остановленного мира", Rank: RankA, Slot: SlotAccessory, Passive: "time", Value: 8, Source: "hidden_shrine"},
+	{Key: "false_gate_crown", Name: "Корона выжившего монарха", Rank: RankS, Slot: SlotAccessory, Passive: "echo", Value: .85, Source: "false_gate"},
+	{Key: "red_gate_heart", Name: "Сердце багрового владыки", Rank: RankS, Slot: SlotArmor, Passive: "heal", Value: .22, Source: "red_gate"},
+	{Key: "shrine_spear", Name: "Копьё последнего обета", Rank: RankS, Slot: SlotWeapon, Passive: "damage", Value: .23, Source: "hidden_shrine"},
+	{Key: "false_gate_throne", Name: "Печать трона за вратами", Rank: RankSS, Slot: SlotAccessory, Passive: "execute", Value: .70, Source: "false_gate"},
+	{Key: "red_gate_sovereign", Name: "Доспех багрового суверена", Rank: RankSS, Slot: SlotArmor, Passive: "negate", Value: .27, Source: "red_gate"},
+	{Key: "false_gate_origin", Name: "Первозданный клинок Системы", Rank: RankSSS, Slot: SlotWeapon, Passive: "echo", Value: 1.1, Source: "false_gate"},
 }
 
 // relicByKey finds a relic in the catalog.
 func relicByKey(key string) (Relic, bool) {
 	for _, relic := range relicCatalog {
 		if relic.Key == key {
-			return relic, true
+			return relicMetadata(relic), true
 		}
 	}
 	return Relic{}, false
@@ -158,7 +196,7 @@ func rollRelic(rnd *rand.Rand, rank Rank) Relic {
 	for index := rankIndex(rank); index >= 0; index-- {
 		pool := make([]Relic, 0, 8)
 		for _, relic := range relicCatalog {
-			if relic.Rank == rankOrder[index] {
+			if relic.Rank == rankOrder[index] && relicMetadata(relic).Source == "dungeon" {
 				pool = append(pool, relic)
 			}
 		}
@@ -234,6 +272,7 @@ var abilities = map[HeroClass]struct {
 }
 
 func scaledRelic(relic Relic, level int) Relic {
+	relic = relicMetadata(relic)
 	relic.Value *= 1 + float64(max(0, level-1))*.2
 	relic.UpgradeCost = 0
 	if level < 5 {
@@ -249,25 +288,20 @@ func scaledRelic(relic Relic, level int) Relic {
 		material = "void"
 	}
 	relic.CraftCost = map[string]int{material: 6 * rank * rank}
-	switch relic.Key {
-	case "echo_blade":
-		relic.CraftAura = 150 * rank
-		relic.CraftCost = map[string]int{"bone": 18}
-	case "troll_heart":
-		relic.CraftAura = 150 * rank
-		relic.CraftCost = map[string]int{"bone": 18}
-	case "hourglass":
-		relic.CraftAura = 150 * rank
-		relic.CraftCost = map[string]int{"ember": 20}
-	case "executioner":
-		relic.CraftAura = 150 * rank
-		relic.CraftCost = map[string]int{"void": 20}
+	if relic.Dungeon == "void" {
+		material = "void"
+	}
+	if relic.Source != "dungeon" {
+		material = "seal"
+	}
+	relic.CraftCost = map[string]int{material: 6 * rank * rank}
+	if !relic.Craftable {
+		relic.CraftAura = 0
+		relic.CraftCost = map[string]int{}
 	}
 	relic.UpgradeMaterials = map[string]int{}
 	if level >= 3 && level < 5 {
-		for material := range relic.CraftCost {
-			relic.UpgradeMaterials[material] = rank * (level - 2) * 2
-		}
+		relic.UpgradeMaterials[material] = rank * (level - 2) * 2
 	}
 	percent := relic.Value * 100
 	switch relic.Passive {
@@ -294,6 +328,20 @@ func scaledRelic(relic Relic, level int) Relic {
 		relic.Description = fmt.Sprintf("Урон +%.0f%%, когда у врага не больше 35%% здоровья", percent)
 		relic.Effect = "execute"
 	}
+	return relic
+}
+
+func relicMetadata(relic Relic) Relic {
+	if relic.Source == "" {
+		relic.Source = "dungeon"
+		if atLeast(relic.Rank, RankSS) {
+			relic.Source = "false_gate"
+		}
+	}
+	if relic.Dungeon == "" && relic.Source == "dungeon" && relic.Rank == RankS {
+		relic.Dungeon = "void"
+	}
+	relic.Craftable = relic.Source == "dungeon" && !atLeast(relic.Rank, RankS)
 	return relic
 }
 func relicsCatalog() []Relic {

@@ -146,6 +146,7 @@ func (s *Service) snapshot(ctx context.Context, userID int64) (Player, error) {
 	if data.Session != nil {
 		view := *data.Session
 		view.Question.Answer = 0
+		view.PendingEvent = nil
 		view.Worn = nil
 
 		data.Session = &view

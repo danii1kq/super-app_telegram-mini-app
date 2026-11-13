@@ -137,6 +137,9 @@ func TestAuraHTTPAnswerRetriesAndIsolation(t *testing.T) {
 		t.Fatal("locked dungeon accepted")
 	}
 	readRaidView(t, request("POST", "/api/v1/aura/start", map[string]any{"kind": "gate", "dungeon": "crypt"}, 1))
+	if _, err := pool.Exec(context.Background(), `UPDATE aura_players SET session=session-'pending_event' WHERE user_id=1`); err != nil {
+		t.Fatal(err)
+	}
 	before := readRaidView(t, request("GET", "/api/v1/aura", nil, 1))
 	if before.Player.Session == nil || before.Player.Session.QuestionID == "" {
 		t.Fatal("missing server question identity")
@@ -185,6 +188,11 @@ func TestAuraHTTPDungeonVictoryAndDefeat(t *testing.T) {
 	}
 	readRaidView(t, request("POST", "/api/v1/aura/start", map[string]any{"kind": "gate", "dungeon": "crypt"}, 1))
 	for n := 0; n < 50; n++ {
+		if n == 0 {
+			if _, err := pool.Exec(context.Background(), `UPDATE aura_players SET session=session-'pending_event' WHERE user_id=1`); err != nil {
+				t.Fatal(err)
+			}
+		}
 		view := readRaidView(t, request("GET", "/api/v1/aura", nil, 1))
 		session := view.Player.Session
 		if session == nil {
@@ -197,14 +205,20 @@ func TestAuraHTTPDungeonVictoryAndDefeat(t *testing.T) {
 		}
 	}
 	won := readRaidView(t, request("GET", "/api/v1/aura", nil, 1))
-	if won.Player.Session != nil || won.Player.Clears != 1 || len(won.Relics) != 1 {
-		t.Fatalf("boss victory failed to grant one clear and relic: %+v", won)
+	if won.Player.Session != nil || won.Player.Clears != 1 || len(won.Relics) > 1 {
+		t.Fatalf("boss victory failed to grant one clear and at most one relic: %+v", won)
 	}
 	var weeklyClears int
-	if err:=pool.QueryRow(context.Background(),`SELECT clears FROM aura_weekly_scores WHERE user_id=1`).Scan(&weeklyClears);err!=nil||weeklyClears!=1{t.Fatal("victory missing from weekly ranking",weeklyClears,err)}
-	claimed:=readRaidView(t,request("POST","/api/v1/aura/quests/claim",map[string]any{"id":"first_clear"},1))
-	if claimed.Player.Aura!=won.Player.Aura+250{t.Fatal("first clear quest paid wrong amount")}
-	if request("POST","/api/v1/aura/quests/claim",map[string]any{"id":"first_clear"},1).Code!=400{t.Fatal("quest paid twice")}
+	if err := pool.QueryRow(context.Background(), `SELECT clears FROM aura_weekly_scores WHERE user_id=1`).Scan(&weeklyClears); err != nil || weeklyClears != 1 {
+		t.Fatal("victory missing from weekly ranking", weeklyClears, err)
+	}
+	claimed := readRaidView(t, request("POST", "/api/v1/aura/quests/claim", map[string]any{"id": "first_clear"}, 1))
+	if claimed.Player.Aura != won.Player.Aura+250 {
+		t.Fatal("first clear quest paid wrong amount")
+	}
+	if request("POST", "/api/v1/aura/quests/claim", map[string]any{"id": "first_clear"}, 1).Code != 400 {
+		t.Fatal("quest paid twice")
+	}
 	readRaidView(t, request("POST", "/api/v1/aura/start", map[string]any{"kind": "gate", "dungeon": "crypt"}, 2))
 	for n := 0; n < 40; n++ {
 		view := readRaidView(t, request("GET", "/api/v1/aura", nil, 2))
@@ -230,44 +244,98 @@ func TestAuraHTTPDungeonVictoryAndDefeat(t *testing.T) {
 	}
 }
 
-func TestAuraHTTPAbilityAndTimeout(t *testing.T){
-	pool,request:=auraHTTPFixture(t)
-	readRaidView(t,request("POST","/api/v1/aura/class",map[string]any{"class":"strategist"},1))
-	readRaidView(t,request("POST","/api/v1/aura/start",map[string]any{"kind":"gate","dungeon":"crypt"},1))
-	var current raidTestView
-	for n:=0;n<12;n++{
-		current=readRaidView(t,request("GET","/api/v1/aura",nil,1))
-		s:=current.Player.Session
-		if s==nil{t.Fatal("run ended before charged ability")}
-		if s.Phase=="choice"{readRaidView(t,request("POST","/api/v1/aura/route",map[string]any{"route":"normal","request_id":fmt.Sprintf("charge-route-%d",n)},1));continue}
-		if s.AbilityReady{break}
-		readRaidView(t,request("POST","/api/v1/aura/answer",map[string]any{"choice":raidAnswer(t,pool,1),"question_id":s.QuestionID,"request_id":fmt.Sprintf("charge-%d",n)},1))
+func TestAuraHTTPAbilityAndTimeout(t *testing.T) {
+	pool, request := auraHTTPFixture(t)
+	readRaidView(t, request("POST", "/api/v1/aura/class", map[string]any{"class": "strategist"}, 1))
+	readRaidView(t, request("POST", "/api/v1/aura/start", map[string]any{"kind": "gate", "dungeon": "crypt"}, 1))
+	if _, err := pool.Exec(context.Background(), `UPDATE aura_players SET session=session-'pending_event' WHERE user_id=1`); err != nil {
+		t.Fatal(err)
 	}
-	if current.Player.Session==nil||!current.Player.Session.AbilityReady{t.Fatal("three correct answers did not charge ability")}
-	activated:=readRaidView(t,request("POST","/api/v1/aura/ability",map[string]any{"request_id":"ability-once"},1))
-	if activated.Player.Session==nil||activated.Player.Session.AbilityReady||len(activated.Player.Session.Question.Options)!=2{t.Fatal("strategist ability did not remove two options and spend charge")}
-	if request("POST","/api/v1/aura/ability",map[string]any{"request_id":"ability-once"},1).Code!=400{t.Fatal("ability request replay accepted")}
-	if _,err:=pool.Exec(context.Background(),`UPDATE aura_players SET session=jsonb_set(session,'{question_deadline}',to_jsonb(now()-interval '1 second')) WHERE user_id=1`);err!=nil{t.Fatal(err)}
-	q:=activated.Player.Session
-	timedOut:=readRaidView(t,request("POST","/api/v1/aura/answer",map[string]any{"choice":raidAnswer(t,pool,1),"question_id":q.QuestionID,"request_id":"late-answer"},1))
-	if timedOut.Player.Session==nil||timedOut.Player.Session.HeroHP>=q.HeroHP||timedOut.Player.Session.BossHP!=q.BossHP{t.Fatal("late correct answer did not apply and persist enemy damage")}
+	var current raidTestView
+	for n := 0; n < 12; n++ {
+		current = readRaidView(t, request("GET", "/api/v1/aura", nil, 1))
+		s := current.Player.Session
+		if s == nil {
+			t.Fatal("run ended before charged ability")
+		}
+		if s.Phase == "choice" {
+			readRaidView(t, request("POST", "/api/v1/aura/route", map[string]any{"route": "normal", "request_id": fmt.Sprintf("charge-route-%d", n)}, 1))
+			continue
+		}
+		if s.AbilityReady {
+			break
+		}
+		readRaidView(t, request("POST", "/api/v1/aura/answer", map[string]any{"choice": raidAnswer(t, pool, 1), "question_id": s.QuestionID, "request_id": fmt.Sprintf("charge-%d", n)}, 1))
+	}
+	if current.Player.Session == nil || !current.Player.Session.AbilityReady {
+		t.Fatal("three correct answers did not charge ability")
+	}
+	activated := readRaidView(t, request("POST", "/api/v1/aura/ability", map[string]any{"request_id": "ability-once"}, 1))
+	if activated.Player.Session == nil || activated.Player.Session.AbilityReady || len(activated.Player.Session.Question.Options) != 2 {
+		t.Fatal("strategist ability did not remove two options and spend charge")
+	}
+	if request("POST", "/api/v1/aura/ability", map[string]any{"request_id": "ability-once"}, 1).Code != 400 {
+		t.Fatal("ability request replay accepted")
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE aura_players SET session=jsonb_set(session,'{question_deadline}',to_jsonb(now()-interval '1 second')) WHERE user_id=1`); err != nil {
+		t.Fatal(err)
+	}
+	q := activated.Player.Session
+	timedOut := readRaidView(t, request("POST", "/api/v1/aura/answer", map[string]any{"choice": raidAnswer(t, pool, 1), "question_id": q.QuestionID, "request_id": "late-answer"}, 1))
+	if timedOut.Player.Session == nil || timedOut.Player.Session.HeroHP >= q.HeroHP || timedOut.Player.Session.BossHP != q.BossHP {
+		t.Fatal("late correct answer did not apply and persist enemy damage")
+	}
 }
 
-func TestAuraHTTPCraftingIsAtomic(t *testing.T){
-	pool,request:=auraHTTPFixture(t)
-	readRaidView(t,request("GET","/api/v1/aura",nil,1))
-	if _,err:=pool.Exec(context.Background(),`UPDATE aura_players SET aura=5000,progress=jsonb_set(progress,'{materials}','{"bone":100,"ember":100,"void":100}'::jsonb) WHERE user_id=1`);err!=nil{t.Fatal(err)}
+func TestAuraHTTPCraftingIsAtomic(t *testing.T) {
+	pool, request := auraHTTPFixture(t)
+	readRaidView(t, request("GET", "/api/v1/aura", nil, 1))
+	if _, err := pool.Exec(context.Background(), `UPDATE aura_players SET aura=5000,progress=jsonb_set(progress,'{materials}','{"bone":100,"ember":100,"void":100}'::jsonb) WHERE user_id=1`); err != nil {
+		t.Fatal(err)
+	}
 	var wg sync.WaitGroup
-	statuses:=make(chan int,6)
-	for n:=0;n<6;n++{wg.Add(1);go func(){defer wg.Done();statuses<-request("POST","/api/v1/aura/relics/craft",map[string]any{"key":"echo_blade"},1).Code}()}
-	wg.Wait();close(statuses)
-	success:=0
-	for status:=range statuses{if status==200{success++}else if status!=400{t.Fatalf("craft status %d",status)}}
-	view:=readRaidView(t,request("GET","/api/v1/aura",nil,1))
-	if success!=1||len(view.Relics)!=1||view.Player.Materials["bone"]!=82{t.Fatal("concurrent craft duplicated item or material spending",success,view.Player.Materials)}
-	var response struct { Catalog []struct{Key string `json:"key"`;CraftAura int64 `json:"craft_aura"`} `json:"catalog"` }
-	if err:=json.Unmarshal(request("GET","/api/v1/aura",nil,1).Body.Bytes(),&response);err!=nil{t.Fatal(err)}
-	for _,item:=range response.Catalog{if item.Key=="echo_blade"&&view.Player.Aura!=5000-item.CraftAura{t.Fatal("craft spending differs from quoted price")}}
+	statuses := make(chan int, 6)
+	for n := 0; n < 6; n++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			statuses <- request("POST", "/api/v1/aura/relics/craft", map[string]any{"key": "echo_blade"}, 1).Code
+		}()
+	}
+	wg.Wait()
+	close(statuses)
+	success := 0
+	for status := range statuses {
+		if status == 200 {
+			success++
+		} else if status != 400 {
+			t.Fatalf("craft status %d", status)
+		}
+	}
+	view := readRaidView(t, request("GET", "/api/v1/aura", nil, 1))
+	if success != 1 || len(view.Relics) != 1 {
+		t.Fatal("concurrent craft duplicated item or material spending", success, view.Player.Materials)
+	}
+	var response struct {
+		Catalog []struct {
+			Key       string         `json:"key"`
+			CraftAura int64          `json:"craft_aura"`
+			CraftCost map[string]int `json:"craft_cost"`
+		} `json:"catalog"`
+	}
+	if err := json.Unmarshal(request("GET", "/api/v1/aura", nil, 1).Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range response.Catalog {
+		if item.Key == "echo_blade" {
+			if view.Player.Aura != 5000-item.CraftAura || view.Player.Materials["bone"] != 100-item.CraftCost["bone"] {
+				t.Fatal("craft spending differs from quoted price")
+			}
+		}
+	}
+	if request("POST", "/api/v1/aura/relics/craft", map[string]any{"key": "world_ender"}, 1).Code != 400 {
+		t.Fatal("exclusive relic could be crafted for free")
+	}
 }
 
 func TestAuraHTTPLegacyInventoryAndPaidUpgrade(t *testing.T) {

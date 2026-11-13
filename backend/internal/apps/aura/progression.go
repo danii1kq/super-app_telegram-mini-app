@@ -141,6 +141,9 @@ func (s *Service) RelicCraft(ctx context.Context, userID int64, key string) (Res
 			return bad("Такой реликвии нет")
 		}
 		recipe := scaledRelic(relic, 1)
+		if !recipe.Craftable {
+			return bad("Эту реликвию можно найти только в подходящих вратах")
+		}
 		if data.Aura < int64(recipe.CraftAura) {
 			return bad("Недостаточно ауры для изготовления")
 		}
@@ -180,13 +183,29 @@ func (s *Service) Route(ctx context.Context, userID int64, route, requestID stri
 			return err
 		}
 		session := data.Session
-		if session == nil || session.Phase != "choice" {
+		if session == nil || (session.Phase != "choice" && session.Phase != "event") {
 			return bad("Сначала зачисти комнату")
 		}
 		now := s.now()
 		if !now.Before(session.ExpiresAt) {
 			result = s.finishRun(&data, session, false, now)
+		} else if session.Phase == "event" {
+			switch route {
+			case "event_leave":
+				result = s.finishRun(&data, session, false, now)
+				result.Message = "Ты покинул аномалию до запечатывания врат. Материалы сохранены"
+			case "event_enter":
+				if err = s.enterDungeonEvent(session, now); err != nil {
+					return err
+				}
+				result.Message = "Система: аномалия принята. " + session.Event.Name
+			default:
+				return bad("Сначала прими или отклони аномалию")
+			}
 		} else {
+			if acceptedEvent(session) && session.Event.ID == "red_gate" && route != "normal" {
+				return bad("Красные врата запечатаны. Продолжай зачистку")
+			}
 			switch route {
 			case "normal", "elite", "shrine", "chest", "retreat":
 			default:

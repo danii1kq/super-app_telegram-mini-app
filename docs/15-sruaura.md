@@ -38,6 +38,9 @@ sound controls apply to feedback. Artwork details and generation prompt are in
   upgrades increase actual effects. Signature relics add combo echoes, healing,
   additional time and finishing damage. Recipes consume named dungeon materials
   and aura. Prices and requirements come from the server.
+- The expanded catalog contains 64 relics: 18 exclusive to events, 43 craftable
+  E-A items and three ordinary S items obtainable as drops. All original IDs
+  remain valid. S, SS, SSS and event items have no recipe, enforced by the API.
 - Signature recipes stay accessible for early build experiments. Crafting the
   original relics scales quadratically with rarity. Awakening stages four and
   five require quoted dungeon materials as well as aura.
@@ -46,6 +49,33 @@ sound controls apply to feedback. Artwork details and generation prompt are in
   currency alone. The UTC Monday weekly board stores each hunter's best
   dungeon/difficulty/errors result and clear count in the same transaction as
   victory. The original arena, tower and grind modes remain accessible.
+
+## Rare events and loot
+
+Each gate entry snapshots a single hidden event roll: false S-rank gate 0.8%,
+red gate 1.2%, hidden shrine 1.5%, otherwise ordinary. The event reveals after
+room one or two and asks for an explicit enter/leave choice. The public state
+omits the pending result; refreshing or retrying cannot reroll it. Event battles
+retain the chosen math difficulty. The Silent Warden has three phases, red
+gates have two locked encounters with health drain, and the shrine heals its
+guardian on mistakes. Declining preserves room materials. Successful events
+grant seals and a relic from their separate pools.
+
+Base item chances per ordinary victory: crypt 35%, forge 45%, void 55%. Their
+maximum ranks are C, A and S. The void's S chance is 1% conditional on an item
+dropping. The tenth empty ordinary victory guarantees an item without raising
+its rank. SS requires a void event after 20 clears; SSS requires 80 clears.
+Eligible false-gate victories build separate SS and SSS guarantees at five
+and twenty victories, reset by the corresponding exclusive drop. Rank S threat
+does not promise rank S loot. The server returns odds and current guarantees.
+
+Gate recovery is 20 minutes after victory, two minutes after failure or leaving.
+The new boss portrait is `web/public/aura/silent-warden.png`, generated with the
+built-in image tool using an original cathedral executioner with an obsidian
+mask, fractured gold halo and violet rim lighting. It matches the existing
+atlas palette. Dungeon cards preserve square portrait geometry and align the
+image to the top, keeping heads visible on mobile. Rank colors match across
+icons, item cards and loot dialogs.
 
 ## Persistence and verification
 
