@@ -2,7 +2,7 @@
 
 ## Raster character atlas
 
-Project asset: `web/public/aura/hunters-atlas.png`.
+Project asset: `web/public/aura/hunters-atlas.webp`.
 
 Technique: built-in `image_gen`, one original square 2-by-2 atlas. The image is
 copied into the project; the application has no dependency on an external image
@@ -51,10 +51,17 @@ feedback belongs to the page layer.
 
 ## Silent Warden
 
-`web/public/aura/silent-warden.png` is an original standalone boss portrait,
+`web/public/aura/silent-warden.webp` is an original standalone boss portrait,
 generated with built-in image_gen for the false S-rank gate. Prompt: a monumental
 stone executioner in angular obsidian cathedral armor, ice-violet eyes, broken
 gold halo and ceremonial iron blade, a tiny hunter for scale, flooded dark
 cathedral, violet cracks, cold rim lighting, fine webtoon ink contours and painted
 cel shading, no text or franchise characters. The output was copied into the
 workspace and visually checked against the original atlas.
+
+## Delivery compression
+
+Original PNG assets totalled 6,201,819 bytes. Pillow WebP quality 84, method 6
+produced 671,114 bytes at unchanged dimensions, saving 5,530,705 bytes (89.2%).
+Runtime CSS references only WebP. PNG source versions remain in Git history
+and generated source storage, outside the public build.

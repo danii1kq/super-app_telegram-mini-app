@@ -21,7 +21,7 @@
 .aura-anomaly-guide>h2{font-size:21px;font-weight:500;margin:8px 0 12px}.aura-anomaly-guide>p{color:var(--au-muted);font-size:11px;line-height:1.9;max-width:750px}
 .aura-anomaly-types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:22px}
 .aura-anomaly-types>article{border-top:1px solid var(--au-line);padding-top:15px}.aura-anomaly-types strong{font-size:13px;font-weight:500}.aura-anomaly-types p{font-size:10px;line-height:1.8;margin-top:8px;color:var(--au-muted)}
-.aura-portrait-warden{background-image:url('/aura/silent-warden.png');background-size:cover;background-position:center}
+.aura-portrait-warden{background-image:url('/aura/silent-warden.webp');background-size:cover;background-position:center}
 .aura-dungeon-image>.aura-enemy-art{inset:0;width:100%;height:100%;min-height:0;aspect-ratio:auto}
 .aura-dungeon-image .aura-character-portrait{inset:0 0 auto;height:auto;aspect-ratio:1;transform:none}
 .aura-loot-explainer{font-size:11px;line-height:1.9;color:var(--au-muted);margin:0 0 28px!important}

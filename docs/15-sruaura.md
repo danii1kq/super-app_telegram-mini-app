@@ -70,7 +70,7 @@ and twenty victories, reset by the corresponding exclusive drop. Rank S threat
 does not promise rank S loot. The server returns odds and current guarantees.
 
 Gate recovery is 20 minutes after victory, two minutes after failure or leaving.
-The new boss portrait is `web/public/aura/silent-warden.png`, generated with the
+The new boss portrait is `web/public/aura/silent-warden.webp`, generated with the
 built-in image tool using an original cathedral executioner with an obsidian
 mask, fractured gold halo and violet rim lighting. It matches the existing
 atlas palette. Dungeon cards preserve square portrait geometry and align the

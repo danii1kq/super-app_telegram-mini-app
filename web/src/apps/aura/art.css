@@ -1,5 +1,5 @@
 .aura-hunter-art,.aura-enemy-art{position:relative;isolation:isolate;overflow:hidden;aspect-ratio:1;background:#10101d;border-radius:inherit}
-.aura-character-portrait{position:absolute;inset:0;background-image:url('/aura/hunters-atlas.png');background-size:200% 200%;background-repeat:no-repeat;transform:scale(1.015)}
+.aura-character-portrait{position:absolute;inset:0;background-image:url('/aura/hunters-atlas.webp');background-size:200% 200%;background-repeat:no-repeat;transform:scale(1.015)}
 .aura-portrait-hunter{background-position:0 0}.aura-portrait-crypt{background-position:100% 0}.aura-portrait-forge{background-position:0 100%}.aura-portrait-void{background-position:100% 100%}
 .aura-character-vignette{position:absolute;inset:0;background:linear-gradient(0deg,#0b0b15 0%,transparent 34%,transparent 80%,#0b0b1522);pointer-events:none}
 .aura-hunter-sigil{position:absolute;width:65%;aspect-ratio:1;border:1px solid #c2a6ff1a;border-radius:50%;left:17.5%;top:17%;box-shadow:0 0 40px #b68cff08;pointer-events:none}
