@@ -26,5 +26,5 @@ func (s *Service) receiptDebtsTx(ctx context.Context, tx pgx.Tx, r Receipt, expe
 			return err
 		}
 	}
-	return nil
+	return touchFinance(ctx, tx, r.GroupID)
 }

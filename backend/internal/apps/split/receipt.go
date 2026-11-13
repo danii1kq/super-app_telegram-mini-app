@@ -60,6 +60,7 @@ type ReceiptItem struct {
 
 // Debt is an obligation between two people.
 type Debt struct {
+	Version     int64
 	ID          int64
 	GroupID     int64
 	AuthorID    int64
@@ -78,6 +79,8 @@ type Debt struct {
 
 // DebtPayment is one repayment against a debt.
 type DebtPayment struct {
+	Status      string
+	Method      string
 	ID          int64
 	AmountMinor int64
 	PaidAt      time.Time

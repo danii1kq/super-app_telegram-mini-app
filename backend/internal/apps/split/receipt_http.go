@@ -24,6 +24,7 @@ func (h *Handler) RegisterReceipts(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/split/groups/{id}/debts", h.auth.Middleware(http.HandlerFunc(h.createDebt)))
 	mux.Handle("POST /api/v1/split/groups/{id}/expenses/{expenseId}/debt", h.auth.Middleware(http.HandlerFunc(h.recordExpenseDebt)))
 	mux.Handle("POST /api/v1/split/debts/{id}/payments", h.auth.Middleware(http.HandlerFunc(h.addPayment)))
+	mux.Handle("POST /api/v1/split/debts/{id}/payments/{paymentId}/respond", h.auth.Middleware(http.HandlerFunc(h.respondPayment)))
 }
 
 // createReceipt takes a raw image body. Multipart would work too, but one
@@ -522,6 +523,8 @@ func debtJSON(debt Debt) map[string]any {
 	payments := make([]map[string]any, 0, len(debt.Payments))
 	for _, payment := range debt.Payments {
 		payments = append(payments, map[string]any{
+			"status":       payment.Status,
+			"method":       payment.Method,
 			"id":           strconv.FormatInt(payment.ID, 10),
 			"amount_minor": strconv.FormatInt(payment.AmountMinor, 10),
 			"paid_at":      payment.PaidAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
@@ -531,6 +534,7 @@ func debtJSON(debt Debt) map[string]any {
 
 	out := map[string]any{
 		"id":                strconv.FormatInt(debt.ID, 10),
+		"version":           debt.Version,
 		"group_id":          strconv.FormatInt(debt.GroupID, 10),
 		"author_id":         strconv.FormatInt(debt.AuthorID, 10),
 		"creditor_id":       strconv.FormatInt(debt.CreditorID, 10),

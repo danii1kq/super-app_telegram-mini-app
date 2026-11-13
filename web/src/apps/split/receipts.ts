@@ -52,6 +52,8 @@ export interface Allocation {
 }
 
 export interface DebtPayment {
+  status: 'pending' | 'confirmed' | 'rejected';
+  method: 'transfer' | 'offset';
   id: string;
   amount_minor: string;
   paid_at: string;
@@ -59,6 +61,7 @@ export interface DebtPayment {
 }
 
 export interface Debt {
+  version: number;
   id: string;
   group_id: string;
   author_id: string;
@@ -140,7 +143,14 @@ export function useDebts(groupId: string) {
     queryFn: () => api<{ debts: Debt[] }>(`/split/groups/${groupId}/debts`),
     select: (data) => data.debts,
     enabled: Boolean(groupId),
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
+}
+
+export function useRespondPayment(groupId: string) {
+ const cache=useQueryClient();
+ return useMutation({mutationFn:({debtId,paymentId,accept}:{debtId:string;paymentId:string;accept:boolean})=>api<Debt>(`/split/debts/${debtId}/payments/${paymentId}/respond`,{method:'POST',body:{accept}}),onSuccess:()=>{void cache.invalidateQueries({queryKey:debtKeys.list(groupId)});void cache.invalidateQueries({queryKey:['split','balances',groupId]});}});
 }
 
 /** Uploads the photo as a raw body: the server sniffs the real format. */

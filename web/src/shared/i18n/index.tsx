@@ -13,6 +13,12 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  splitPaymentAwaiting: "Ждёт подтверждения получателя",
+  splitPaymentConfirmed: "Подтверждён",
+  splitPaymentRejected: "Не подтверждён",
+  splitReceived: "Получил деньги",
+  splitNotReceived: "Не получил",
+  splitSent: "Перевёл деньги",
   splitDraft: "Черновик",
   splitCollecting: "Выбираем покупки",
   splitReview: "На подтверждении",
@@ -428,6 +434,12 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  splitPaymentAwaiting: "Алушының растауын күтуде",
+  splitPaymentConfirmed: "Расталды",
+  splitPaymentRejected: "Расталмады",
+  splitReceived: "Ақшаны алдым",
+  splitNotReceived: "Алмадым",
+  splitSent: "Ақшаны жібердім",
   splitDraft: "Жоба",
   splitCollecting: "Сатып алғанды таңдау",
   splitReview: "Растауды күтуде",
@@ -841,6 +853,12 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  splitPaymentAwaiting: "Awaiting recipient confirmation",
+  splitPaymentConfirmed: "Confirmed",
+  splitPaymentRejected: "Rejected",
+  splitReceived: "Received money",
+  splitNotReceived: "Not received",
+  splitSent: "Sent money",
   splitDraft: "Draft",
   splitCollecting: "Choosing purchases",
   splitReview: "Awaiting approval",

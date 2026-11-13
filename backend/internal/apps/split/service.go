@@ -169,6 +169,9 @@ func (s *Service) AddExpense(ctx context.Context, authorID, groupID, payerID int
 
 	var expense Expense
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if err := lockGroup(ctx, tx, groupID); err != nil {
+			return err
+		}
 		// The author must belong to the group: without this check any account
 		// could write an expense into someone else's group by guessing its id.
 		var authorMember bool
@@ -285,7 +288,7 @@ func (s *Service) AddExpense(ctx context.Context, authorID, groupID, payerID int
 				return err
 			}
 		}
-		return nil
+		return touchFinance(ctx, tx, groupID)
 	})
 	if err != nil {
 		return Expense{}, err
