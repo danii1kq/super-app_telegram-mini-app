@@ -57,6 +57,7 @@ type Balance struct {
 	UserID       int64
 	PaidMinor    int64
 	ShareMinor   int64
+	SettledMinor int64
 	BalanceMinor int64
 }
 
@@ -450,6 +451,17 @@ func (s *Service) Balances(ctx context.Context, viewerID, groupID int64) ([]Bala
 	for userID, amount := range owe {
 		shared[userID] += amount
 	}
+	settled := map[int64]int64{}
+	debts, err := s.Debts(ctx, viewerID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	for _, debt := range debts {
+		if debt.SourceExpenseID != nil {
+			settled[debt.DebtorID] += debt.PaidMinor
+			settled[debt.CreditorID] -= debt.PaidMinor
+		}
+	}
 
 	rows, err := s.pool.Query(ctx,
 		`SELECT user_id FROM split_members WHERE group_id = $1 AND state = 'active'`, groupID)
@@ -474,7 +486,8 @@ func (s *Service) Balances(ctx context.Context, viewerID, groupID int64) ([]Bala
 			UserID:       id,
 			PaidMinor:    paid[id],
 			ShareMinor:   shared[id],
-			BalanceMinor: BalanceOf(paid[id], shared[id]),
+			SettledMinor: settled[id],
+			BalanceMinor: BalanceOf(paid[id], shared[id]) + settled[id],
 		})
 	}
 	return out, nil

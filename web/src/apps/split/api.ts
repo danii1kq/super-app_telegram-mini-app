@@ -25,6 +25,7 @@ export interface SplitBalance {
   paid_minor: string;
   share_minor: string;
   balance_minor: string;
+  settled_minor: string;
 }
 
 export const splitKeys = {

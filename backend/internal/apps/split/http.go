@@ -190,6 +190,7 @@ func (h *Handler) balances(w http.ResponseWriter, r *http.Request) {
 			"paid_minor":    strconv.FormatInt(balance.PaidMinor, 10),
 			"share_minor":   strconv.FormatInt(balance.ShareMinor, 10),
 			"balance_minor": strconv.FormatInt(balance.BalanceMinor, 10),
+			"settled_minor": strconv.FormatInt(balance.SettledMinor, 10),
 		})
 	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"balances": out})
