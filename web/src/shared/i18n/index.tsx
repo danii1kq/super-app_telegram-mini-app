@@ -13,6 +13,16 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  splitHowToSettle: "Как рассчитаться",
+  splitOffset: "Взаимозачёт встречных долгов",
+  splitSettlementHint: "Объединяем долги только между вами и исходным получателем. Взаимозачёт требует согласия обоих, перевод подтверждает получатель.",
+  splitProposeSettlement: "Предложить этот расчёт",
+  splitAcceptSettlement: "Согласен с расчётом и взаимозачётом",
+  splitSettlementProposed: "Ждём согласия второй стороны",
+  splitSettlementAgreed: "Расчёт согласован, можно перевести деньги",
+  splitSettlementStale: "Долги изменились. Создайте расчёт заново.",
+  splitNothingToSettle: "У вас нет незакрытых расчётов в этой группе",
+  splitReceipts: "Чеки",
   splitPaymentAwaiting: "Ждёт подтверждения получателя",
   splitPaymentConfirmed: "Подтверждён",
   splitPaymentRejected: "Не подтверждён",
@@ -434,6 +444,16 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  splitHowToSettle: "Қалай есептесуге болады",
+  splitOffset: "Өзара қарыздарды есепке алу",
+  splitSettlementHint: "Қарыз тек сіз бен бастапқы алушы арасында біріктіріледі. Өзара есепке алуға екеуі келіседі, аударымды алушы растайды.",
+  splitProposeSettlement: "Осы есептесуді ұсыну",
+  splitAcceptSettlement: "Есептесу мен өзара есепке алуға келісемін",
+  splitSettlementProposed: "Екінші тараптың келісімін күтеміз",
+  splitSettlementAgreed: "Есептесу келісілді, ақшаны аударуға болады",
+  splitSettlementStale: "Қарыз өзгерді. Жаңа есептесу жасаңыз.",
+  splitNothingToSettle: "Бұл топта жабылмаған есептесуіңіз жоқ",
+  splitReceipts: "Чектер",
   splitPaymentAwaiting: "Алушының растауын күтуде",
   splitPaymentConfirmed: "Расталды",
   splitPaymentRejected: "Расталмады",
@@ -853,6 +873,16 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  splitHowToSettle: "How to settle",
+  splitOffset: "Mutual debt offset",
+  splitSettlementHint: "Combine debts only between the original two people. Both agree to offsets, and the recipient confirms the transfer.",
+  splitProposeSettlement: "Propose this settlement",
+  splitAcceptSettlement: "Agree to settlement and offset",
+  splitSettlementProposed: "Awaiting the other person’s agreement",
+  splitSettlementAgreed: "Agreed, ready for transfer",
+  splitSettlementStale: "Debts changed. Create a new settlement.",
+  splitNothingToSettle: "You have no outstanding settlements in this group",
+  splitReceipts: "Receipts",
   splitPaymentAwaiting: "Awaiting recipient confirmation",
   splitPaymentConfirmed: "Confirmed",
   splitPaymentRejected: "Rejected",

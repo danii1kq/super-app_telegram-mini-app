@@ -7,6 +7,7 @@ import { SplitDebtsPage } from './pages/SplitDebtsPage';
 import { SplitReportPage } from './pages/SplitReportPage';
 import { ReceiptDetailsPage } from './pages/ReceiptDetailsPage';
 import { SplitInvitePage } from './pages/SplitInvitePage';
+import { SplitSettlementsPage } from './pages/SplitSettlementsPage';
 
 /** SruSplit space: routes mounted by the shell at /apps/split. */
 export default function SplitRoutes() {
@@ -20,6 +21,7 @@ export default function SplitRoutes() {
       <Route path=":groupId/receipt" element={<SplitReceiptPage />} />
       <Route path=":groupId/receipts/:receiptId" element={<ReceiptDetailsPage />} />
       <Route path=":groupId/debts" element={<SplitDebtsPage />} />
+      <Route path=":groupId/settlements" element={<SplitSettlementsPage />} />
     </Routes>
   );
 }

@@ -46,7 +46,7 @@ func (s *Service) lockedDebt(ctx context.Context, tx pgx.Tx, userID, debtID int6
 	return d, err
 }
 
-func (s *Service) addPaymentTx(ctx context.Context, tx pgx.Tx, d Debt, authorID, amount int64, requestID, status, method string) (bool, error) {
+func (s *Service) addPaymentTx(ctx context.Context, tx pgx.Tx, d Debt, authorID, amount int64, requestID, status, method string, silent ...bool) (bool, error) {
 	if amount <= 0 || amount > 1_000_000_000_000 || requestID == "" || len(requestID) > 128 {
 		return false, httpapi.BadRequest("invalid_payment", "Проверьте сумму и ключ возврата")
 	}
@@ -96,6 +96,9 @@ func (s *Service) addPaymentTx(ctx context.Context, tx pgx.Tx, d Debt, authorID,
 		return false, err
 	}
 	d.Version++
+	if len(silent) > 0 && silent[0] {
+		return true, nil
+	}
 	if status == "confirmed" {
 		d.Outstanding = d.AmountMinor - paid - amount
 		return true, s.notifyPayment(ctx, tx, d, amount, authorID)

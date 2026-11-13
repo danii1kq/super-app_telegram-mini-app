@@ -100,7 +100,8 @@ export function SplitGroupPage() {
         </SecondaryButton>
       </div>
 
-      <SectionLabel>{t('receiptItems')}</SectionLabel>
+      <SecondaryButton onClick={()=>navigate(`/apps/split/${groupId}/settlements`)} full>{t('splitHowToSettle')}</SecondaryButton>
+      <SectionLabel>{t('splitReceipts')}</SectionLabel>
       <Card>{receipts.data?.map(receipt=><Row key={receipt.id} icon="receipt_long" title={`${t('receiptTitle')} ${receipt.id}`} subtitle={t(receipt.status==='saved'?'splitSaved':receipt.status==='review'?'splitReview':receipt.status==='collecting'?'splitCollecting':receipt.status==='cancelled'?'splitCancelled':'splitDraft')} value={`${formatMinor(receipt.total_minor)} ₸`} onClick={()=>navigate(`/apps/split/${groupId}/receipts/${receipt.id}`)}/>)}</Card>
       <SectionLabel>{t('balances')}</SectionLabel>
       <Card>
