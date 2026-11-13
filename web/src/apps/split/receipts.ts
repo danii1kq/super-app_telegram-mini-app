@@ -118,7 +118,7 @@ export function useReceipt(id: string) {
 }
 
 export function useReceipts(groupId: string) {
-  return useQuery({ queryKey: ['split', 'receipts', groupId], queryFn: () => api<{receipts: Receipt[]}>(`/split/groups/${groupId}/receipts`), select: r => r.receipts, enabled: Boolean(groupId), refetchInterval: 5000 });
+  return useQuery({ queryKey: ['split', 'receipts', groupId], queryFn: () => api<{receipts: Pick<Receipt, 'id' | 'group_id' | 'status' | 'version' | 'total_minor' | 'created_at'>[]}>(`/split/groups/${groupId}/receipts`), select: r => r.receipts, enabled: Boolean(groupId), refetchInterval: 5000 });
 }
 
 export function useReceiptAction(id: string, groupId: string) {

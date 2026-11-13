@@ -2,6 +2,9 @@ package split
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -101,6 +104,50 @@ func TestCollaborativeReceiptConsensusAndInvite(t *testing.T) {
 	}
 	_, err = s.ResolveReceiptInvite(ctx, 3, token, false)
 	requireReceiptStatus(t, err, 404)
+}
+
+func TestReceiptListReturnsOnlyAuthorizedSummaries(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	g, err := s.CreateGroup(ctx, 1, "List", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := s.CreateManualReceipt(ctx, 1, g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateReceipt(ctx, 1, receipt.ID, 12300, 0, 0, []ReceiptItem{{Name: "Private item", Quantity: 1, AmountMinor: 12300}}, receipt.Version); err != nil {
+		t.Fatal(err)
+	}
+	mux := receiptTestMux(t, s)
+	for _, user := range []int{1, 3} {
+		r := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/split/groups/%d/receipts", g.ID), nil)
+		r.Header.Set("Authorization", fmt.Sprintf("Bearer test-%d", user))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		if user == 3 {
+			if w.Code != 404 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			continue
+		}
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		var data struct {
+			Receipts []map[string]any `json:"receipts"`
+		}
+		if err = json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+			t.Fatal(err)
+		}
+		if len(data.Receipts) != 1 || data.Receipts[0]["total_minor"] != "12300" {
+			t.Fatal(data)
+		}
+		if _, ok := data.Receipts[0]["items"]; ok {
+			t.Fatal("list fetched full private receipt")
+		}
+	}
 }
 
 func TestConcurrentClaimKeepsLastUnitAndSharedPizza(t *testing.T) {

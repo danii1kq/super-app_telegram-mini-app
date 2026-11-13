@@ -3,6 +3,7 @@ package split
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/danii1kq/srunal/internal/core/auth"
 	"github.com/danii1kq/srunal/internal/platform/httpapi"
@@ -29,36 +30,37 @@ func (h *Handler) listReceipts(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, err)
 		return
 	}
-	rows, err := h.pool.Query(r.Context(), `SELECT id FROM split_receipts WHERE group_id=$1 ORDER BY updated_at DESC,id DESC LIMIT 100`, gid)
+
+	rows, err := h.pool.Query(r.Context(), `SELECT id,status,version,total_sealed,total_key_id,created_at FROM split_receipts WHERE group_id=$1 ORDER BY updated_at DESC,id DESC LIMIT 100`, gid)
 	if err != nil {
 		httpapi.WriteError(w, err)
 		return
 	}
-	ids := []int64{}
+	defer rows.Close()
+	out := []map[string]any{}
 	for rows.Next() {
 		var id int64
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+		var status string
+		var version int
+		var sealed []byte
+		var key *string
+		var created time.Time
+		if err = rows.Scan(&id, &status, &version, &sealed, &key, &created); err != nil {
 			httpapi.WriteError(w, err)
 			return
 		}
-		ids = append(ids, id)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		httpapi.WriteError(w, err)
-		return
-	}
-	out := []map[string]any{}
-	for _, id := range ids {
-		receipt, err := h.service.Receipt(r.Context(), user.ID, id)
+		total, err := h.service.openOptional(sealed, key, receiptTotalAAD(id))
 		if err != nil {
 			httpapi.WriteError(w, err)
 			return
 		}
-		out = append(out, receiptJSON(receipt))
+		out = append(out, map[string]any{"id": strconv.FormatInt(id, 10), "group_id": strconv.FormatInt(gid, 10), "status": status, "version": version, "total_minor": strconv.FormatInt(total, 10), "created_at": created.UTC().Format(time.RFC3339)})
 	}
+	if err = rows.Err(); err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+
 	httpapi.WriteJSON(w, 200, map[string]any{"receipts": out})
 }
 func (h *Handler) collaborate(w http.ResponseWriter, r *http.Request, action string) {
