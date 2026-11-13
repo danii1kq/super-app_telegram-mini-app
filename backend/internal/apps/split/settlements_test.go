@@ -101,7 +101,8 @@ func TestSettlementStaleAfterPaymentAndLegacyExpense(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.AddExpense(ctx, 1, g.ID, 1, "food", "Food", "cafe", 600000, []int64{1, 2}); err != nil {
+	expense, err := s.AddExpense(ctx, 1, g.ID, 1, "food", "Food", "cafe", 600000, []int64{1, 2})
+	if err != nil {
 		t.Fatal(err)
 	}
 	pairs, _, err := s.SettlementPlan(ctx, 1, g.ID)
@@ -127,6 +128,9 @@ func TestSettlementStaleAfterPaymentAndLegacyExpense(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.RecordExpenseDebt(ctx, 1, g.ID, expense.ID, 2, "track-after-proposal"); err != nil {
+		t.Fatal(err)
+	}
 	p, err = s.RespondSettlement(ctx, 1, mustID(p.ID), "agree")
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +146,42 @@ func TestSettlementStaleAfterPaymentAndLegacyExpense(t *testing.T) {
 	for _, b := range balances {
 		if b.BalanceMinor != 0 {
 			t.Fatal("legacy expense was not settled", b)
+		}
+	}
+}
+
+func TestEqualDebtsSettleAfterBothAgreeWithoutTransfer(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	g, err := s.CreateGroup(ctx, 1, "Equal", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateDebt(ctx, 1, g.ID, 1, 2, 100, "", "a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateDebt(ctx, 2, g.ID, 2, 1, 100, "", "b"); err != nil {
+		t.Fatal(err)
+	}
+	pairs, _, err := s.SettlementPlan(ctx, 1, g.ID)
+	if err != nil || len(pairs) != 1 || pairs[0].TransferMinor != "0" {
+		t.Fatal(pairs, err)
+	}
+	p, err := s.ProposeSettlement(ctx, 1, g.ID, 2, pairs[0].GroupVersion, "offset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err = s.RespondSettlement(ctx, 2, mustID(p.ID), "agree")
+	if err != nil || p.Status != "confirmed" {
+		t.Fatal(p, err)
+	}
+	debts, err := s.Debts(ctx, 1, g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range debts {
+		if d.Outstanding != 0 || len(d.Payments) != 1 || d.Payments[0].Method != "offset" {
+			t.Fatal(d)
 		}
 	}
 }

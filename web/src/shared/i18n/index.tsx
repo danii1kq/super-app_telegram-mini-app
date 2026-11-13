@@ -13,6 +13,7 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  splitPhotoNotStored: "Фото обработано без сохранения на сервере.",
   splitBotNotifications: "Уведомления бота",
   splitAllowBot: "Разрешить боту писать в личку",
   splitBotAccessDeclined: "Уведомления не включены. Разрешение можно дать в Telegram, остальные функции доступны.",
@@ -463,6 +464,7 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  splitPhotoNotStored: "Фото серверде сақталмай өңделді.",
   splitBotNotifications: "Бот хабарландырулары",
   splitAllowBot: "Ботқа жеке хабарламаға рұқсат беру",
   splitBotAccessDeclined: "Хабарландыру қосылмады. Рұқсатты Telegram ішінде беруге болады, басқа мүмкіндіктер қолжетімді.",
@@ -911,6 +913,7 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  splitPhotoNotStored: "The photo was processed without storing it on the server.",
   splitBotNotifications: "Bot notifications",
   splitAllowBot: "Allow private bot messages",
   splitBotAccessDeclined: "Notifications remain off. Grant access in Telegram when ready; other features still work.",

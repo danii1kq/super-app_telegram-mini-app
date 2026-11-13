@@ -17,7 +17,7 @@ import (
 // A manual debt has no expense behind it, so it does add to the group balance.
 // The author is recorded and shown: the other side has not confirmed anything.
 func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID, debtorID int64, amountMinor int64, note, clientRequestID string) (Debt, error) {
-	if clientRequestID == "" {
+	if clientRequestID == "" || len(clientRequestID) > 128 || len([]rune(note)) > 500 {
 		return Debt{}, httpapi.BadRequest("missing_request_id", "Не передан client_request_id")
 	}
 	if err := s.requireMember(ctx, authorID, groupID); err != nil {
@@ -41,16 +41,21 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 		if err := lockGroup(ctx, tx, groupID); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, authorID); err != nil {
+			return err
+		}
 		// Idempotency: the same key with the same body returns the stored row; a
 		// different body under the same key is a conflict, not a silent accept.
-		var existingID, existingCreditor, existingDebtor int64
+		var existingID, existingGroup, existingCreditor, existingDebtor int64
 		var existingSealed []byte
+		var existingNote []byte
+		var existingNoteKey *string
 		var existingKey string
 		err := tx.QueryRow(ctx,
-			`SELECT id, creditor_id, debtor_id, amount_sealed, amount_key_id
+			`SELECT id, creditor_id, debtor_id, amount_sealed, amount_key_id,group_id,note_sealed,note_key_id
 			   FROM split_debts WHERE author_id = $1 AND client_request_id = $2`,
 			authorID, clientRequestID,
-		).Scan(&existingID, &existingCreditor, &existingDebtor, &existingSealed, &existingKey)
+		).Scan(&existingID, &existingCreditor, &existingDebtor, &existingSealed, &existingKey, &existingGroup, &existingNote, &existingNoteKey)
 		if err == nil {
 			existingRaw, err := s.content.OpenString(
 				secure.Sealed{KeyID: existingKey, Ciphertext: existingSealed}, debtAmountAAD(existingID),
@@ -62,7 +67,11 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 			if err != nil {
 				return err
 			}
-			if existingCreditor != creditorID || existingDebtor != debtorID || existingAmount != amountMinor {
+			oldNote, err := s.openSealedString(existingNote, existingNoteKey, debtNoteAAD(existingID))
+			if err != nil {
+				return err
+			}
+			if existingGroup != groupID || existingCreditor != creditorID || existingDebtor != debtorID || existingAmount != amountMinor || oldNote != note {
 				return httpapi.Conflict("idempotency_conflict", "Этот ключ уже использован с другими данными")
 			}
 			debt.ID = existingID
@@ -119,14 +128,7 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 		return Debt{}, err
 	}
 
-	debt.GroupID = groupID
-	debt.AuthorID = authorID
-	debt.CreditorID = creditorID
-	debt.DebtorID = debtorID
-	debt.AmountMinor = amountMinor
-	debt.Note = note
-	debt.Outstanding = amountMinor
-	return debt, nil
+	return s.debtsByID(ctx, authorID, debt.ID)
 }
 
 // RecordExpenseDebt links an obligation to an expense that already carries it.
@@ -198,14 +200,7 @@ func (s *Service) RecordExpenseDebt(ctx context.Context, authorID, groupID, expe
 		return Debt{}, err
 	}
 
-	debt.GroupID = groupID
-	debt.AuthorID = authorID
-	debt.CreditorID = expense.PayerID
-	debt.DebtorID = debtorID
-	debt.AmountMinor = share
-	debt.SourceExpenseID = &expenseID
-	debt.Outstanding = share
-	return debt, nil
+	return s.debtsByID(ctx, authorID, debt.ID)
 }
 
 // Debts lists the group's obligations with their repayments.

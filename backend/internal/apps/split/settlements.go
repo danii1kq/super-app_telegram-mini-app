@@ -297,8 +297,15 @@ func (s *Service) ProposeSettlement(ctx context.Context, userID, groupID, otherI
 			return err
 		}
 		a, b := min(userID, otherID), max(userID, otherID)
-		err := tx.QueryRow(ctx, `SELECT id FROM split_settlements WHERE author_id=$1 AND client_request_id=$2 AND group_id=$3 AND user_a=$4 AND user_b=$5`, userID, requestID, groupID, a, b).Scan(&id)
+		if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID); err != nil {
+			return err
+		}
+		var existingGroup, existingA, existingB int64
+		err := tx.QueryRow(ctx, `SELECT id,group_id,user_a,user_b FROM split_settlements WHERE author_id=$1 AND client_request_id=$2`, userID, requestID).Scan(&id, &existingGroup, &existingA, &existingB)
 		if err == nil {
+			if existingGroup != groupID || existingA != a || existingB != b {
+				return httpapi.Conflict("idempotency_conflict", "Ключ использован для другого расчёта")
+			}
 			return nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -408,6 +415,9 @@ func (s *Service) RespondSettlement(ctx context.Context, userID, id int64, actio
 				status = "confirmed"
 			}
 		case "report":
+			if uid == p.Pair.DebtorID && status == "reported" {
+				return nil
+			}
 			if uid != p.Pair.DebtorID || status != "agreed" {
 				return httpapi.Conflict("invalid_settlement_state", "Сначала согласуйте расчёт обеими сторонами")
 			}
@@ -463,6 +473,12 @@ func (s *Service) applySettlement(ctx context.Context, tx pgx.Tx, groupID, actor
 			continue
 		}
 		debtID := o.DebtID
+		if debtID == 0 {
+			err = tx.QueryRow(ctx, `SELECT id FROM split_debts WHERE source_expense_id=$1 AND debtor_id=$2`, o.ExpenseID, o.DebtorID).Scan(&debtID)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
 		if debtID == 0 {
 			if err = tx.QueryRow(ctx, `INSERT INTO split_debts(group_id,author_id,creditor_id,debtor_id,amount_sealed,amount_key_id,source_expense_id,client_request_id)VALUES($1,$2,$3,$4,''::bytea,'pending',$5,$6)RETURNING id`, groupID, actorID, o.CreditorID, o.DebtorID, o.ExpenseID, "settlement-source:"+strconv.FormatInt(o.ExpenseID, 10)+":"+strconv.FormatInt(o.DebtorID, 10)).Scan(&debtID); err != nil {
 				return err

@@ -104,3 +104,31 @@ func TestConcurrentPaymentsReserveRemaining(t *testing.T) {
 		t.Fatal("overreserved", succeeded.Load())
 	}
 }
+
+func TestDebtReplayReturnsActualRemainderAndRejectsAnotherGroup(t *testing.T) {
+	s, _ := receiptTestService(t)
+	ctx := context.Background()
+	g, err := s.CreateGroup(ctx, 1, "Loan", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := s.CreateDebt(ctx, 1, g.ID, 1, 2, 100, "Note", "loan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.AddPayment(ctx, 1, d.ID, 100, "received"); err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := s.CreateDebt(ctx, 1, g.ID, 1, 2, 100, "Note", "loan")
+	if err != nil || repeated.Outstanding != 0 {
+		t.Fatal("replay reset debt", repeated, err)
+	}
+	other, err := s.CreateGroup(ctx, 1, "Other", []int64{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.CreateDebt(ctx, 1, other.ID, 1, 2, 100, "Note", "loan")
+	requireReceiptStatus(t, err, 409)
+	_, err = s.CreateDebt(ctx, 1, g.ID, 1, 2, 100, "Different note", "loan")
+	requireReceiptStatus(t, err, 409)
+}

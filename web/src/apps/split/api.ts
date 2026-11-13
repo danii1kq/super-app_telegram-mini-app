@@ -63,12 +63,12 @@ export function useSplitBalances(groupId: string, enabled = true) {
 
 /** Money is integer minor units; the UI shows tenge with two decimals. */
 export function formatMinor(value: string): string {
-  const minor = Number(value);
-  if (!Number.isFinite(minor)) return '0,00';
-  const sign = minor < 0 ? '-' : '';
-  const absolute = Math.abs(minor);
-  const whole = Math.floor(absolute / 100);
-  const cents = String(absolute % 100).padStart(2, '0');
+  if (!/^-?\d+$/.test(value)) return '0,00';
+  const minor = BigInt(value);
+  const sign = minor < 0n ? '-' : '';
+  const absolute = minor < 0n ? -minor : minor;
+  const whole = absolute / 100n;
+  const cents = String(absolute % 100n).padStart(2, '0');
   return `${sign}${whole.toLocaleString('ru-RU')},${cents}`;
 }
 
@@ -78,5 +78,5 @@ export function parseMinor(input: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
   const [whole, fraction = ''] = cleaned.split('.');
   const minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
-  return Number.isFinite(minor) && minor > 0 ? minor : null;
+  return Number.isSafeInteger(minor) && minor > 0 ? minor : null;
 }

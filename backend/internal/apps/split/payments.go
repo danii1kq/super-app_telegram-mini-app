@@ -50,6 +50,9 @@ func (s *Service) addPaymentTx(ctx context.Context, tx pgx.Tx, d Debt, authorID,
 	if amount <= 0 || amount > 1_000_000_000_000 || requestID == "" || len(requestID) > 128 {
 		return false, httpapi.BadRequest("invalid_payment", "Проверьте сумму и ключ возврата")
 	}
+	if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, authorID); err != nil {
+		return false, err
+	}
 	var existingDebt int64
 	var raw []byte
 	var key string
