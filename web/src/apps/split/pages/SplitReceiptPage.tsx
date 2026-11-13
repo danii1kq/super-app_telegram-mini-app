@@ -7,6 +7,7 @@ import {
 import { newRequestId } from '../mutations';
 import { receiptPreview, parseReceiptMinor, MAX_RECEIPT_MINOR, MAX_RECEIPT_ITEMS } from '../receiptPreview';
 import { ApiError } from '@/shared/api/client';
+import { ReceiptPhotoEditor } from '../ReceiptPhotoEditor';
 import {
   useGroupMembers,
   useManualReceipt,
@@ -89,6 +90,8 @@ export function SplitReceiptPage() {
   const [manual, setManual] = useState(false);
   const [saveKey, setSaveKey] = useState(newRequestId);
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [originalPhoto, setOriginalPhoto] = useState<File | null>(null);
+  const [photoEditing, setPhotoEditing] = useState(false);
   const [photoUrl, setPhotoUrl] = useState('');
   const [consent, setConsent] = useState(false);
   const [reviewedSignature, setReviewedSignature] = useState('');
@@ -162,7 +165,7 @@ export function SplitReceiptPage() {
     if (!file.size || file.size > 20 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       feedback(t('receiptImageLimit'), 'error'); return;
     }
-    setSelectedPhoto(file); setConsent(false);
+    setOriginalPhoto(file); setSelectedPhoto(file); setPhotoEditing(false); setConsent(false);
   };
 
   const recognize = () => {
@@ -303,6 +306,7 @@ export function SplitReceiptPage() {
       }
       bottomSpace
     >
+      {!receiptId && originalPhoto ? <ReceiptPhotoEditor key={`${originalPhoto.name}:${originalPhoto.lastModified}`} file={originalPhoto} onChange={(file) => { setSelectedPhoto(file); setConsent(false); }} onEditing={setPhotoEditing} /> : null}
       {photoUrl ? <Card className="mt-2 gap-2 p-3">
         <img src={photoUrl} alt={t('receiptPhotoPreview')} className="max-h-64 w-full rounded-xl object-contain" />
         <p className="text-caption text-ink-2">{t(receiptId ? 'receiptServerPhotoDeleted' : 'receiptLocalPreview')}</p>
@@ -330,7 +334,7 @@ export function SplitReceiptPage() {
                 <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={upload.isPending} className="mt-0.5 size-5 shrink-0 accent-accent" />
                 {t('receiptDeepSeekConsent')}
               </label>
-              <PrimaryButton onClick={recognize} full disabled={!consent} progress={upload.isPending}>{upload.isPending ? t('receiptRecognizing') : t('receiptRecognize')}</PrimaryButton>
+              <PrimaryButton onClick={recognize} full disabled={!consent || photoEditing} progress={upload.isPending}>{upload.isPending ? t('receiptRecognizing') : t('receiptRecognize')}</PrimaryButton>
             </> : null}
             <SecondaryButton onClick={startManual} full disabled={upload.isPending}>
               {t('receiptManual')}

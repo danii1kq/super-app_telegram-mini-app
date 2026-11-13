@@ -13,6 +13,10 @@ export type Lang = 'ru' | 'kk' | 'en';
 const LANG_KEY = 'srunal.lang';
 
 const ru = {
+  splitCropHint: 'Выделите чек пальцем или настройте рамку. Примените обрезку перед отправкой.',
+  splitCropError: 'Не удалось обработать фото. Можно отправить исходник или выбрать другое.',
+  splitCropLeft: 'Слева', splitCropTop: 'Сверху', splitCropWidth: 'Ширина', splitCropHeight: 'Высота',
+  splitRotateLeft: 'Повернуть влево', splitRotateRight: 'Повернуть вправо', splitPhotoOriginal: 'Без изменений', splitCropApply: 'Применить обрезку',
   dayEventDetails: 'Событие',
   dayEventReadonly: 'Изменять здесь можно только свои личные события без повторений. Общие, повторяющиеся и внешние события остаются в SruDay.',
   dayEventUpdated: 'Изменения сохранены',
@@ -382,6 +386,10 @@ const ru = {
 export type DictKey = keyof typeof ru;
 
 const kk: Record<DictKey, string> = {
+  splitCropHint: 'Чекті саусақпен белгілеңіз немесе жақтауды реттеңіз. Жібермес бұрын қиып алуды қолданыңыз.',
+  splitCropError: 'Фотосуретті өңдеу мүмкін болмады. Түпнұсқаны жіберіңіз немесе басқасын таңдаңыз.',
+  splitCropLeft: 'Сол жақ', splitCropTop: 'Жоғары', splitCropWidth: 'Ені', splitCropHeight: 'Биіктігі',
+  splitRotateLeft: 'Солға бұру', splitRotateRight: 'Оңға бұру', splitPhotoOriginal: 'Өзгеріссіз', splitCropApply: 'Қиып алуды қолдану',
   dayEventDetails: 'Оқиға',
   dayEventReadonly: 'Мұнда тек қайталанбайтын жеке оқиғаларыңызды өзгертуге болады. Ортақ, қайталанатын және сыртқы оқиғалар SruDay ішінде қалады.',
   dayEventUpdated: 'Өзгерістер сақталды',
@@ -749,6 +757,10 @@ const kk: Record<DictKey, string> = {
 };
 
 const en: Record<DictKey, string> = {
+  splitCropHint: 'Drag to select the receipt or adjust the frame. Apply the crop before sending.',
+  splitCropError: 'Could not process the photo. Send the original or choose another photo.',
+  splitCropLeft: 'Left', splitCropTop: 'Top', splitCropWidth: 'Width', splitCropHeight: 'Height',
+  splitRotateLeft: 'Rotate left', splitRotateRight: 'Rotate right', splitPhotoOriginal: 'Use original', splitCropApply: 'Apply crop',
   dayEventDetails: 'Event',
   dayEventReadonly: 'Only your own private events without recurrence can be edited here. Shared, recurring and external events stay in SruDay.',
   dayEventUpdated: 'Changes saved',
