@@ -17,6 +17,9 @@ backend/bin/
 # Local secrets and environment
 .env
 .env.local
+.env.*
+!.env.example
+*.dpapi
 *.local.md
 deploy/SSH.local.md
 

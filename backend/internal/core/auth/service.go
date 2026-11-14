@@ -23,14 +23,19 @@ type User struct {
 
 // Service owns accounts and sessions.
 type Service struct {
-	pool    *postgres.Pool
-	index   *secure.LookupIndex
-	content *secure.Cipher
-	ttl     time.Duration
+	pool     *postgres.Pool
+	index    *secure.LookupIndex
+	content  *secure.Cipher
+	identity *secure.Cipher
+	ttl      time.Duration
 }
 
-func NewService(pool *postgres.Pool, index *secure.LookupIndex, content *secure.Cipher, ttl time.Duration) *Service {
-	return &Service{pool: pool, index: index, content: content, ttl: ttl}
+func NewService(pool *postgres.Pool, index *secure.LookupIndex, content *secure.Cipher, ttl time.Duration, identity ...*secure.Cipher) *Service {
+	identityCipher := content
+	if len(identity) > 0 {
+		identityCipher = identity[0]
+	}
+	return &Service{pool: pool, index: index, content: content, identity: identityCipher, ttl: ttl}
 }
 
 // Login finds or creates the account for a verified payload and issues a
@@ -49,7 +54,7 @@ func (s *Service) Login(ctx context.Context, data InitData) (User, string, error
 		// Upsert, not select-then-insert: React StrictMode fires the login twice
 		// in development, and two concurrent inserts of the same account raced
 		// into a unique violation. ON CONFLICT makes the second one an update.
-		sealed, err := s.content.SealString(fmt.Sprintf("%d", data.TelegramID), "user:telegram_id")
+		sealed, err := s.identity.SealString(fmt.Sprintf("%d", data.TelegramID), "user:telegram_id")
 		if err != nil {
 			return err
 		}
@@ -59,6 +64,8 @@ func (s *Service) Login(ctx context.Context, data InitData) (User, string, error
 			 ON CONFLICT (telegram_id_lookup) DO UPDATE
 			    SET public_name = excluded.public_name,
 			        username = excluded.username,
+			        telegram_id_sealed=excluded.telegram_id_sealed,
+			        key_id=excluded.key_id,
 			        updated_at = now()
 			 RETURNING id, public_name, coalesce(username, ''), status`,
 			lookup, sealed.Ciphertext, sealed.KeyID, publicName, data.Username,

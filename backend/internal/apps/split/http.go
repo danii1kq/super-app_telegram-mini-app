@@ -28,6 +28,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/split/groups/{id}/members", h.auth.Middleware(http.HandlerFunc(h.members)))
 	h.RegisterReceipts(mux)
 	h.RegisterReport(mux)
+	h.registerCollaboration(mux)
+	h.registerSettlements(mux)
+	h.registerReminders(mux)
 }
 
 func (h *Handler) listGroups(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +193,7 @@ func (h *Handler) balances(w http.ResponseWriter, r *http.Request) {
 			"paid_minor":    strconv.FormatInt(balance.PaidMinor, 10),
 			"share_minor":   strconv.FormatInt(balance.ShareMinor, 10),
 			"balance_minor": strconv.FormatInt(balance.BalanceMinor, 10),
+			"settled_minor": strconv.FormatInt(balance.SettledMinor, 10),
 		})
 	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"balances": out})
@@ -246,5 +250,25 @@ func (h *Handler) members(w http.ResponseWriter, r *http.Request) {
 	for _, id := range ids {
 		out = append(out, strconv.FormatInt(id, 10))
 	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"members": out})
+	rows, err := h.pool.Query(r.Context(), `SELECT id,public_name FROM users WHERE id=ANY($1::bigint[]) ORDER BY id`, ids)
+	if err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	defer rows.Close()
+	people := []map[string]string{}
+	for rows.Next() {
+		var id int64
+		var name string
+		if err = rows.Scan(&id, &name); err != nil {
+			httpapi.WriteError(w, err)
+			return
+		}
+		people = append(people, map[string]string{"id": strconv.FormatInt(id, 10), "public_name": name})
+	}
+	if err = rows.Err(); err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"members": out, "people": people})
 }

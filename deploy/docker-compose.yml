@@ -31,16 +31,22 @@ services:
       dockerfile: deploy/Dockerfile
     environment:
       SRUNAL_ADDR: ":8080"
-      SRUNAL_FARM_STARS_ENABLED: ${SRUNAL_FARM_STARS_ENABLED:-0}
       SRUNAL_DATABASE_URL: postgres://srunal:${POSTGRES_PASSWORD}@db:5432/srunal?sslmode=disable
       SRUNAL_BOT_TOKEN: ${SRUNAL_BOT_TOKEN}
       SRUNAL_WEBHOOK_SECRET: ${SRUNAL_WEBHOOK_SECRET}
       SRUNAL_BOT_ID: ${SRUNAL_BOT_ID}
+      SRUNAL_FARM_STARS_ENABLED: ${SRUNAL_FARM_STARS_ENABLED:-false}
+      SRUNAL_BOT_USERNAME: ${SRUNAL_BOT_USERNAME:-}
       SRUNAL_CONTENT_KEY: ${SRUNAL_CONTENT_KEY}
       SRUNAL_IDENTITY_KEY: ${SRUNAL_IDENTITY_KEY}
       SRUNAL_DELIVERY_KEY: ${SRUNAL_DELIVERY_KEY}
       SRUNAL_HMAC_INDEX_KEY: ${SRUNAL_HMAC_INDEX_KEY}
       SRUNAL_MINIAPP_NAME: ${SRUNAL_MINIAPP_NAME}
+      SRUNAL_DEEPSEEK_API_KEY: ${SRUNAL_DEEPSEEK_API_KEY:-}
+      SRUNAL_DEEPSEEK_BASE_URL: ${SRUNAL_DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      SRUNAL_DEEPSEEK_MODEL: ${SRUNAL_DEEPSEEK_MODEL:-deepseek-flash}
+      SRUNAL_WEATHER_API_KEY: ${SRUNAL_WEATHER_API_KEY:-}
+      SRUNAL_DAY_API_URL: ${SRUNAL_DAY_API_URL:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -55,6 +61,9 @@ services:
       SRUNAL_DATABASE_URL: postgres://srunal:${POSTGRES_PASSWORD}@db:5432/srunal?sslmode=disable
       SRUNAL_BOT_TOKEN: ${SRUNAL_BOT_TOKEN}
       SRUNAL_DELIVERY_KEY: ${SRUNAL_DELIVERY_KEY}
+      SRUNAL_IDENTITY_KEY: ${SRUNAL_IDENTITY_KEY}
+      SRUNAL_BOT_USERNAME: ${SRUNAL_BOT_USERNAME:-}
+      SRUNAL_MINIAPP_NAME: ${SRUNAL_MINIAPP_NAME:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

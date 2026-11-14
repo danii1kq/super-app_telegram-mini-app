@@ -28,6 +28,27 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/tinder/matches", h.auth.Middleware(http.HandlerFunc(h.matches)))
 	mux.Handle("POST /api/v1/tinder/photo", h.auth.Middleware(http.HandlerFunc(h.uploadPhoto)))
 	mux.Handle("GET /api/v1/tinder/photo/{id}", h.auth.Middleware(http.HandlerFunc(h.photo)))
+	mux.Handle("POST /api/v1/tinder/bot-access", h.auth.Middleware(http.HandlerFunc(h.botAccess)))
+}
+
+func (h *Handler) botAccess(w http.ResponseWriter, r *http.Request) {
+	user, _ := auth.UserFrom(r.Context())
+	var body struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := httpapi.DecodeJSON(w, r, &body, 1024); err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	if body.Enabled == nil {
+		httpapi.WriteError(w, httpapi.BadRequest("invalid_setting", "Укажите настройку уведомлений"))
+		return
+	}
+	if _, err := h.service.pool.Exec(r.Context(), `UPDATE user_settings SET tinder_like_notifications=$2,tinder_match_notifications=$2,bot_notifications_opt_in=bot_notifications_opt_in OR $2 WHERE user_id=$1`, user.ID, *body.Enabled); err != nil {
+		httpapi.WriteError(w, err)
+		return
+	}
+	httpapi.WriteJSON(w, 200, map[string]bool{"enabled": *body.Enabled})
 }
 
 // uploadPhoto takes a raw image body, the same shape split uses for receipts:
@@ -76,18 +97,18 @@ func (h *Handler) photo(w http.ResponseWriter, r *http.Request) {
 
 func cardJSON(card Card) map[string]any {
 	return map[string]any{
-		"user_id":    strconv.FormatInt(card.UserID, 10),
-		"name":       card.Name,
-		"username":   card.Username,
-		"bio":        card.Bio,
-		"photo_url":  card.PhotoURL,
-		"university": card.University,
-		"gender":     card.Gender,
-		"age":        card.Age,
-		"likes_you":  card.LikesYou,
-		"has_photo":  card.HasPhoto,
+		"user_id":       strconv.FormatInt(card.UserID, 10),
+		"name":          card.Name,
+		"username":      card.Username,
+		"bio":           card.Bio,
+		"photo_url":     card.PhotoURL,
+		"university":    card.University,
+		"gender":        card.Gender,
+		"age":           card.Age,
+		"likes_you":     card.LikesYou,
+		"has_photo":     card.HasPhoto,
 		"photo_version": card.PhotoVersion,
-		"created_at": card.CreatedAt.UTC().Format(time.RFC3339),
+		"created_at":    card.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -113,14 +134,14 @@ func (h *Handler) ownProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
 		"profile": map[string]any{
-			"user_id":   strconv.FormatInt(profile.UserID, 10),
-			"bio":       profile.Bio,
-			"photo_url": profile.PhotoURL,
+			"user_id":    strconv.FormatInt(profile.UserID, 10),
+			"bio":        profile.Bio,
+			"photo_url":  profile.PhotoURL,
 			"university": profile.University,
 			"gender":     profile.Gender,
 			"seeking":    seekingOrEmpty(profile.Seeking),
-			"age":       profile.Age,
-			"active":    profile.Active,
+			"age":        profile.Age,
+			"active":     profile.Active,
 		},
 		"likes_me": likes,
 	})
@@ -167,14 +188,14 @@ func (h *Handler) saveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
 		"profile": map[string]any{
-			"user_id":   strconv.FormatInt(profile.UserID, 10),
-			"bio":       profile.Bio,
-			"photo_url": profile.PhotoURL,
+			"user_id":    strconv.FormatInt(profile.UserID, 10),
+			"bio":        profile.Bio,
+			"photo_url":  profile.PhotoURL,
 			"university": profile.University,
 			"gender":     profile.Gender,
 			"seeking":    seekingOrEmpty(profile.Seeking),
-			"age":       profile.Age,
-			"active":    profile.Active,
+			"age":        profile.Age,
+			"active":     profile.Active,
 		},
 	})
 }

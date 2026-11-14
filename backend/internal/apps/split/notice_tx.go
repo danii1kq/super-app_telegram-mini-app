@@ -50,7 +50,7 @@ func (s *Service) notifyPayment(ctx context.Context, tx pgx.Tx, debt Debt, amoun
 		return err
 	}
 
-	version := debt.AmountMinor - debt.Outstanding
+	version := debt.Version
 	for _, recipient := range []int64{debt.CreditorID, debt.DebtorID} {
 		if recipient == actorID {
 			continue

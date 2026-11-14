@@ -1,7 +1,7 @@
 # SruAura: охотник Системы
 
 The game remains at `/apps/game/aura`. This upgrade preserves existing heroes,
-currency, class choices and owned relics. Migration 000022 extends the existing
+currency, class choices and owned relics. Migration 000032 extends the existing
 player table rather than replacing its records. The unrelated `demo/` folder is
 not part of this implementation.
 

@@ -8,16 +8,15 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/danii1kq/srunal/internal/apps/aura"
 	"github.com/danii1kq/srunal/internal/apps/day"
 	"github.com/danii1kq/srunal/internal/apps/doc"
 	"github.com/danii1kq/srunal/internal/apps/farm"
 	"github.com/danii1kq/srunal/internal/apps/notes"
 	"github.com/danii1kq/srunal/internal/apps/pulse"
 	"github.com/danii1kq/srunal/internal/apps/split"
-	"github.com/danii1kq/srunal/internal/apps/aura"
 	"github.com/danii1kq/srunal/internal/apps/tinder"
 	"github.com/danii1kq/srunal/internal/core/auth"
-	"github.com/danii1kq/srunal/internal/core/chat"
 	"github.com/danii1kq/srunal/internal/core/social"
 	"github.com/danii1kq/srunal/internal/core/user"
 	"github.com/danii1kq/srunal/internal/integration"
@@ -27,6 +26,7 @@ import (
 	"github.com/danii1kq/srunal/internal/platform/postgres"
 	"github.com/danii1kq/srunal/internal/platform/secure"
 	"github.com/danii1kq/srunal/internal/platform/telegram"
+	"github.com/danii1kq/srunal/internal/platform/vision"
 )
 
 // Deps carries what every module needs.
@@ -57,7 +57,16 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	deps := Deps{Config: cfg, Pool: pool, Content: content, Index: index}
 
 	verifier := auth.NewVerifier(cfg.BotToken, cfg.AllowedBotID, cfg.InitDataMaxAge)
-	authService := auth.NewService(pool, index, content, cfg.SessionTTL)
+	identity, err := secure.NewCipher(cfg.IdentityKey)
+	if err != nil {
+		return nil, err
+	}
+	authService := auth.NewService(pool, index, content, cfg.SessionTTL, identity)
+	if pool != nil {
+		if err = authService.MigrateIdentityKeys(ctx); err != nil {
+			return nil, err
+		}
+	}
 
 	mux := http.NewServeMux()
 
@@ -76,7 +85,6 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	}
 	user.NewHandler(user.NewService(pool), authService).Register(mux)
 	social.NewHandler(social.NewService(pool, content), authService).Register(mux)
-	chat.NewHandler(chat.NewService(pool, content), authService, chat.NewHub()).Register(mux)
 
 	docClient := doc.NewClient(cfg.DocAPIURL, cfg.DocAPIToken)
 	docService := doc.NewService(pool, docClient)
@@ -84,12 +92,18 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 
 	dayClient := day.NewClient(cfg.DayAPIURL, cfg.DayAPIToken)
 	dayService := day.NewService(pool, dayClient)
-	day.NewHandler(dayService, authService).Register(mux)
+	visionClient := vision.NewClient(cfg.DeepSeekBaseURL, cfg.DeepSeekAPIKey, cfg.DeepSeekModel)
+	day.NewHandler(dayService, authService, visionClient, day.NewWeatherClient(cfg.WeatherAPIKey)).Register(mux)
 
 	notesService := notes.NewService(pool, content)
 	notes.NewHandler(notesService, authService).Register(mux)
 
-	split.NewHandler(split.NewService(pool, content, receiptReader(cfg), delivery), authService, pool).Register(mux)
+	splitService := split.NewService(pool, content, receiptReader(visionClient), delivery)
+	splitService.MiniAppURL = telegram.MiniAppURL(cfg.BotUsername, cfg.MiniAppShortName)
+	split.NewHandler(splitService, authService, pool).Register(mux)
+	if pool != nil {
+		go splitService.RunReminders(ctx)
+	}
 
 	pulse.NewHandler(pulse.NewService(pool, content), authService).Register(mux)
 	tinderService := tinder.NewService(pool, content)
@@ -97,8 +111,8 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 	tinder.NewHandler(tinderService, authService).Register(mux)
 	aura.NewHandler(aura.NewService(pool), authService).Register(mux)
 	farmHandler := farm.NewHandler(pool, authService)
-	if cfg.DevInsecureKeys {
-		if err := farmHandler.SeedDevThemes(ctx); err != nil {
+	if cfg.DevInsecureKeys && pool != nil {
+		if err = farmHandler.SeedDevThemes(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -127,9 +141,9 @@ func NewAPI(ctx context.Context, cfg config.Config, pool *postgres.Pool) (http.H
 // No key means the Disabled reader: the API answers "unavailable" and the UI
 // offers manual entry. There is deliberately no mock that returns invented
 // lines, because a fake receipt would look like a successful reading.
-func receiptReader(cfg config.Config) ocr.Reader {
-	if cfg.OCRAPIKey == "" {
+func receiptReader(client *vision.Client) ocr.Reader {
+	if !client.Configured() {
 		return ocr.Disabled{}
 	}
-	return ocr.NewOpenAI(cfg.OCRBaseURL, cfg.OCRAPIKey, cfg.OCRModel)
+	return ocr.NewDeepSeek(client)
 }

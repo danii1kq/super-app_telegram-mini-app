@@ -11,13 +11,17 @@ export interface ReceiptItem {
   unclear: boolean;
   /** How many units of this line each person takes, keyed by user id. */
   units: Record<string, number>;
+  allocation_mode: 'units' | 'shared';
+  parent_position: number | null;
+  suggested_parent_position?: number | null;
 }
 
 export interface Receipt {
   id: string;
   group_id: string;
   author_id: string;
-  status: 'draft' | 'saved';
+  status: 'draft' | 'collecting' | 'review' | 'saved' | 'cancelled';
+  version: number;
   total_minor: string;
   discount_minor: string;
   service_minor: string;
@@ -26,6 +30,14 @@ export interface Receipt {
   /** Stable code, translated by the UI: unavailable or unreadable. */
   ocr_error?: 'unavailable' | 'unreadable';
   saved_expense_id?: string;
+  image_state?: 'none' | 'stored' | 'purged' | 'processing';
+  image_bytes?: number;
+  image_width?: number;
+  image_height?: number;
+  payer_id?: string;
+  description?: string;
+  category?: string;
+  approvals: { user_id: string; decision: 'pending' | 'accepted' | 'question'; question: string }[];
 }
 
 export interface Allocation {
@@ -40,6 +52,8 @@ export interface Allocation {
 }
 
 export interface DebtPayment {
+  status: 'pending' | 'confirmed' | 'rejected';
+  method: 'transfer' | 'offset';
   id: string;
   amount_minor: string;
   paid_at: string;
@@ -47,6 +61,7 @@ export interface DebtPayment {
 }
 
 export interface Debt {
+  version: number;
   id: string;
   group_id: string;
   author_id: string;
@@ -87,11 +102,30 @@ export function useGroupMembers(groupId: string) {
   });
 }
 
+export function useGroupPeople(groupId: string) {
+  return useQuery({queryKey:debtKeys.members(groupId),queryFn:()=>api<{members:string[];people:{id:string;public_name:string}[]}>(`/split/groups/${groupId}/members`),select:r=>r.people,enabled:Boolean(groupId),refetchInterval:5000});
+}
+
 export function useReceipt(id: string) {
   return useQuery({
     queryKey: receiptKeys.one(id),
     queryFn: () => api<Receipt>(`/split/receipts/${id}`),
     enabled: Boolean(id),
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useReceipts(groupId: string) {
+  return useQuery({ queryKey: ['split', 'receipts', groupId], queryFn: () => api<{receipts: Pick<Receipt, 'id' | 'group_id' | 'status' | 'version' | 'total_minor' | 'created_at'>[]}>(`/split/groups/${groupId}/receipts`), select: r => r.receipts, enabled: Boolean(groupId), refetchInterval: 5000 });
+}
+
+export function useReceiptAction(id: string, groupId: string) {
+  const cache=useQueryClient();
+  return useMutation({ mutationFn: ({action,...body}: {action:string;version?:number;item_id?:string;count?:number;decision?:string;question?:string;payer_id?:string;client_request_id?:string;description?:string;category?:string}) => api<Receipt>(`/split/receipts/${id}/${action}`,{method:'POST',body}),
+   onSuccess:r=>{cache.setQueryData(receiptKeys.one(id),r);void cache.invalidateQueries({queryKey:['split','receipts',groupId]});void cache.invalidateQueries({queryKey:['split','expenses',groupId]});void cache.invalidateQueries({queryKey:['split','balances',groupId]});void cache.invalidateQueries({queryKey:debtKeys.list(groupId)});},
+   onError:()=>{void cache.invalidateQueries({queryKey:receiptKeys.one(id)});}
   });
 }
 
@@ -109,7 +143,14 @@ export function useDebts(groupId: string) {
     queryFn: () => api<{ debts: Debt[] }>(`/split/groups/${groupId}/debts`),
     select: (data) => data.debts,
     enabled: Boolean(groupId),
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
+}
+
+export function useRespondPayment(groupId: string) {
+ const cache=useQueryClient();
+ return useMutation({mutationFn:({debtId,paymentId,accept}:{debtId:string;paymentId:string;accept:boolean})=>api<Debt>(`/split/debts/${debtId}/payments/${paymentId}/respond`,{method:'POST',body:{accept}}),onSuccess:()=>{void cache.invalidateQueries({queryKey:debtKeys.list(groupId)});void cache.invalidateQueries({queryKey:['split','balances',groupId]});}});
 }
 
 /** Uploads the photo as a raw body: the server sniffs the real format. */
@@ -121,6 +162,7 @@ export function useUploadReceipt(groupId: string) {
         `/split/groups/${groupId}/receipts`,
         file,
         file.type || 'application/octet-stream',
+        'deepseek',
       ),
     onSuccess: (receipt) => {
       queryClient.setQueryData(receiptKeys.one(receipt.id), receipt);
@@ -143,18 +185,23 @@ export function useUpdateReceipt(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
+      version: number;
       totalMinor: string;
       discountMinor: string;
       serviceMinor: string;
-      items: { name: string; quantity: number; amountMinor: string; unclear: boolean; units: Record<string, number> }[];
+      items: { id?: string; name: string; quantity: number; amountMinor: string; unclear: boolean; units: Record<string, number>; allocationMode?: 'units' | 'shared'; parentPosition?: number | null }[];
     }) =>
       api<Receipt>(`/split/receipts/${id}`, {
         method: 'PATCH',
         body: {
+          version: input.version,
           total_minor: input.totalMinor,
           discount_minor: input.discountMinor,
           service_minor: input.serviceMinor,
           items: input.items.map((item) => ({
+            id: item.id,
+            allocation_mode: item.allocationMode,
+            parent_position: item.parentPosition,
             name: item.name,
             quantity: item.quantity,
             amount_minor: item.amountMinor,

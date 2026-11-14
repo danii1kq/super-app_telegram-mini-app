@@ -23,12 +23,13 @@ type Config struct {
 
 	// Telegram
 	BotToken         string
-	FarmStarsEnabled bool
+	BotUsername      string
 	WebhookSecret    string
 	AllowedBotID     int64
 	InitDataMaxAge   time.Duration
 	SessionTTL       time.Duration
 	MiniAppShortName string
+	FarmStarsEnabled bool
 
 	// Existing services SruNal adapts to.
 	DocAPIURL   string
@@ -36,11 +37,11 @@ type Config struct {
 	DayAPIURL   string
 	DayAPIToken string
 
-	// Receipt recognition. Empty key means the feature reports "unavailable"
-	// and the UI offers manual entry; it never falls back to fake results.
-	OCRBaseURL string
-	OCRAPIKey  string
-	OCRModel   string
+	// Image imports use a dedicated DeepSeek credential, never a frontend key.
+	DeepSeekBaseURL string
+	DeepSeekAPIKey  string
+	DeepSeekModel   string
+	WeatherAPIKey   string
 
 	// Cryptography: base64-encoded 32-byte keys. Empty in development means
 	// the process refuses to start unless DevInsecureKeys is set.
@@ -52,23 +53,39 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	return load(false)
+}
+
+func LoadWorker() (Config, error) { return load(true) }
+
+func LoadDatabase() (Config, error) {
+	dsn := env("SRUNAL_DATABASE_URL", "")
+	if dsn == "" {
+		return Config{}, fmt.Errorf("SRUNAL_DATABASE_URL is required")
+	}
+	return Config{DatabaseURL: dsn}, nil
+}
+
+func load(worker bool) (Config, error) {
 	cfg := Config{
 		Addr:             env("SRUNAL_ADDR", ":8080"),
 		DatabaseURL:      env("SRUNAL_DATABASE_URL", ""),
 		BotToken:         env("SRUNAL_BOT_TOKEN", ""),
-		FarmStarsEnabled: envBool("SRUNAL_FARM_STARS_ENABLED", false),
+		BotUsername:      env("SRUNAL_BOT_USERNAME", ""),
 		WebhookSecret:    env("SRUNAL_WEBHOOK_SECRET", ""),
 		AllowedBotID:     envInt("SRUNAL_BOT_ID", 0),
 		InitDataMaxAge:   envDuration("SRUNAL_INITDATA_MAX_AGE", 24*time.Hour),
 		SessionTTL:       envDuration("SRUNAL_SESSION_TTL", 30*24*time.Hour),
 		MiniAppShortName: env("SRUNAL_MINIAPP_NAME", ""),
+		FarmStarsEnabled: envBool("SRUNAL_FARM_STARS_ENABLED", false),
 		DocAPIURL:        env("SRUNAL_DOC_API_URL", ""),
 		DocAPIToken:      env("SRUNAL_DOC_API_TOKEN", ""),
 		DayAPIURL:        env("SRUNAL_DAY_API_URL", ""),
 		DayAPIToken:      env("SRUNAL_DAY_API_TOKEN", ""),
-		OCRBaseURL:       env("SRUNAL_OCR_BASE_URL", ""),
-		OCRAPIKey:        env("SRUNAL_OCR_API_KEY", ""),
-		OCRModel:         env("SRUNAL_OCR_MODEL", ""),
+		DeepSeekBaseURL:  env("SRUNAL_DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+		DeepSeekAPIKey:   env("SRUNAL_DEEPSEEK_API_KEY", ""),
+		DeepSeekModel:    env("SRUNAL_DEEPSEEK_MODEL", "deepseek-flash"),
+		WeatherAPIKey:    env("SRUNAL_WEATHER_API_KEY", ""),
 		ContentKey:       env("SRUNAL_CONTENT_KEY", ""),
 		IdentityKey:      env("SRUNAL_IDENTITY_KEY", ""),
 		DeliveryKey:      env("SRUNAL_DELIVERY_KEY", ""),
@@ -78,9 +95,6 @@ func Load() (Config, error) {
 
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("SRUNAL_DATABASE_URL is required")
-	}
-	if cfg.FarmStarsEnabled && (cfg.BotToken == "" || cfg.WebhookSecret == "") {
-		return Config{}, fmt.Errorf("farm Stars require SRUNAL_BOT_TOKEN and SRUNAL_WEBHOOK_SECRET")
 	}
 
 	if cfg.DevInsecureKeys {
@@ -104,11 +118,17 @@ func Load() (Config, error) {
 		}
 	}
 
-	if cfg.ContentKey == "" {
+	if !worker && cfg.ContentKey == "" {
 		return Config{}, fmt.Errorf("SRUNAL_CONTENT_KEY is required (or set SRUNAL_DEV_INSECURE_KEYS=1 for local development)")
 	}
-	if cfg.HMACIndexKey == "" {
+	if !worker && cfg.HMACIndexKey == "" {
 		return Config{}, fmt.Errorf("SRUNAL_HMAC_INDEX_KEY is required (or set SRUNAL_DEV_INSECURE_KEYS=1 for local development)")
+	}
+	if cfg.IdentityKey == "" {
+		return Config{}, fmt.Errorf("SRUNAL_IDENTITY_KEY is required")
+	}
+	if cfg.DeliveryKey == "" {
+		return Config{}, fmt.Errorf("SRUNAL_DELIVERY_KEY is required")
 	}
 	return cfg, nil
 }

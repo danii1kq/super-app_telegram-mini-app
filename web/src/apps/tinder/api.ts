@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, apiBlobUrl, apiUpload } from '@/shared/api/client';
+import { api, apiBlob, apiUpload } from '@/shared/api/client';
 
 export interface TinderProfile {
   user_id: string;
@@ -55,7 +55,7 @@ export function useProfilePhoto(userId: string, version = '', enabled = true) {
     queryKey: ['tinder', 'photo', userId, version] as const,
     // The version is part of the key, so a replaced photo is a new query
     // rather than a cached hit.
-    queryFn: () => apiBlobUrl(`/tinder/photo/${userId}?v=${encodeURIComponent(version)}`),
+    queryFn: () => apiBlob(`/tinder/photo/${userId}?v=${encodeURIComponent(version)}`),
     enabled: Boolean(userId) && enabled,
     staleTime: 5 * 60_000,
   });
@@ -129,3 +129,5 @@ export function usePass() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: tinderKeys.deck }),
   });
 }
+
+export function useEnableTinderBot(){return useMutation({mutationFn:()=>api('/tinder/bot-access',{method:'POST',body:{enabled:true}})});}

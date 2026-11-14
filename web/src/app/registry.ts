@@ -1,5 +1,5 @@
 /**
- * App registry: the catalogue of the five apps plus the SruNal core sections.
+ * App registry: catalogue apps and the games hub; the calendar is a core section.
  *
  * Each app owns its route and its lazy-loaded module. Adding an app means adding
  * one entry here and its folder under src/apps/<id>.
@@ -10,7 +10,7 @@
 
 import type { DictKey } from '@/shared/i18n';
 
-export type AppId = 'doc' | 'day' | 'pulse' | 'notes' | 'split' | 'game' | 'tinder';
+export type AppId = 'doc' | 'pulse' | 'notes' | 'split' | 'game' | 'tinder';
 
 export interface AppMeta {
   id: AppId;
@@ -25,36 +25,14 @@ export interface AppMeta {
 }
 
 export const APPS: readonly AppMeta[] = [
-  {
-    id: 'game',
-    path: '/apps/game',
-    title: 'SruGame',
-    tagline: 'appGameTagline',
-    icon: 'sports_esports',
-    ready: true,
-  },
-  {
-    id: 'tinder',
-    path: '/apps/tinder',
-    title: 'SruTinder',
-    tagline: 'appTinderTagline',
-    icon: 'favorite',
-    ready: true,
-  },
+  {id:'game',path:'/apps/game',title:'SruGame',tagline:'appGameTagline',icon:'sports_esports',ready:true},
+  {id:'tinder',path:'/apps/tinder',title:'SruTinder',tagline:'appTinderTagline',icon:'favorite',ready:true},
   {
     id: 'doc',
     path: '/apps/doc',
-    title: 'SruDoc',
+    title: 'Docgen',
     tagline: 'appDocTagline',
     icon: 'description',
-    ready: true,
-  },
-  {
-    id: 'day',
-    path: '/apps/day',
-    title: 'SruDay',
-    tagline: 'appDayTagline',
-    icon: 'calendar_month',
     ready: true,
   },
   {

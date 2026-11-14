@@ -34,9 +34,11 @@ type Cipher struct {
 }
 
 type keyEntry struct {
-	id  string
+	id   string
 	aead cipher.AEAD
 }
+
+func (c *Cipher) ActiveKeyID() string { return c.activeID }
 
 // NewCipher builds a cipher from base64-encoded 32-byte keys. The first key is
 // the active one; the rest are read-only rotation history.

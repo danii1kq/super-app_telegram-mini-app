@@ -46,16 +46,16 @@ type Profile struct {
 
 // Card is one profile in the deck, as another player sees it.
 type Card struct {
-	UserID    int64
-	Name      string
-	Username  string
-	Bio       string
-	PhotoURL  string
+	UserID     int64
+	Name       string
+	Username   string
+	Bio        string
+	PhotoURL   string
 	University string
-	Age       int
-	Gender    string
-	LikesYou  bool
-	HasPhoto  bool
+	Age        int
+	Gender     string
+	LikesYou   bool
+	HasPhoto   bool
 	// PhotoVersion changes whenever the photo is replaced, so the client can
 	// request a fresh image instead of a cached one.
 	PhotoVersion string
@@ -347,9 +347,27 @@ func (s *Service) Like(ctx context.Context, fromID, toID int64) (matched bool, m
 		return false, 0, httpapi.BadRequest("own_profile", "Нельзя лайкнуть себя")
 	}
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		ids := []int64{min(fromID, toID), max(fromID, toID)}
+		rows, err := tx.Query(ctx, `SELECT id FROM users WHERE id=ANY($1::bigint[]) AND status='active' ORDER BY id FOR UPDATE`, ids)
+		if err != nil {
+			return err
+		}
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if count != 2 {
+			return httpapi.NotFound("Анкета не найдена")
+		}
 		var exists bool
 		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM tinder_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id = $1 AND p.active AND u.status='active')`, toID,
+			`SELECT (SELECT count(*) FROM tinder_profiles WHERE user_id=ANY($1::bigint[]) AND active)=2
+			 AND NOT EXISTS(SELECT 1 FROM social_blocks WHERE (blocker_id=$2 AND blocked_id=$3) OR (blocker_id=$3 AND blocked_id=$2))`, ids, fromID, toID,
 		).Scan(&exists); err != nil {
 			return err
 		}
@@ -384,28 +402,19 @@ func (s *Service) Like(ctx context.Context, fromID, toID int64) (matched bool, m
 			a, b = b, a
 		}
 		created := true
-		err := tx.QueryRow(ctx,
-			`INSERT INTO tinder_matches (user_a, user_b) VALUES ($1,$2)
-			 ON CONFLICT (user_a, user_b) DO NOTHING
-			 RETURNING id`, a, b,
-		).Scan(&matchID)
+		err = tx.QueryRow(ctx, `INSERT INTO tinder_matches(user_a,user_b)VALUES($1,$2)ON CONFLICT(user_a,user_b)DO NOTHING RETURNING id`, a, b).Scan(&matchID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			// The match already existed: read it back instead of rewriting it.
 			created = false
-			if err := tx.QueryRow(ctx,
-				`SELECT id FROM tinder_matches WHERE user_a = $1 AND user_b = $2`, a, b,
-			).Scan(&matchID); err != nil {
-				return err
-			}
-		} else if err != nil {
+			err = tx.QueryRow(ctx, `SELECT id FROM tinder_matches WHERE user_a=$1 AND user_b=$2`, a, b).Scan(&matchID)
+		}
+		if err != nil {
 			return err
 		}
 		matched = true
-		_ = created
 		// Both sides hear about a match; the like that caused it is not
 		// announced separately, because the match already says it.
-		if s.delivery != nil {
-			if err := s.notifyMatch(ctx, tx, fromID, toID); err != nil {
+		if s.delivery != nil && created {
+			if err := s.notifyMatch(ctx, tx, a, b); err != nil {
 				return err
 			}
 		}
@@ -437,7 +446,8 @@ func (s *Service) Matches(ctx context.Context, viewerID int64) ([]Match, error) 
 		   FROM tinder_matches m
 		   JOIN users u ON u.id = CASE WHEN m.user_a = $1 THEN m.user_b ELSE m.user_a END
 		   LEFT JOIN tinder_profiles p ON p.user_id = u.id
-		  WHERE m.user_a = $1 OR m.user_b = $1
+		  WHERE (m.user_a = $1 OR m.user_b = $1) AND u.status='active'
+		    AND NOT EXISTS(SELECT 1 FROM social_blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=u.id) OR (b.blocker_id=u.id AND b.blocked_id=$1))
 		  ORDER BY m.created_at DESC
 		  LIMIT 100`, viewerID)
 	if err != nil {

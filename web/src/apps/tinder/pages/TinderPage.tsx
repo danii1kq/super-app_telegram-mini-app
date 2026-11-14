@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useLike,
@@ -9,9 +9,11 @@ import {
   useTinderProfile,
   useUploadPhoto,
   useProfilePhoto,
+  useEnableTinderBot,
   type TinderCard,
 } from '../api';
-import { useOpenDirect } from '@/core/chat/mutations';
+import { telegramContact } from '../contact';
+import { openTelegramLink, requestBotWriteAccess } from '@/shared/telegram/sdk';
 import {
   AppHeader,
   Avatar,
@@ -48,8 +50,10 @@ const SEEKING = [
  */
 function CardPhoto({ userId, name, version }: { userId: string; name: string; version: string }) {
   const photo = useProfilePhoto(userId, version);
-  if (photo.data) {
-    return <img src={photo.data} alt={name} className="h-72 w-full object-cover" />;
+  const [url,setUrl]=useState('');
+  useEffect(()=>{if(!photo.data){setUrl('');return;}const next=URL.createObjectURL(photo.data);setUrl(next);return()=>URL.revokeObjectURL(next);},[photo.data]);
+  if (url) {
+    return <img src={url} alt={name} className="h-72 w-full object-cover" />;
   }
   return (
     <div className="flex h-72 w-full items-center justify-center bg-neutral-soft">
@@ -70,8 +74,8 @@ export function TinderPage() {
   const saveProfile = useSaveProfile();
   const like = useLike();
   const pass = usePass();
-  const openDirect = useOpenDirect();
   const uploadPhoto = useUploadPhoto();
+  const enableBot=useEnableTinderBot();
 
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState('');
@@ -105,12 +109,6 @@ export function TinderPage() {
   };
 
   const submitProfile = () => {
-    if (photoFile) {
-      uploadPhoto.mutate(photoFile, {
-        onSuccess: () => setPhotoFile(null),
-        onError: () => feedback(t('tinderPhotoFailed'), 'error'),
-      });
-    }
     saveProfile.mutate(
       {
         bio: bio.trim(),
@@ -123,8 +121,8 @@ export function TinderPage() {
       },
       {
         onSuccess: () => {
-          setEditing(false);
-          feedback(t('tinderSaved'));
+          if(photoFile){uploadPhoto.mutate(photoFile,{onSuccess:()=>{setPhotoFile(null);setEditing(false);feedback(t('tinderSaved'));},onError:()=>feedback(t('tinderPhotoFailed'),'error')});}
+          else{setEditing(false);feedback(t('tinderSaved'));}
         },
         onError: () => feedback(t('tinderSaveFailed'), 'error'),
       },
@@ -140,11 +138,9 @@ export function TinderPage() {
     });
   };
 
-  const openChat = (partnerId: string) => {
-    openDirect.mutate(partnerId, {
-      onSuccess: (conversation) => navigate(`/chats/${conversation.id}`),
-      onError: () => feedback(t('error'), 'error'),
-    });
+  const openContact = (partnerId: string, username: string) => {
+    const url=telegramContact(username);
+    if(url)openTelegramLink(url);else navigate(`/people/${partnerId}`);
   };
 
   return (
@@ -236,7 +232,7 @@ export function TinderPage() {
             <button type="button" onClick={() => setEditing(false)} className="text-body-secondary text-ink-2">
               {t('cancel')}
             </button>
-            <PrimaryButton onClick={submitProfile} progress={saveProfile.isPending}>
+            <PrimaryButton onClick={submitProfile} disabled={saveProfile.isPending||uploadPhoto.isPending} progress={saveProfile.isPending||uploadPhoto.isPending}>
               {t('save')}
             </PrimaryButton>
           </div>
@@ -245,6 +241,7 @@ export function TinderPage() {
 
       {own && !editing ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-3">
+          <button type="button" disabled={enableBot.isPending} className="min-h-11 text-caption text-accent" onClick={()=>{void requestBotWriteAccess().then(allowed=>{if(allowed)enableBot.mutate(undefined,{onSuccess:()=>feedback(t('tinderNotificationsEnabled')),onError:()=>feedback(t('error'),'error')});else feedback(t('splitBotAccessDeclined'),'error');});}}>{t('tinderEnableNotifications')}</button>
           <button type="button" onClick={startEditing} className="whitespace-nowrap text-caption text-accent">
             {t('tinderEditProfile')}
           </button>
@@ -274,11 +271,10 @@ export function TinderPage() {
               <span className="min-w-0 flex-1 truncate text-body-secondary-strong text-ink">{match.name}</span>
               <button
                 type="button"
-                disabled={openDirect.isPending}
-                onClick={() => openChat(match.partner_id)}
-                className="h-8 rounded-lg bg-accent-soft px-3 text-caption font-semibold text-accent"
+                onClick={() => openContact(match.partner_id,match.username)}
+                className="min-h-11 rounded-lg bg-accent-soft px-3 text-caption font-semibold text-accent"
               >
-                {t('pulseWrite')}
+                {t(telegramContact(match.username)?'profileTelegram':'profile')}
               </button>
             </div>
           ))}

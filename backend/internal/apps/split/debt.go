@@ -17,7 +17,7 @@ import (
 // A manual debt has no expense behind it, so it does add to the group balance.
 // The author is recorded and shown: the other side has not confirmed anything.
 func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID, debtorID int64, amountMinor int64, note, clientRequestID string) (Debt, error) {
-	if clientRequestID == "" {
+	if clientRequestID == "" || len(clientRequestID) > 128 || len([]rune(note)) > 500 {
 		return Debt{}, httpapi.BadRequest("missing_request_id", "Не передан client_request_id")
 	}
 	if err := s.requireMember(ctx, authorID, groupID); err != nil {
@@ -26,7 +26,7 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 	if creditorID == debtorID {
 		return Debt{}, httpapi.Validation(map[string]string{"debtor_id": "Должник и получатель совпадают"}, "Проверьте поля")
 	}
-	if amountMinor <= 0 {
+	if amountMinor <= 0 || amountMinor > 1_000_000_000_000 {
 		return Debt{}, httpapi.Validation(map[string]string{"amount_minor": "Сумма должна быть больше нуля"}, "Проверьте поля")
 	}
 	if err := s.requireMember(ctx, creditorID, groupID); err != nil {
@@ -38,16 +38,24 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 
 	var debt Debt
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if err := lockGroup(ctx, tx, groupID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, authorID); err != nil {
+			return err
+		}
 		// Idempotency: the same key with the same body returns the stored row; a
 		// different body under the same key is a conflict, not a silent accept.
-		var existingID, existingCreditor, existingDebtor int64
+		var existingID, existingGroup, existingCreditor, existingDebtor int64
 		var existingSealed []byte
+		var existingNote []byte
+		var existingNoteKey *string
 		var existingKey string
 		err := tx.QueryRow(ctx,
-			`SELECT id, creditor_id, debtor_id, amount_sealed, amount_key_id
+			`SELECT id, creditor_id, debtor_id, amount_sealed, amount_key_id,group_id,note_sealed,note_key_id
 			   FROM split_debts WHERE author_id = $1 AND client_request_id = $2`,
 			authorID, clientRequestID,
-		).Scan(&existingID, &existingCreditor, &existingDebtor, &existingSealed, &existingKey)
+		).Scan(&existingID, &existingCreditor, &existingDebtor, &existingSealed, &existingKey, &existingGroup, &existingNote, &existingNoteKey)
 		if err == nil {
 			existingRaw, err := s.content.OpenString(
 				secure.Sealed{KeyID: existingKey, Ciphertext: existingSealed}, debtAmountAAD(existingID),
@@ -59,7 +67,11 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 			if err != nil {
 				return err
 			}
-			if existingCreditor != creditorID || existingDebtor != debtorID || existingAmount != amountMinor {
+			oldNote, err := s.openSealedString(existingNote, existingNoteKey, debtNoteAAD(existingID))
+			if err != nil {
+				return err
+			}
+			if existingGroup != groupID || existingCreditor != creditorID || existingDebtor != debtorID || existingAmount != amountMinor || oldNote != note {
 				return httpapi.Conflict("idempotency_conflict", "Этот ключ уже использован с другими данными")
 			}
 			debt.ID = existingID
@@ -107,20 +119,16 @@ func (s *Service) CreateDebt(ctx context.Context, authorID, groupID, creditorID,
 		debt.DebtorID = debtorID
 		debt.AmountMinor = amountMinor
 		debt.Outstanding = amountMinor
+		if err := touchFinance(ctx, tx, groupID); err != nil {
+			return err
+		}
 		return s.notifyDebt(ctx, tx, debt, authorID)
 	})
 	if err != nil {
 		return Debt{}, err
 	}
 
-	debt.GroupID = groupID
-	debt.AuthorID = authorID
-	debt.CreditorID = creditorID
-	debt.DebtorID = debtorID
-	debt.AmountMinor = amountMinor
-	debt.Note = note
-	debt.Outstanding = amountMinor
-	return debt, nil
+	return s.debtsByID(ctx, authorID, debt.ID)
 }
 
 // RecordExpenseDebt links an obligation to an expense that already carries it.
@@ -151,6 +159,9 @@ func (s *Service) RecordExpenseDebt(ctx context.Context, authorID, groupID, expe
 
 	var debt Debt
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if err := lockGroup(ctx, tx, groupID); err != nil {
+			return err
+		}
 		var existingID int64
 		err := tx.QueryRow(ctx,
 			`SELECT id FROM split_debts WHERE source_expense_id = $1 AND debtor_id = $2`,
@@ -189,14 +200,7 @@ func (s *Service) RecordExpenseDebt(ctx context.Context, authorID, groupID, expe
 		return Debt{}, err
 	}
 
-	debt.GroupID = groupID
-	debt.AuthorID = authorID
-	debt.CreditorID = expense.PayerID
-	debt.DebtorID = debtorID
-	debt.AmountMinor = share
-	debt.SourceExpenseID = &expenseID
-	debt.Outstanding = share
-	return debt, nil
+	return s.debtsByID(ctx, authorID, debt.ID)
 }
 
 // Debts lists the group's obligations with their repayments.
@@ -207,7 +211,7 @@ func (s *Service) Debts(ctx context.Context, viewerID, groupID int64) ([]Debt, e
 
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, author_id, creditor_id, debtor_id, amount_sealed, amount_key_id,
-		        note_sealed, note_key_id, source_expense_id, created_at
+		        note_sealed, note_key_id, source_expense_id, created_at, version
 		   FROM split_debts WHERE group_id = $1 ORDER BY created_at DESC, id DESC`, groupID)
 	if err != nil {
 		return nil, err
@@ -222,7 +226,7 @@ func (s *Service) Debts(ctx context.Context, viewerID, groupID int64) ([]Debt, e
 		var noteSealed []byte
 		var noteKey *string
 		if err := rows.Scan(&debt.ID, &debt.AuthorID, &debt.CreditorID, &debt.DebtorID,
-			&amountSealed, &amountKey, &noteSealed, &noteKey, &debt.SourceExpenseID, &debt.CreatedAt,
+			&amountSealed, &amountKey, &noteSealed, &noteKey, &debt.SourceExpenseID, &debt.CreatedAt, &debt.Version,
 		); err != nil {
 			return nil, err
 		}
@@ -259,154 +263,14 @@ func (s *Service) Debts(ctx context.Context, viewerID, groupID int64) ([]Debt, e
 }
 
 func (s *Service) paymentsOf(ctx context.Context, debtID int64) ([]DebtPayment, int64, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, author_id, amount_sealed, amount_key_id, paid_at
-		   FROM split_debt_payments WHERE debt_id = $1 ORDER BY paid_at, id`, debtID)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	out := make([]DebtPayment, 0, 4)
-	total := int64(0)
-	for rows.Next() {
-		var payment DebtPayment
-		var sealed []byte
-		var keyID string
-		if err := rows.Scan(&payment.ID, &payment.AuthorID, &sealed, &keyID, &payment.PaidAt); err != nil {
-			return nil, 0, err
-		}
-		raw, err := s.content.OpenString(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, debtPaymentAAD(payment.ID))
-		if err != nil {
-			return nil, 0, err
-		}
-		amount, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil {
-			return nil, 0, err
-		}
-		payment.AmountMinor = amount
-		total += amount
-		out = append(out, payment)
-	}
-	return out, total, rows.Err()
+	return s.paymentsOfQuery(ctx, s.pool, debtID)
 }
-
-// AddPayment records a full or partial repayment.
-//
-// The debt row is locked for the duration of the transaction, so two concurrent
-// repayments cannot together exceed the debt. The client request id makes a
-// retry after a network error return the stored payment instead of a second one.
-func (s *Service) AddPayment(ctx context.Context, authorID, debtID, amountMinor int64, clientRequestID string) (Debt, error) {
-	if clientRequestID == "" {
-		return Debt{}, httpapi.BadRequest("missing_request_id", "Не передан client_request_id")
-	}
-	if amountMinor <= 0 {
-		return Debt{}, httpapi.Validation(map[string]string{"amount_minor": "Возврат должен быть больше нуля"}, "Проверьте поля")
-	}
-
-	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
-		var groupID, creditorID, debtorID int64
-		var amountSealed []byte
-		var amountKey string
-		if err := tx.QueryRow(ctx,
-			`SELECT group_id, creditor_id, debtor_id, amount_sealed, amount_key_id
-			   FROM split_debts WHERE id = $1 FOR UPDATE`, debtID,
-		).Scan(&groupID, &creditorID, &debtorID, &amountSealed, &amountKey); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return httpapi.NotFound("Долг не найден")
-			}
-			return err
-		}
-		// Only the two sides of the debt may record money moving.
-		if authorID != creditorID && authorID != debtorID {
-			return httpapi.NotFound("Долг не найден")
-		}
-
-		// Idempotency first: a retry must not add a second repayment.
-		var existingID int64
-		err := tx.QueryRow(ctx,
-			`SELECT id FROM split_debt_payments WHERE author_id = $1 AND client_request_id = $2`,
-			authorID, clientRequestID,
-		).Scan(&existingID)
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-
-		amountRaw, err := s.content.OpenString(secure.Sealed{KeyID: amountKey, Ciphertext: amountSealed}, debtAmountAAD(debtID))
-		if err != nil {
-			return err
-		}
-		debtAmount, err := strconv.ParseInt(amountRaw, 10, 64)
-		if err != nil {
-			return err
-		}
-
-		// Ciphertext cannot be summed in SQL, so the running total is decrypted
-		// here inside the same transaction that holds the debt row lock.
-		_, paidTotal, err := s.paymentsOfTx(ctx, tx, debtID)
-		if err != nil {
-			return err
-		}
-
-		if paidTotal+amountMinor > debtAmount {
-			return httpapi.Validation(
-				map[string]string{"amount_minor": "Возврат больше остатка долга"},
-				"Проверьте поля",
-			)
-		}
-
-		var paymentID int64
-		if err := tx.QueryRow(ctx,
-			`INSERT INTO split_debt_payments (debt_id, author_id, amount_sealed, amount_key_id, client_request_id)
-			 VALUES ($1, $2, ''::bytea, 'pending', $3) RETURNING id`,
-			debtID, authorID, clientRequestID,
-		).Scan(&paymentID); err != nil {
-			return err
-		}
-		sealed, err := s.content.SealString(strconv.FormatInt(amountMinor, 10), debtPaymentAAD(paymentID))
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx,
-			`UPDATE split_debt_payments SET amount_sealed = $2, amount_key_id = $3 WHERE id = $1`,
-			paymentID, sealed.Ciphertext, sealed.KeyID,
-		)
-		if err != nil {
-			return err
-		}
-
-		// The message is committed with the repayment. The remainder here is the
-		// one this transaction just computed, so an already settled debt never
-		// produces a stale "you still owe" message.
-		noticeDebt := Debt{
-			ID:              debtID,
-			GroupID:         groupID,
-			CreditorID:      creditorID,
-			DebtorID:        debtorID,
-			AmountMinor:     debtAmount,
-			Outstanding:     debtAmount - paidTotal - amountMinor,
-			SourceExpenseID: nil,
-		}
-		return s.notifyPayment(ctx, tx, noticeDebt, amountMinor, authorID)
-	})
-	if err != nil {
-		return Debt{}, err
-	}
-
-	// Return the debt as it now stands.
-	debts, err := s.debtsByID(ctx, authorID, debtID)
-	if err != nil {
-		return Debt{}, err
-	}
-	return debts, nil
-}
-
 func (s *Service) paymentsOfTx(ctx context.Context, tx pgx.Tx, debtID int64) ([]DebtPayment, int64, error) {
-	rows, err := tx.Query(ctx,
-		`SELECT id, author_id, amount_sealed, amount_key_id, paid_at
+	return s.paymentsOfQuery(ctx, tx, debtID)
+}
+func (s *Service) paymentsOfQuery(ctx context.Context, q receiptQuerier, debtID int64) ([]DebtPayment, int64, error) {
+	rows, err := q.Query(ctx,
+		`SELECT id, author_id, amount_sealed, amount_key_id, paid_at, status, method
 		   FROM split_debt_payments WHERE debt_id = $1 ORDER BY paid_at, id`, debtID)
 	if err != nil {
 		return nil, 0, err
@@ -419,7 +283,7 @@ func (s *Service) paymentsOfTx(ctx context.Context, tx pgx.Tx, debtID int64) ([]
 		var payment DebtPayment
 		var sealed []byte
 		var keyID string
-		if err := rows.Scan(&payment.ID, &payment.AuthorID, &sealed, &keyID, &payment.PaidAt); err != nil {
+		if err := rows.Scan(&payment.ID, &payment.AuthorID, &sealed, &keyID, &payment.PaidAt, &payment.Status, &payment.Method); err != nil {
 			return nil, 0, err
 		}
 		raw, err := s.content.OpenString(secure.Sealed{KeyID: keyID, Ciphertext: sealed}, debtPaymentAAD(payment.ID))
@@ -431,7 +295,9 @@ func (s *Service) paymentsOfTx(ctx context.Context, tx pgx.Tx, debtID int64) ([]
 			return nil, 0, err
 		}
 		payment.AmountMinor = amount
-		total += amount
+		if payment.Status == "confirmed" {
+			total += amount
+		}
 		out = append(out, payment)
 	}
 	return out, total, rows.Err()
@@ -448,13 +314,13 @@ func (s *Service) debtsByID(ctx context.Context, viewerID, debtID int64) (Debt, 
 	err := s.pool.QueryRow(ctx,
 		`SELECT d.id, d.group_id, d.author_id, d.creditor_id, d.debtor_id,
 		        d.amount_sealed, d.amount_key_id, d.note_sealed, d.note_key_id,
-		        d.source_expense_id, d.created_at
+		        d.source_expense_id, d.created_at, d.version
 		   FROM split_debts d
 		   JOIN split_members m ON m.group_id = d.group_id
 		  WHERE d.id = $1 AND m.user_id = $2 AND m.state = 'active'`,
 		debtID, viewerID,
 	).Scan(&debt.ID, &debt.GroupID, &debt.AuthorID, &debt.CreditorID, &debt.DebtorID,
-		&amountSealed, &amountKey, &noteSealed, &noteKey, &debt.SourceExpenseID, &debt.CreatedAt)
+		&amountSealed, &amountKey, &noteSealed, &noteKey, &debt.SourceExpenseID, &debt.CreatedAt, &debt.Version)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Debt{}, httpapi.NotFound("Долг не найден")

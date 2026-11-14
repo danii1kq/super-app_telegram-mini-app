@@ -211,7 +211,7 @@ func socialTestService(t *testing.T) (*Service, context.Context) {
 		_, _ = admin.Exec(context.Background(), `DROP SCHEMA `+name+` CASCADE`)
 		_ = admin.Close(context.Background())
 	})
-	for _, file := range []string{"000001_core_identity.up.sql", "000002_social_chat.up.sql"} {
+	for _, file := range []string{"000001_core_identity.up.sql", "000002_social_chat.up.sql", "000012_social_views.up.sql"} {
 		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", file))
 		if err != nil {
 			t.Fatal(err)

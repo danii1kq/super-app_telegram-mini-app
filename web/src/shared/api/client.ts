@@ -62,34 +62,23 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
  * The token is module-private, so a file upload goes through here instead of
  * reaching for it from a component.
  */
-export async function apiUpload<T>(path: string, file: Blob, mime: string): Promise<T> {
+export async function apiUpload<T>(path: string, file: Blob, mime: string, consent?: 'deepseek'): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json', 'Content-Type': mime };
   if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
+  if (consent) headers['X-AI-Consent'] = consent;
 
   const response = await fetch(`/api/v1${path}`, { method: 'POST', headers, body: file });
   return readResponse<T>(response);
 }
 
-/**
- * Fetches a binary resource with the session token and returns a blob URL.
- *
- * The token is module-private, so an authenticated image cannot be a plain
- * <img src>: the browser would send no Authorization header and the request
- * would come back 401. The caller owns the URL and should revoke it.
- */
-export async function apiBlobUrl(path: string): Promise<string> {
-  const headers: Record<string, string> = {};
-  if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
-
-  const response = await fetch(`/api/v1${path}`, { headers });
-  if (response.status === 401) {
-    clearSessionToken();
-    onUnauthorized?.();
-  }
-  if (!response.ok) {
-    throw new ApiError(response.status, 'blob_failed', `Запрос не выполнен (${response.status})`);
-  }
-  return URL.createObjectURL(await response.blob());
+/** Fetch private media using the same in-memory session as JSON requests. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const headers: Record<string,string> = {};
+  if(sessionToken) headers.Authorization=`Bearer ${sessionToken}`;
+  const response=await fetch(`/api/v1${path}`,{headers});
+  if(response.status===401){clearSessionToken();onUnauthorized?.();}
+  if(!response.ok)throw new ApiError(response.status,'blob_failed',`Запрос не выполнен (${response.status})`);
+  return response.blob();
 }
 
 async function readResponse<T>(response: Response): Promise<T> {

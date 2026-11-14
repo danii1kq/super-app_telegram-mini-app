@@ -1,6 +1,6 @@
 # SruFarm
 
-An independent game at `/apps/farm`, registered in the existing catalogue.
+A game at `/apps/game/farm`, opened through SruGame; `/apps/farm` redirects to it.
 The initial game interface is in Russian; the catalogue description supports
 the shell's Russian, Kazakh and English language settings.
 Design: warm illustrated garden, cream canvas, forest green ink, lime highlights,
@@ -102,7 +102,7 @@ plants shed tiny sparks. Harvest sound follows the specimen's mutation.
 Six world palettes cover navigation, panels, shop, dialogs, laboratory, showcase,
 buttons, scenery and CSS atmosphere. New worlds are enchanted forest, autumn
 and frost, unlocked locally by `FOREST`, `AUTUMN`, `FROST`. Existing Stars and
-promo-code transactions support them through migration 000013. The mobile menu
+promo-code transactions support them through migration 000023. The mobile menu
 uses two visible rows rather than hiding the new sections offscreen.
 
 ## Genetics and recovery
@@ -310,7 +310,7 @@ local preference as its skip and finish buttons.
 ## Games on earned coins
 
 The Игры tab contains Переросток, player coinflips and plant upgrades.
-`/apps/farm?tab=games` opens it directly. Game coins remain earned virtual
+`/apps/game/farm?tab=games` opens it directly. Game coins remain earned virtual
 currency; cosmetic Stars invoices are separate. Stakes range from 100 to 100000.
 Direct coin winnings never increment harvest revenue or the weekly farm top.
 A won plant follows the normal market rules when subsequently sold.
@@ -335,7 +335,7 @@ is determined when the server processes cashout under the player row lock.
 
 ### Player coinflips
 
-Migration000014 stores offers separately from player JSON. A host chooses sun or
+Migration 000024 stores offers separately from player JSON. A host chooses sun or
 moon and escrows its stake. One open offer per host is enforced by a partial
 unique index. An authenticated, different player joins the opposite side with
 an equal stake. A crypto-random result pays the winner `floor(stake*1.8)`, taking
@@ -375,7 +375,7 @@ No live player balances or clocks are changed by those fixtures.
 
 Balance changes affect new stakes. Existing crash rounds retain their saved
 threshold and declared return; old rounds without a return field report96%.
-Migration000015 preserves a10% fee for existing coinflip offers, while new offers
+Migration 000025 preserves a10% fee for existing coinflip offers, while new offers
 snapshot10%. Existing offers retain their saved fee, including 25% offers.
 Both offer previews and payout settlement use the saved fee.
 

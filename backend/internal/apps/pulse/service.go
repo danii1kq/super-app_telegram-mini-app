@@ -7,7 +7,7 @@ package pulse
 
 import (
 	"context"
-	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -49,6 +49,7 @@ type Audience struct {
 // Create publishes a status. The author confirms the audience before sending;
 // the server stores exactly that list.
 func (s *Service) Create(ctx context.Context, authorID int64, text string, expiresAt time.Time, audience Audience) (Status, error) {
+	text = strings.TrimSpace(text)
 	if text == "" {
 		return Status{}, httpapi.Validation(map[string]string{"text": "Добавьте текст статуса"}, "Проверьте поля")
 	}
@@ -56,20 +57,39 @@ func (s *Service) Create(ctx context.Context, authorID int64, text string, expir
 		return Status{}, httpapi.Validation(map[string]string{"text": "Слишком длинный текст"}, "Проверьте поля")
 	}
 	// The status must end in the future: an expired one is useless on creation.
-	if !expiresAt.After(time.Now().Add(time.Minute)) {
-		return Status{}, httpapi.Validation(map[string]string{"expires_at": "Время окончания должно быть в будущем"}, "Проверьте поля")
+	now := time.Now()
+	if !expiresAt.After(now.Add(time.Minute)) || expiresAt.After(now.Add(24*time.Hour)) {
+		return Status{}, httpapi.Validation(map[string]string{"expires_at": "Выберите время от минуты до 24 часов в будущем"}, "Проверьте поля")
 	}
+	if len(audience.Users) > 100 || (audience.Community != nil && *audience.Community <= 0) {
+		return Status{}, httpapi.Validation(map[string]string{"audience": "Выберите до 100 получателей"}, "Проверьте поля")
+	}
+	recipients := make([]int64, 0, len(audience.Users))
+	seen := make(map[int64]bool)
+	for _, id := range audience.Users {
+		if id <= 0 {
+			return Status{}, httpapi.Validation(map[string]string{"audience": "Некорректный получатель"}, "Проверьте поля")
+		}
+		if id != authorID && !seen[id] {
+			recipients = append(recipients, id)
+			seen[id] = true
+		}
+	}
+	audience.Users = recipients
 	if len(audience.Users) == 0 && audience.Community == nil {
 		return Status{}, httpapi.Validation(map[string]string{"audience": "Выберите, кто увидит статус"}, "Проверьте поля")
 	}
 
 	var status Status
 	err := s.pool.InTx(ctx, func(tx pgx.Tx) error {
+		if err := validateAudience(ctx, tx, authorID, audience); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx,
 			`INSERT INTO pulse_statuses (author_id, text_sealed, key_id, expires_at)
 			 VALUES ($1, ''::bytea, 'pending', $2)
-			 RETURNING id, created_at`, authorID, expiresAt,
-		).Scan(&status.ID, &status.CreatedAt); err != nil {
+			 RETURNING id, created_at, (SELECT public_name FROM users WHERE id = $1)`, authorID, expiresAt,
+		).Scan(&status.ID, &status.CreatedAt, &status.AuthorName); err != nil {
 			return err
 		}
 
@@ -96,17 +116,6 @@ func (s *Service) Create(ctx context.Context, authorID int64, text string, expir
 			}
 		}
 		if audience.Community != nil {
-			var member bool
-			if err := tx.QueryRow(ctx,
-				`SELECT EXISTS (SELECT 1 FROM social_members
-				                 WHERE community_id = $1 AND user_id = $2 AND state = 'active')`,
-				*audience.Community, authorID,
-			).Scan(&member); err != nil {
-				return err
-			}
-			if !member {
-				return httpapi.Forbidden("Нет доступа к сообществу")
-			}
 			if _, err := tx.Exec(ctx,
 				`INSERT INTO pulse_audience (status_id, community_id) VALUES ($1, $2)`,
 				status.ID, *audience.Community,
@@ -140,16 +149,7 @@ func (s *Service) Feed(ctx context.Context, viewerID int64) ([]Status, error) {
 		   JOIN users u ON u.id = p.author_id
 		  WHERE p.closed_at IS NULL
 		    AND p.expires_at > now()
-		    AND NOT EXISTS (SELECT 1 FROM social_blocks b
-		                     WHERE b.blocker_id = p.author_id AND b.blocked_id = $1)
-		    AND (
-		         p.author_id = $1
-		         OR EXISTS (SELECT 1 FROM pulse_audience a
-		                     WHERE a.status_id = p.id AND a.user_id = $1)
-		         OR EXISTS (SELECT 1 FROM pulse_audience a
-		                     JOIN social_members m ON m.community_id = a.community_id
-		                     WHERE a.status_id = p.id AND m.user_id = $1 AND m.state = 'active')
-		    )
+		    AND `+visibleStatusSQL+`
 		  ORDER BY p.expires_at, p.id
 		  LIMIT 100`, viewerID)
 	if err != nil {
@@ -182,98 +182,21 @@ func (s *Service) Feed(ctx context.Context, viewerID int64) ([]Status, error) {
 // refuses, even if the client still shows it.
 func (s *Service) Respond(ctx context.Context, viewerID, statusID int64) error {
 	return s.pool.InTx(ctx, func(tx pgx.Tx) error {
-		var authorID int64
-		var expiresAt time.Time
-		var closedAt *time.Time
-		if err := tx.QueryRow(ctx,
-			`SELECT author_id, expires_at, closed_at FROM pulse_statuses WHERE id = $1 FOR UPDATE`,
-			statusID,
-		).Scan(&authorID, &expiresAt, &closedAt); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return httpapi.NotFound("Статус не найден")
-			}
+		authorID, expiresAt, closedAt, err := lockVisibleStatus(ctx, tx, viewerID, statusID)
+		if err != nil {
 			return err
-		}
-
-		if closedAt != nil || !expiresAt.After(time.Now()) {
-			return httpapi.Conflict("status_closed", "Статус уже завершён")
 		}
 		if authorID == viewerID {
 			return httpapi.BadRequest("own_status", "Нельзя откликнуться на свой статус")
 		}
-
-		// The viewer must be in the audience and must not be blocked.
-		var allowed bool
-		if err := tx.QueryRow(ctx,
-			`SELECT
-			    NOT EXISTS (SELECT 1 FROM social_blocks b
-			                 WHERE b.blocker_id = $1 AND b.blocked_id = $2)
-			    AND (
-			         EXISTS (SELECT 1 FROM pulse_audience a
-			                  WHERE a.status_id = $3 AND a.user_id = $2)
-			         OR EXISTS (SELECT 1 FROM pulse_audience a
-			                     JOIN social_members m ON m.community_id = a.community_id
-			                     WHERE a.status_id = $3 AND m.user_id = $2 AND m.state = 'active')
-			    )`, authorID, viewerID, statusID,
-		).Scan(&allowed); err != nil {
-			return err
+		if closedAt != nil || !expiresAt.After(time.Now()) {
+			return httpapi.Conflict("status_closed", "Статус уже завершён")
 		}
-		if !allowed {
-			return httpapi.NotFound("Статус не найден")
-		}
-
-		_, err := tx.Exec(ctx,
+		_, err = tx.Exec(ctx,
 			`INSERT INTO pulse_responses (status_id, user_id) VALUES ($1, $2)
 			 ON CONFLICT DO NOTHING`, statusID, viewerID)
 		return err
 	})
-}
-
-// Responder is one account that answered a status.
-type Responder struct {
-	UserID   int64
-	Name     string
-	Username string
-	At       time.Time
-}
-
-// Responders lists who answered, newest first. Only the author may see the
-// list: a responder must not learn who else was invited, because the audience
-// itself is private to the author.
-func (s *Service) Responders(ctx context.Context, viewerID, statusID int64) ([]Responder, error) {
-	var authorID int64
-	if err := s.pool.QueryRow(ctx,
-		`SELECT author_id FROM pulse_statuses WHERE id = $1`, statusID,
-	).Scan(&authorID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, httpapi.NotFound("Статус не найден")
-		}
-		return nil, err
-	}
-	if authorID != viewerID {
-		return nil, httpapi.NotFound("Статус не найден")
-	}
-
-	rows, err := s.pool.Query(ctx,
-		`SELECT r.user_id, u.public_name, coalesce(u.username, ''), r.created_at
-		   FROM pulse_responses r
-		   JOIN users u ON u.id = r.user_id
-		  WHERE r.status_id = $1
-		  ORDER BY r.created_at DESC, r.user_id`, statusID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	out := make([]Responder, 0, 8)
-	for rows.Next() {
-		var item Responder
-		if err := rows.Scan(&item.UserID, &item.Name, &item.Username, &item.At); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, rows.Err()
 }
 
 // Close ends the author's own status early.

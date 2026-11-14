@@ -59,6 +59,8 @@ interface TelegramWebApp {
     removeItem(key: string): void;
   };
   isVersionAtLeast?(version: string): boolean;
+  requestWriteAccess?(callback: (allowed: boolean) => void): void;
+  openInvoice?(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
   onEvent(event: string, handler: () => void): void;
   offEvent(event: string, handler: () => void): void;
   setHeaderColor(color: string): void;
@@ -68,7 +70,6 @@ interface TelegramWebApp {
   showConfirm(message: string, callback: (confirmed: boolean) => void): void;
   openLink(url: string): void;
   openTelegramLink(url: string): void;
-  openInvoice?(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
   enableClosingConfirmation(): void;
   disableClosingConfirmation(): void;
   ready(): void;

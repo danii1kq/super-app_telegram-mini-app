@@ -16,25 +16,8 @@ export interface PulseStatus {
 
 export const pulseKeys = {
   feed: ['pulse', 'feed'] as const,
-  responders: (statusId: string) => ['pulse', 'responders', statusId] as const,
+  responses: (id: string) => ['pulse', 'responses', id] as const,
 };
-
-export interface PulseResponder {
-  user_id: string;
-  name: string;
-  username: string;
-  answered_at: string;
-}
-
-/** Who answered a status. Only the author may read this list. */
-export function usePulseResponders(statusId: string, enabled = true) {
-  return useQuery({
-    queryKey: pulseKeys.responders(statusId),
-    queryFn: () => api<{ responders: PulseResponder[] }>(`/pulse/${statusId}/responses`),
-    select: (data) => data.responders,
-    enabled: Boolean(statusId) && enabled,
-  });
-}
 
 export function usePulseFeed(enabled = true) {
   return useQuery({
@@ -43,12 +26,23 @@ export function usePulseFeed(enabled = true) {
     select: (data) => data.statuses,
     // Statuses expire on their own: refresh while the screen is open.
     refetchInterval: 30_000,
+    refetchOnWindowFocus: 'always',
     enabled,
   });
 }
 
-/** Minutes left until the status expires, floored at zero. */
-export function minutesLeft(expiresAt: string): number {
-  const diff = new Date(expiresAt).getTime() - Date.now();
-  return Math.max(0, Math.floor(diff / 60_000));
+export interface PulseResponder {
+  id: string;
+  public_name: string;
+}
+
+export function usePulseResponders(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: pulseKeys.responses(id),
+    queryFn: ({ signal }) => api<{ people: PulseResponder[] }>(`/pulse/${id}/responses`, { signal }),
+    select: (data) => data.people,
+    enabled,
+    staleTime: 0,
+    refetchInterval: 10_000,
+  });
 }

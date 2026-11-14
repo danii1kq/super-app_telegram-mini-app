@@ -19,7 +19,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
-	cfg, err := config.Load()
+	cfg, err := config.LoadWorker()
 	if err != nil {
 		slog.Error("config", "err", err)
 		os.Exit(1)
@@ -53,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	worker := notify.NewWorker(pool, telegram.NewClient(cfg.BotToken), deliveryCipher, identityCipher)
+	worker := notify.NewWorker(pool, telegram.NewClient(cfg.BotToken), deliveryCipher, identityCipher, telegram.MiniAppURL(cfg.BotUsername, cfg.MiniAppShortName))
 	slog.Info("worker started")
 	worker.Run(ctx, 2*time.Second)
 	slog.Info("worker stopped")

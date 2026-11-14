@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useComments } from './api';
 import { useCreateComment } from './mutations';
 import { Banner, PrimaryButton, Skeleton } from '@/shared/ui';
@@ -27,7 +28,8 @@ export function CommentThread({ postId, enabled }: { postId: string; enabled: bo
   };
 
   return (
-    <section id={`comments-${postId}`} aria-label={t('commentsTitle')} className="mt-3 border-t border-line pt-3">
+    <section id={`comments-${postId}`} aria-label={t('commentsTitle')} className="mt-3 scroll-mt-20 border-t border-line pt-3">
+      <h2 className="pb-3 text-body-strong text-ink">{t('commentsTitle')}</h2>
       <textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={create.isPending}
         placeholder={t('commentPlaceholder')} aria-label={t('commentPlaceholder')} rows={2} maxLength={2000}
         className="w-full resize-y rounded-xl bg-neutral-soft/60 p-3 text-body-lg text-ink outline-none focus:ring-2 focus:ring-accent placeholder:text-hint disabled:opacity-60" />
@@ -39,7 +41,7 @@ export function CommentThread({ postId, enabled }: { postId: string; enabled: bo
       <div className="flex flex-col gap-3 pt-3">
         {comments.data?.map((comment) => <div key={comment.id} className="rounded-xl bg-neutral-soft/40 p-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-            <span className="break-words text-body-secondary-strong text-ink">{comment.author_name}</span>
+            <Link to={`/people/${comment.author_id}`} className="min-h-11 break-words py-2 text-body-secondary-strong text-ink">{comment.author_name}</Link>
             <time dateTime={comment.created_at} className="text-caption text-ink-2">{formatDateTime(comment.created_at, lang)}</time>
           </div>
           <p className="whitespace-pre-wrap break-words pt-1 text-body-lg text-ink [overflow-wrap:anywhere]">{comment.body}</p>

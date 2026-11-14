@@ -10,16 +10,13 @@ const TABS: readonly { to: string; label: DictKey; icon: string }[] = [
 ];
 
 /**
- * Shell around every section. The tab bar is hidden inside an app space and in
- * a single conversation: both own the screen, and the tab bar would cover the
- * message composer.
+ * Core sections keep the tabs; catalogue applications own their screen.
  */
 export function AppShell() {
   const t = useT();
   const location = useLocation();
   const insideApp = location.pathname.startsWith('/apps/');
-  const insideChat = /^\/chats\/[^/]+/.test(location.pathname);
-  const hideTabs = insideApp || insideChat;
+  const hideTabs = insideApp;
 
   return (
     <div className="flex min-h-screen flex-col bg-page">

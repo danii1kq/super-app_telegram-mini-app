@@ -23,6 +23,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/pulse", h.auth.Middleware(http.HandlerFunc(h.create)))
 	mux.Handle("POST /api/v1/pulse/{id}/responses", h.auth.Middleware(http.HandlerFunc(h.respond)))
 	mux.Handle("GET /api/v1/pulse/{id}/responses", h.auth.Middleware(http.HandlerFunc(h.responders)))
+	mux.Handle("DELETE /api/v1/pulse/{id}/responses", h.auth.Middleware(http.HandlerFunc(h.cancelResponse)))
 	mux.Handle("POST /api/v1/pulse/{id}/close", h.auth.Middleware(http.HandlerFunc(h.close)))
 }
 
@@ -91,7 +92,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	audience := Audience{}
 	for _, raw := range body.Audience {
 		id, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil {
+		if err != nil || id <= 0 {
 			httpapi.WriteError(w, httpapi.Validation(map[string]string{"audience": "Некорректный получатель"}, "Проверьте поля"))
 			return
 		}
@@ -99,7 +100,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.CommunityID != "" {
 		id, err := strconv.ParseInt(body.CommunityID, 10, 64)
-		if err != nil {
+		if err != nil || id <= 0 {
 			httpapi.WriteError(w, httpapi.Validation(map[string]string{"community_id": "Некорректное сообщество"}, "Проверьте поля"))
 			return
 		}
@@ -121,7 +122,7 @@ func (h *Handler) respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statusID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || statusID <= 0 {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
 		return
 	}
@@ -132,34 +133,6 @@ func (h *Handler) respond(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-func (h *Handler) responders(w http.ResponseWriter, r *http.Request) {
-	user, ok := auth.UserFrom(r.Context())
-	if !ok {
-		httpapi.WriteError(w, httpapi.Unauthorized("Требуется вход"))
-		return
-	}
-	statusID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
-		return
-	}
-	list, err := h.service.Responders(r.Context(), user.ID, statusID)
-	if err != nil {
-		httpapi.WriteError(w, err)
-		return
-	}
-	out := make([]map[string]any, 0, len(list))
-	for _, item := range list {
-		out = append(out, map[string]any{
-			"user_id":   strconv.FormatInt(item.UserID, 10),
-			"name":      item.Name,
-			"username":  item.Username,
-			"answered_at": item.At.UTC().Format(time.RFC3339),
-		})
-	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"responders": out})
-}
-
 func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 	user, ok := auth.UserFrom(r.Context())
 	if !ok {
@@ -167,7 +140,7 @@ func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statusID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || statusID <= 0 {
 		httpapi.WriteError(w, httpapi.BadRequest("invalid_id", "Некорректный ID"))
 		return
 	}

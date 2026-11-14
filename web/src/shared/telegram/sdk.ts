@@ -32,6 +32,10 @@ export function startParam(): string {
   return tg?.initDataUnsafe?.start_param ?? '';
 }
 
+export function requestBotWriteAccess(): Promise<boolean> {
+  return new Promise(resolve=>{if(!tg?.requestWriteAccess){resolve(false);return;}try{tg.requestWriteAccess(resolve);}catch{resolve(false);}});
+}
+
 export function versionAtLeast(version: string): boolean {
   try {
     return tg?.isVersionAtLeast?.(version) ?? false;
@@ -114,7 +118,7 @@ export function openLink(url: string): void {
 }
 
 export function openTelegramLink(url: string): void {
-  if (tg) {
+  if (tg && isMiniApp()) {
     tg.openTelegramLink(url);
     return;
   }

@@ -10,7 +10,7 @@ export function useCreateStatus() {
         method: 'POST',
         body: { text: input.text, expires_at: input.expiresAt, audience: input.audience },
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: pulseKeys.feed }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: pulseKeys.feed }),
   });
 }
 
@@ -19,7 +19,7 @@ export function useRespond() {
   return useMutation({
     mutationFn: (statusId: string) =>
       api<{ ok: boolean }>(`/pulse/${statusId}/responses`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: pulseKeys.feed }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: pulseKeys.feed }),
   });
 }
 
@@ -28,6 +28,23 @@ export function useCloseStatus() {
   return useMutation({
     mutationFn: (statusId: string) =>
       api<{ ok: boolean }>(`/pulse/${statusId}/close`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: pulseKeys.feed }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: pulseKeys.feed }),
+  });
+}
+
+export function useCancelResponse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (statusId: string) => api<{ ok: boolean }>(`/pulse/${statusId}/responses`, { method: 'DELETE' }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: pulseKeys.feed }),
+  });
+}
+
+export function useSavePulseMeeting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { title: string; starts_at: string; ends_at: string; all_day: boolean }) =>
+      api<{ id: string }>('/day/events', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['day'] }),
   });
 }
