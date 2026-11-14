@@ -137,13 +137,16 @@ func (s *Service) SavePhoto(ctx context.Context, userID int64, raw []byte) (stri
 	if err != nil {
 		return "", err
 	}
-	_, err = s.pool.Exec(ctx,
+	result, err := s.pool.Exec(ctx,
 		`UPDATE tinder_profiles
 		    SET photo_sealed = $2, photo_key_id = $3, photo_mime = $4, updated_at = now()
 		  WHERE user_id = $1`,
 		userID, sealed.Ciphertext, sealed.KeyID, normalized.Mime)
 	if err != nil {
 		return "", err
+	}
+	if result.RowsAffected() == 0 {
+		return "", httpapi.NotFound("Сначала создайте анкету")
 	}
 	return normalized.Mime, nil
 }
@@ -156,7 +159,7 @@ func (s *Service) Photo(ctx context.Context, viewerID, ownerID int64) ([]byte, s
 	if viewerID != ownerID {
 		var allowed bool
 		if err := s.pool.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM tinder_profiles WHERE user_id = $1 AND active)
+			`SELECT EXISTS (SELECT 1 FROM tinder_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id = $1 AND p.active AND u.status='active')
 			    AND NOT EXISTS (SELECT 1 FROM social_blocks b
 			                     WHERE (b.blocker_id = $1 AND b.blocked_id = $2)
 			                        OR (b.blocker_id = $2 AND b.blocked_id = $1))`,
@@ -226,7 +229,7 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, bio, photoURL, 
 	}
 	_, err = s.pool.Exec(ctx,
 		`INSERT INTO tinder_profiles (user_id, bio_sealed, key_id, photo_url, university, gender, seeking, age, active)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,0),$9)
 		 ON CONFLICT (user_id) DO UPDATE
 		    SET bio_sealed = EXCLUDED.bio_sealed,
 		        key_id = EXCLUDED.key_id,
@@ -346,7 +349,7 @@ func (s *Service) Like(ctx context.Context, fromID, toID int64) (matched bool, m
 	err = s.pool.InTx(ctx, func(tx pgx.Tx) error {
 		var exists bool
 		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM tinder_profiles WHERE user_id = $1 AND active)`, toID,
+			`SELECT EXISTS (SELECT 1 FROM tinder_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id = $1 AND p.active AND u.status='active')`, toID,
 		).Scan(&exists); err != nil {
 			return err
 		}
@@ -380,14 +383,25 @@ func (s *Service) Like(ctx context.Context, fromID, toID int64) (matched bool, m
 		if a > b {
 			a, b = b, a
 		}
-		if err := tx.QueryRow(ctx,
+		created := true
+		err := tx.QueryRow(ctx,
 			`INSERT INTO tinder_matches (user_a, user_b) VALUES ($1,$2)
-			 ON CONFLICT (user_a, user_b) DO UPDATE SET user_a = EXCLUDED.user_a
+			 ON CONFLICT (user_a, user_b) DO NOTHING
 			 RETURNING id`, a, b,
-		).Scan(&matchID); err != nil {
+		).Scan(&matchID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The match already existed: read it back instead of rewriting it.
+			created = false
+			if err := tx.QueryRow(ctx,
+				`SELECT id FROM tinder_matches WHERE user_a = $1 AND user_b = $2`, a, b,
+			).Scan(&matchID); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 		matched = true
+		_ = created
 		// Both sides hear about a match; the like that caused it is not
 		// announced separately, because the match already says it.
 		if s.delivery != nil {

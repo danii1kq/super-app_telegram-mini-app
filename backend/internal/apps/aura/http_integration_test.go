@@ -75,7 +75,7 @@ func auraHTTPFixture(t *testing.T) (*pgxpool.Pool, func(string, string, any, int
 	INSERT INTO users(id,public_name)VALUES(1,'Hunter'),(2,'Other'),(3,'Third');`); err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"000021_aura.up.sql", "000022_aura_dungeons.up.sql"} {
+	for _, file := range []string{"000031_aura.up.sql", "000032_aura_dungeons.up.sql"} {
 		data, err := os.ReadFile("../../../../db/migrations/" + file)
 		if err != nil {
 			t.Fatal(err)
