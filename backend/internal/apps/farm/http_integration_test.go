@@ -53,35 +53,35 @@ func TestFarmHTTPPersistenceAndConcurrentSales(t *testing.T) {
 	INSERT INTO users (id,public_name) VALUES (1,'Alice'),(2,'Bob');`); err != nil {
 		t.Fatal(err)
 	}
-	migration, err := os.ReadFile("../../../../db/migrations/000011_farm.up.sql")
+	migration, err := os.ReadFile("../../../../db/migrations/000021_farm.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
-	migration, err = os.ReadFile("../../../../db/migrations/000012_farm_themes.up.sql")
+	migration, err = os.ReadFile("../../../../db/migrations/000022_farm_themes.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
-	migration, err = os.ReadFile("../../../../db/migrations/000013_farm_theme_worlds.up.sql")
+	migration, err = os.ReadFile("../../../../db/migrations/000023_farm_theme_worlds.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
-	migration, err = os.ReadFile("../../../../db/migrations/000014_farm_coinflips.up.sql")
+	migration, err = os.ReadFile("../../../../db/migrations/000024_farm_coinflips.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatal(err)
 	}
-	migration, err = os.ReadFile("../../../../db/migrations/000015_farm_flip_fee.up.sql")
+	migration, err = os.ReadFile("../../../../db/migrations/000025_farm_flip_fee.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
