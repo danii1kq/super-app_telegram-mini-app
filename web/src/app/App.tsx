@@ -40,7 +40,8 @@ export function App() {
           <Route path="/chats/:id" element={<ChatPage />} />
           <Route path="/apps" element={<CataloguePage />} />
           <Route path="/apps/doc/*" element={<DocApp />} />
-          <Route path="/apps/day/*" element={<DayApp />} />
+          <Route path="/calendar/*" element={<DayApp />} />
+          <Route path="/apps/day/*" element={<Navigate to="/calendar" replace />} />
           <Route path="/apps/pulse/*" element={<PulseApp />} />
           <Route path="/apps/notes/*" element={<NotesApp />} />
           <Route path="/apps/split/*" element={<SplitApp />} />

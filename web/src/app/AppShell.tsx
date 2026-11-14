@@ -4,7 +4,7 @@ import { useT, type DictKey } from '@/shared/i18n';
 
 const TABS: readonly { to: string; label: DictKey; icon: string }[] = [
   { to: '/feed', label: 'feed', icon: 'dynamic_feed' },
-  { to: '/chats', label: 'chats', icon: 'chat_bubble' },
+  { to: '/calendar', label: 'calendar', icon: 'calendar_month' },
   { to: '/apps', label: 'apps', icon: 'apps' },
   { to: '/profile', label: 'profile', icon: 'person' },
 ];
